@@ -15,6 +15,7 @@ from deep_context_federation.agent_context_gate import load_agent_context_gate_p
 from deep_context_federation.agent_context_gate import normalize_agent_context_gate_policy
 from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.agent_handoff import build_agent_handoff
+from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation, codebase_memory_source
@@ -109,7 +110,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.31.0"
+    assert payload["package"]["version"] == "0.32.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -123,6 +124,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "agent-context",
         "agent-context-gate",
         "agent-handoff",
+        "verify-handoff",
         "intake",
         "build",
         "scan",
@@ -158,6 +160,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
+    assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
     assert payload["safety_boundaries"]["external_tool_install"] == "never"
@@ -189,6 +192,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
+    assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
 
@@ -705,6 +709,19 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert economics["estimated_token_savings_percent"] > 50
     assert Path(result["outputs"]["agent_context_gate_json"]).exists()
     assert validate_artifact_contract(result)["ok"] is True
+    verified = verify_agent_handoff(result, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
+    assert verified["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
+    assert verified["ok"] is True
+    assert verified["status"] == "pass_agent_handoff_verification"
+    assert verified["summary"]["token_economics_status"] == "measured"
+    assert validate_artifact_contract(verified)["ok"] is True
+
+    prompt_path.write_text(prompt_path.read_text(encoding="utf-8") + "\nmutated\n", encoding="utf-8")
+    tampered = verify_agent_handoff(result, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
+    assert tampered["ok"] is False
+    assert tampered["status"] == "fail_agent_handoff_verification"
+    tamper_error_ids = {row["id"] for row in tampered["errors"]}
+    assert "artifact_sha256_match:model_prompt" in tamper_error_ids
 
     strict_context_gate_policy = normalize_agent_context_gate_policy(
         {
@@ -742,6 +759,10 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert failed["model_handoff"]["token_economics"]["model_prompt_estimated_tokens"] == 0
     assert failed["model_handoff"]["token_economics"]["estimated_token_savings"] == 0
     assert validate_artifact_contract(failed)["ok"] is True
+    blocked_verified = verify_agent_handoff(failed, handoff_path=Path(failed["outputs"]["agent_handoff_json"]))
+    assert blocked_verified["ok"] is True
+    assert blocked_verified["summary"]["token_economics_status"] == "not_applicable"
+    assert validate_artifact_contract(blocked_verified)["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

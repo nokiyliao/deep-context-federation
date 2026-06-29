@@ -12,6 +12,7 @@ from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_POLICY
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
+from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import SCHEMA_VERSION
@@ -768,6 +769,22 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "prompt_text": {"type": "string"},
                 "prompt_estimated_tokens": {"type": "integer"},
                 "json_estimated_tokens": {"type": "integer"},
+            },
+        ),
+        "agent_handoff_verification": _schema(
+            AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION,
+            "Deep Context Federation agent handoff verification",
+            ["schema_version", "ok", "status", "authority_effect", "no_apply", "checks", "errors", "summary"],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_handoff_verification", "fail_agent_handoff_verification"]},
+                **_boundary_props(),
+                "input_ref": {"type": "string"},
+                "check_count": {"type": "integer"},
+                "error_count": {"type": "integer"},
+                "checks": array_type,
+                "errors": array_type,
+                "summary": object_type,
             },
         ),
     }

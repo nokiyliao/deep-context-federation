@@ -18,6 +18,8 @@ from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.agent_ci import markdown_agent_ci
 from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff import markdown_agent_handoff
+from deep_context_federation.agent_handoff_verify import markdown_agent_handoff_verification
+from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.bootstrap import markdown_bootstrap
@@ -285,6 +287,10 @@ def build_parser() -> argparse.ArgumentParser:
     agent_handoff.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text fields.")
     agent_handoff.add_argument("--output", type=Path)
     agent_handoff.add_argument("--format", choices=["json", "markdown"], default="json")
+    verify_handoff = sub.add_parser("verify-handoff", help="Verify a generated agent-handoff artifact before model use.")
+    verify_handoff.add_argument("--input", type=Path, required=True)
+    verify_handoff.add_argument("--output", type=Path)
+    verify_handoff.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -778,6 +784,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_handoff(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "verify-handoff":
+        payload = read_required_json(args.input)
+        result = verify_agent_handoff(payload, handoff_path=args.input)
+        if args.output:
+            result["outputs"] = {"agent_handoff_verification_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_agent_handoff_verification(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

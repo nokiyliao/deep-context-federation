@@ -12,6 +12,7 @@ from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_POLICY
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
+from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import DEFAULT_JSON_NAME
 from deep_context_federation.builder import DEFAULT_MD_NAME
@@ -373,7 +374,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "agent_handoff",
             "schema_version": AGENT_HANDOFF_SCHEMA_VERSION,
             "producer": "agent-handoff",
-            "consumer_commands": ["agent_router", "ci", "operator_context", "github_runner"],
+            "consumer_commands": ["verify-handoff", "agent_router", "ci", "operator_context", "github_runner"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -387,6 +388,24 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "model_handoff",
                 "outputs",
                 "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "agent_handoff_verification",
+            "schema_version": AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION,
+            "producer": "verify-handoff",
+            "consumer_commands": ["agent_router", "ci", "operator_context", "github_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "checks",
+                "errors",
+                "summary",
             ],
             "authority_effect": "none",
             "no_apply": True,
@@ -657,6 +676,16 @@ def _commands() -> list[dict[str, Any]]:
                 "--no-content",
                 "--no-prompt",
             ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "verify-handoff",
+            "intent": "Verify an agent-handoff artifact's safety boundary, generated artifact fingerprints, and token economics before model use.",
+            "writes": ["optional verification JSON when --output is set"],
+            "output_schemas": [AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION],
+            "input_schemas": [AGENT_HANDOFF_SCHEMA_VERSION],
+            "options": ["--input", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },

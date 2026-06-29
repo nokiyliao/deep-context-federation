@@ -125,7 +125,7 @@ python -m deep_context_federation.cli check-artifact \
 Inspect how overlapping tools collapse into DCF-native capabilities:
 
 ```bash
-python -m deep_context_federation.cli plan-capability-ownership \
+python -m deep_context_federation.cli plan-function-ownership \
   --function trace-code-relationships \
   --function map-system-surfaces \
   --function reuse-prior-context \
@@ -278,12 +278,12 @@ python -m deep_context_federation.cli prepare-model-handoff \
 Global wrappers can route from the current repo state before deciding what to run:
 
 ```bash
-python -m deep_context_federation.cli route-model-readiness \
+python -m deep_context_federation.cli decide-model-start \
   --root . \
   --task "dashboard operator evidence authority"
 ```
 
-`route-model-readiness` is read-only and does not execute its recommended command. It normalizes discovery into `ready_agent_route`, `needs_agent_handoff`, `needs_task_agent_route`, `needs_bootstrap_agent_route`, `needs_manifest_refresh_agent_route`, or `blocked_agent_route`, then returns `route_steps` and `recommended_next_command`. This gives Codex, Claude, AGY, GitHub runners, or shell wrappers one stable routing contract instead of making each wrapper hard-code DCF status branching.
+`decide-model-start` is read-only and does not execute its recommended command. It normalizes discovery into `ready_agent_route`, `needs_agent_handoff`, `needs_task_agent_route`, `needs_bootstrap_agent_route`, `needs_manifest_refresh_agent_route`, or `blocked_agent_route`, then returns `route_steps` and `recommended_next_command`. This gives Codex, Claude, AGY, GitHub runners, or shell wrappers one stable routing contract instead of making each wrapper hard-code DCF status branching.
 
 When a wrapper wants DCF to perform the safe generated-artifact steps and return model input, use:
 
@@ -294,7 +294,7 @@ python -m deep_context_federation.cli prepare-model-input \
   --format prompt
 ```
 
-`prepare-model-input` is fail-closed. It emits prompt text only after an existing handoff passes `emit-model-input`, or after a manifest plus task builds a gated handoff that then passes `emit-model-input`. It does not auto-install tools, call external models, mutate source files, or claim project authority.
+`prepare-model-input` is fail-closed. It emits prompt text only after an existing handoff passes `release-model-input`, or after a manifest plus task builds a gated handoff that then passes `release-model-input`. It does not auto-install tools, call external models, mutate source files, or claim project authority.
 
 For global wrappers that should not hard-code a long command line, validate a profile first:
 
@@ -337,11 +337,11 @@ Fresh `prepare-model-handoff` artifacts include an `input_fingerprint` digest ov
 Use lower-level discovery when a wrapper only needs to probe the repo state:
 
 ```bash
-python -m deep_context_federation.cli discover-model-readiness \
+python -m deep_context_federation.cli check-model-readiness \
   --root .
 ```
 
-`discover-model-readiness` is read-only. It reports whether a repo already has a verified handoff ready for `emit-model-input`, only has a manifest, only has federation artifacts, or is not configured yet. The output includes `recommended_next_command`; `route-model-readiness` wraps that lower-level probe into a stronger global-wrapper contract.
+`check-model-readiness` is read-only. It reports whether a repo already has a verified handoff ready for `release-model-input`, only has a manifest, only has federation artifacts, or is not configured yet. The output includes `recommended_next_command`; `decide-model-start` wraps that lower-level probe into a stronger global-wrapper contract.
 
 `prepare-model-handoff` writes `deep_context_federation_agent_handoff_verification.json` automatically. Re-run verification explicitly when a handoff or generated prompt may have moved, been copied, or been modified:
 
@@ -355,12 +355,12 @@ python -m deep_context_federation.cli verify-model-handoff \
 Emit the model prompt through a fail-closed reader:
 
 ```bash
-python -m deep_context_federation.cli emit-model-input \
+python -m deep_context_federation.cli release-model-input \
   --input .dcf/deep_context_federation_agent_handoff.json \
   --format prompt
 ```
 
-`emit-model-input` verifies the handoff first. It prints prompt text only when the handoff, generated artifacts, and token economics pass verification; otherwise it exits with code `2` and emits no prompt in `prompt` mode.
+`release-model-input` verifies the handoff first. It prints prompt text only when the handoff, generated artifacts, and token economics pass verification; otherwise it exits with code `2` and emits no prompt in `prompt` mode.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -405,7 +405,7 @@ python -m deep_context_federation.cli brief-task \
 Run only the repository scan when you want starter source snapshots without the full pipeline:
 
 ```bash
-python -m deep_context_federation.cli map-repo \
+python -m deep_context_federation.cli discover-project-context \
   --root . \
   --output-dir .dcf \
   --write \
@@ -421,7 +421,7 @@ python -m deep_context_federation.cli query-context \
 Compose self-scan output with another manifest before building:
 
 ```bash
-python -m deep_context_federation.cli combine-inputs \
+python -m deep_context_federation.cli merge-context-inputs \
   --manifest .dcf/deep_context_federation.generated.json \
   --manifest examples/deep_context_federation.example.json \
   --output .dcf/deep_context_federation.composed.json \
@@ -438,7 +438,7 @@ python -m deep_context_federation.cli assemble-context \
 Run the bundled example after installation:
 
 ```bash
-python -m deep_context_federation.cli validate-inputs \
+python -m deep_context_federation.cli check-context-inputs \
   --manifest examples/deep_context_federation.example.json
 
 python -m deep_context_federation.cli assemble-context \
@@ -494,13 +494,13 @@ python -m deep_context_federation.cli rank-context \
   --kind entities \
   --format markdown
 
-python -m deep_context_federation.cli query-context-store \
+python -m deep_context_federation.cli query-read-model \
   --read-model .dcf/deep_context_federation_latest.sqlite \
   --preset search \
   --search dashboard \
   --format markdown
 
-python -m deep_context_federation.cli benchmark-context-build \
+python -m deep_context_federation.cli measure-context-build-speed \
   --manifest examples/deep_context_federation.example.json \
   --root examples \
   --iterations 5
@@ -515,7 +515,7 @@ dcf query-context --input .dcf/deep_context_federation_latest.json --preset surf
 dcf trace-context --input .dcf/deep_context_federation_latest.json --match dashboard --depth 2 --format markdown
 dcf diagnose-context --input .dcf/deep_context_federation_latest.json --format markdown
 dcf rank-context --input .dcf/deep_context_federation_latest.json --kind sources --format markdown
-dcf query-context-store --read-model .dcf/deep_context_federation_latest.sqlite --preset source-health
+dcf query-read-model --read-model .dcf/deep_context_federation_latest.sqlite --preset source-health
 ```
 
 From a fresh source checkout without installing first, prefix commands with `PYTHONPATH=src`:
@@ -530,7 +530,7 @@ PYTHONPATH=src python -m deep_context_federation.cli assemble-context \
 
 ## Repo Scan Bootstrap
 
-`dcf map-repo` gives the tool a self-starting path on unfamiliar codebases. It walks the repository with safe default excludes (`.git`, `.venv`, `node_modules`, `output`, `data`, `.codebase-memory`, and generated `.dcf*` folders), then writes:
+`dcf discover-project-context` gives the tool a self-starting path on unfamiliar codebases. It walks the repository with safe default excludes (`.git`, `.venv`, `node_modules`, `output`, `data`, `.codebase-memory`, and generated `.dcf*` folders), then writes:
 
 - `repo_file_inventory.json`: file/path/artifact inventory with surface hints
 - `repo_code_symbols.json`: Python AST plus conservative JS/TS symbol map with path and surface links
@@ -541,7 +541,7 @@ PYTHONPATH=src python -m deep_context_federation.cli assemble-context \
 One command can scan and build:
 
 ```bash
-dcf map-repo --root . --output-dir .dcf --write --build
+dcf discover-project-context --root . --output-dir .dcf --write --build
 ```
 
 For backward compatibility, the scanner also writes `repo_python_symbols.json` as an alias of the code-symbol snapshot during the early alpha period.
@@ -556,7 +556,7 @@ Every scan summary includes lightweight performance fields such as `duration_sec
 
 `dcf bootstrap-context` is the lower-level federation workflow:
 
-1. run `dcf map-repo` into the output directory
+1. run `dcf discover-project-context` into the output directory
 2. optionally compose the generated manifest with one or more curated manifests
 3. build the federation JSON, Markdown, and SQLite read model
 4. run the verifier
@@ -677,11 +677,11 @@ For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEX
 
 Run `dcf verify-model-handoff --input <handoff.json>` before giving a copied or externally transferred `model_prompt_source` to a model. The verifier is read-only and emits `deep_context_federation_agent_handoff_verification_v1`; it checks safety boundaries, pass/fail semantics, artifact hashes, prompt/context token estimates, public-boundary audit status, and `token_economics` consistency. Fresh `dcf prepare-model-handoff` runs already include the same verification summary and verification artifact.
 
-For global wrappers, prefer `dcf emit-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic.
+For global wrappers, prefer `dcf release-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic.
 
-Use `dcf route-model-readiness --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `emit-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
+Use `dcf decide-model-start --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `release-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
 
-Use `dcf prepare-model-input --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then emit prompt text only if the final model-input gate passes.
+Use `dcf prepare-model-input --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then release prompt text only if the final model-input gate passes.
 
 Use `dcf onboard-runner --root <repo> --profile-output <profile.json> --task '<task>' --format json` when the runner wants one onboarding capsule that creates the profile and immediately runs the safe ready path. The result is still read-only with respect to source and authority surfaces; it only writes generated DCF outputs.
 
@@ -710,13 +710,13 @@ dcf describe-abilities \
   --output .dcf/deep_context_federation_capabilities.json
 ```
 
-The public CLI is intentionally named by the function a runner wants to accomplish: `map-repo`, `assemble-context`, `query-context`, `prove-unified-context`, `select-context`, and `prepare-model-handoff`. Legacy source-shaped or implementation-shaped names remain hidden compatibility aliases only; new machine guidance should use the function names emitted by `describe-abilities`.
+The public CLI is intentionally named by the function a runner wants to accomplish: `discover-project-context`, `assemble-context`, `query-context`, `prove-unified-context`, `select-context`, and `prepare-model-handoff`. Legacy source-shaped or implementation-shaped names remain hidden compatibility aliases only; new machine guidance should use the function names emitted by `describe-abilities`.
 
 Function naming is part of the contract, not cosmetic naming. A runner should ask DCF to do something measurable, such as `summarize-operator-context`, `prove-context-advantage`, or `gate-model-context`; it should not dispatch against an upstream source name such as a graph provider, memory provider, or dashboard artifact name.
 
 ## Native Unified Integration
 
-`dcf plan-capability-ownership` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names that describe the outcome a runner wants, such as `trace-code-relationships`, `map-system-surfaces`, `reuse-prior-context`, `trace-claim-evidence`, `summarize-operator-state`, and `orchestrate-model-readiness`; the emitted artifact is DCF-only:
+`dcf plan-function-ownership` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names that describe the outcome a runner wants, such as `trace-code-relationships`, `map-system-surfaces`, `reuse-prior-context`, `trace-claim-evidence`, `summarize-operator-state`, and `orchestrate-model-readiness`; the emitted artifact is DCF-only:
 
 - `public_identity: deep_context_federation`
 - `hide_upstream_tool_identity: true`
@@ -727,7 +727,7 @@ Function naming is part of the contract, not cosmetic naming. A runner should as
 This lets DCF absorb symbol graphs, surface maps, long-term memory, evidence lineage, operator projection, and model handoff into one query/index/governance plane. Any upstream provenance is retained only for internal audit and reproducibility, not as a competing source identity for agents or operators.
 
 ```bash
-dcf plan-capability-ownership --format markdown
+dcf plan-function-ownership --format markdown
 dcf check-artifact \
   --input .dcf/deep_context_federation_native_integration_plan.json \
   --artifact native_integration_plan
@@ -930,7 +930,7 @@ This is the intended way to reduce model input tokens: run local federation quer
 - embedded `context_pack.prompt_text`
 - token budget, compression, coverage, and recommended follow-up commands
 
-Use it when an agent should not decide from scratch whether to run `query-context`, `diagnose-context`, `trace-context`, `pack-task-context`, or `query-context-store`. The brief remains `authority_effect: none` / `no_apply: true`; it routes context and diagnostics only. `query_plan` is execution guidance, not an executor: DCF records the intended `argv`, read role, and expansion policy, while the runner remains responsible for actually running those commands and honoring gates.
+Use it when an agent should not decide from scratch whether to run `query-context`, `diagnose-context`, `trace-context`, `pack-task-context`, or `query-read-model`. The brief remains `authority_effect: none` / `no_apply: true`; it routes context and diagnostics only. `query_plan` is execution guidance, not an executor: DCF records the intended `argv`, read role, and expansion policy, while the runner remains responsible for actually running those commands and honoring gates.
 
 ## Target Resolve
 
@@ -1041,10 +1041,10 @@ dcf gate-quality \
 
 ## Manifest Composition
 
-`dcf combine-inputs` merges multiple federation manifests into one buildable manifest:
+`dcf merge-context-inputs` merges multiple federation manifests into one buildable manifest:
 
 ```bash
-dcf combine-inputs \
+dcf merge-context-inputs \
   --manifest .dcf/deep_context_federation.generated.json \
   --manifest team_evidence/deep_context_federation.json \
   --output .dcf/deep_context_federation.composed.json \
@@ -1087,7 +1087,7 @@ Paths are resolved relative to the manifest directory first, then relative to `-
 
 ## SQLite Read Model
 
-The generated SQLite file is intended for agent and automation use. The stored tables keep raw provenance for reproducible audit, while `dcf query-context-store` returns DCF-collapsed rows by default. It contains:
+The generated SQLite file is intended for agent and automation use. The stored tables keep raw provenance for reproducible audit, while `dcf query-read-model` returns DCF-collapsed rows by default. It contains:
 
 - `sources`
 - `entities`
@@ -1108,7 +1108,7 @@ Read-model presets:
 Example:
 
 ```bash
-dcf query-context-store --read-model .dcf/deep_context_federation_latest.sqlite --preset search --search governance
+dcf query-read-model --read-model .dcf/deep_context_federation_latest.sqlite --preset search --search governance
 ```
 
 ## Source Quality
@@ -1170,10 +1170,10 @@ The diff reports source changes, entity/edge additions and removals, conflict ch
 
 ## Benchmarking
 
-Use `benchmark-context-build` to track local build performance:
+Use `measure-context-build-speed` to track local build performance:
 
 ```bash
-dcf benchmark-context-build --manifest examples/deep_context_federation.example.json --root examples --iterations 20 --json
+dcf measure-context-build-speed --manifest examples/deep_context_federation.example.json --root examples --iterations 20 --json
 ```
 
 ## Optional Memory Import

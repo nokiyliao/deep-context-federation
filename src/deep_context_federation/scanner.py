@@ -410,7 +410,7 @@ def _file_inventory_payload(
                 "status": "advisory",
                 "authority_level": "advisory",
                 "supporting_artifacts": [DEFAULT_INVENTORY_NAME, DEFAULT_SYMBOLS_NAME, DEFAULT_SURFACES_NAME, DEFAULT_DEPENDENCIES_NAME],
-                "verifiers": ["dcf map-repo", "dcf validate-inputs", "dcf verify-context"],
+                "verifiers": ["dcf discover-project-context", "dcf check-context-inputs", "dcf verify-context"],
             }
         ],
         "artifacts": rows,
@@ -592,7 +592,7 @@ def _manifest_payload() -> dict[str, Any]:
                 "role": "evidence_index",
                 "required": True,
                 "path": DEFAULT_INVENTORY_NAME,
-                "verifier": "dcf map-repo",
+                "verifier": "dcf discover-project-context",
             },
             {
                 "source_id": "repo_code_symbols",
@@ -613,7 +613,7 @@ def _manifest_payload() -> dict[str, Any]:
                 "role": "project_surface",
                 "required": True,
                 "path": DEFAULT_SURFACES_NAME,
-                "verifier": "dcf map-repo",
+                "verifier": "dcf discover-project-context",
             },
         ],
     }

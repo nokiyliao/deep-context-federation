@@ -243,7 +243,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.62.0"
+    assert payload["package"]["version"] == "0.64.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -257,23 +257,23 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "decide-continuation",
         "pack-model-context",
         "gate-model-context",
-        "discover-model-readiness",
+        "check-model-readiness",
         "prepare-model-handoff",
-        "emit-model-input",
+        "release-model-input",
         "onboard-runner",
         "validate-run-profile",
         "init-run-profile",
         "prepare-model-input",
-        "route-model-readiness",
+        "decide-model-start",
         "verify-model-handoff",
         "summarize-operator-context",
         "prepare-task-intake",
         "assemble-context",
-        "map-repo",
+        "discover-project-context",
         "describe-contracts",
         "check-artifact",
         "prove-public-boundary",
-        "plan-capability-ownership",
+        "plan-function-ownership",
         "reuse-context",
         "unify-context",
         "prove-unified-context",
@@ -286,7 +286,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "resolve-evidence",
         "review-targets",
         "gate-target-review",
-        "query-context-store",
+        "query-read-model",
         "diagnose-context",
     } <= command_names
     query_presets = {row["preset"] for row in payload["query_presets"]}
@@ -324,6 +324,9 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["read_model_query"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
+    assert "source_identity_policy" in by_kind["agent_model_input"]["top_level_required"]
+    assert "prompt_pack" in by_kind["agent_model_input"]["top_level_required"]
+    assert by_kind["agent_model_input"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
@@ -337,6 +340,9 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
     assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert by_kind["agent_ready"]["schema_version"] == "deep_context_federation_agent_ready_v1"
+    assert "source_identity_policy" in by_kind["agent_ready"]["top_level_required"]
+    assert "prompt_pack" in by_kind["agent_ready"]["top_level_required"]
+    assert by_kind["agent_ready"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
     assert by_kind["input_fingerprint"]["schema_version"] == "deep_context_federation_input_fingerprint_v1"
     assert by_kind["input_fingerprint_compare"]["schema_version"] == "deep_context_federation_input_fingerprint_compare_v1"
@@ -383,6 +389,8 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["read_model_query"]["schema_version"] == "deep_context_federation_sql_query_v1"
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
+    assert "source_identity_policy" in by_kind["agent_model_input"]["json_schema"]["required"]
+    assert "prompt_pack" in by_kind["agent_model_input"]["json_schema"]["required"]
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
@@ -395,6 +403,8 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
     assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert by_kind["agent_ready"]["schema_version"] == "deep_context_federation_agent_ready_v1"
+    assert "source_identity_policy" in by_kind["agent_ready"]["json_schema"]["required"]
+    assert "prompt_pack" in by_kind["agent_ready"]["json_schema"]["required"]
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
     assert by_kind["input_fingerprint"]["schema_version"] == "deep_context_federation_input_fingerprint_v1"
     assert by_kind["input_fingerprint_compare"]["schema_version"] == "deep_context_federation_input_fingerprint_compare_v1"
@@ -446,7 +456,7 @@ def test_native_integration_plan_cli_validates(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "plan-capability-ownership",
+            "plan-function-ownership",
             "--function",
             "trace-code-relationships",
             "--function",
@@ -500,12 +510,12 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
         text=True,
     )
     assert top_help.returncode == 0
-    assert "plan-capability-ownership" in top_help.stdout
+    assert "plan-function-ownership" in top_help.stdout
     assert "reuse-context" in top_help.stdout
     assert "unify-context" in top_help.stdout
     assert "prove-unified-context" in top_help.stdout
     assert "select-context" in top_help.stdout
-    assert "query-context-store" in top_help.stdout
+    assert "query-read-model" in top_help.stdout
     assert "prove-context-advantage" in top_help.stdout
     assert "decide-continuation" in top_help.stdout
     assert "prepare-model-input" in top_help.stdout
@@ -513,6 +523,15 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "prove-public-boundary" in top_help.stdout
     assert "native-integration-plan" not in top_help.stdout
     assert "plan-native-ownership" not in top_help.stdout
+    assert "plan-capability-ownership" not in top_help.stdout
+    assert "map-repo" not in top_help.stdout
+    assert "emit-model-input" not in top_help.stdout
+    assert "discover-model-readiness" not in top_help.stdout
+    assert "route-model-readiness" not in top_help.stdout
+    assert "validate-inputs" not in top_help.stdout
+    assert "combine-inputs" not in top_help.stdout
+    assert "query-context-store" not in top_help.stdout
+    assert "benchmark-context-build" not in top_help.stdout
     assert "memory-ledger" not in top_help.stdout
     assert "index-context-memory" not in top_help.stdout
     assert "build-context-index" not in top_help.stdout
@@ -547,7 +566,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "plan-capability-ownership",
+            "plan-function-ownership",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -637,7 +656,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "query-context-store",
+            "query-read-model",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -1588,16 +1607,16 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert discovery["status"] == "ready_model_input"
     assert discovery["ready_for_model_input"] is True
     assert discovery["selected_handoff"] == Path(result["outputs"]["agent_handoff_json"]).as_posix()
-    assert "emit-model-input" in discovery["recommended_next_command"]
+    assert "release-model-input" in discovery["recommended_next_command"]
     assert discovery["model_input_summary"]["status"] == "pass_agent_model_input"
     assert validate_artifact_contract(discovery)["ok"] is True
     route = route_agent_context(root=tmp_path, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
     assert route["schema_version"] == "deep_context_federation_agent_route_v1"
     assert route["status"] == "ready_agent_route"
-    assert route["action"] == "emit_model_input"
+    assert route["action"] == "release_model_input"
     assert route["model_input_ready"] is True
     assert route["route_steps"][0]["terminal_model_input"] is True
-    assert "emit-model-input" in route["recommended_next_command"]
+    assert "release-model-input" in route["recommended_next_command"]
     assert validate_artifact_contract(route)["ok"] is True
     ready = build_agent_ready(root=tmp_path, output_dir=tmp_path / "agent_ready", handoff_path=Path(result["outputs"]["agent_handoff_json"]))
     assert ready["schema_version"] == "deep_context_federation_agent_ready_v1"
@@ -1678,9 +1697,15 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert model_input["prompt_text"].startswith("# Deep Context Federation Agent Context")
     assert model_input["prompt_source"] == prompt_path.as_posix()
     assert model_input["prompt_sha256"] == prompt_artifact["sha256"]
+    assert model_input["source_identity_policy"]["source_ids_exposed"] is False
+    assert model_input["prompt_pack"]["prompt_source"] == prompt_path.as_posix()
+    assert model_input["prompt_pack"]["prompt_sha256"] == prompt_artifact["sha256"]
+    assert model_input["prompt_pack"]["prompt_text"].startswith("# Deep Context Federation Agent Context")
     assert model_input["verification_summary"]["status"] == "pass_agent_handoff_verification"
     assert model_input["safety_boundaries"]["prompt_emitted_only_after_verification"] is True
     assert validate_artifact_contract(model_input)["ok"] is True
+    model_boundary = build_public_boundary_audit([("model_input", model_input)])
+    assert model_boundary["status"] == "pass_public_boundary_audit"
 
     prompt_path.write_text(prompt_path.read_text(encoding="utf-8") + "\nmutated\n", encoding="utf-8")
     tampered = verify_agent_handoff(result, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
@@ -2107,7 +2132,7 @@ def test_agent_discovery_reports_repo_readiness_states(tmp_path: Path) -> None:
     empty = discover_agent_context(root=tmp_path)
     assert empty["status"] == "not_configured"
     assert empty["ready_for_model_input"] is False
-    assert "dcf map-repo" in empty["recommended_next_command"]
+    assert "dcf discover-project-context" in empty["recommended_next_command"]
     assert validate_artifact_contract(empty)["ok"] is True
 
     missing_handoff = discover_agent_context(root=tmp_path, handoff_path=tmp_path / "missing_handoff.json")
@@ -2133,7 +2158,7 @@ def test_agent_route_normalizes_discovery_for_global_wrappers(tmp_path: Path) ->
     assert empty["status"] == "needs_bootstrap_agent_route"
     assert empty["action"] == "scan_and_build"
     assert empty["route_ready"] is True
-    assert "dcf map-repo" in empty["recommended_next_command"]
+    assert "dcf discover-project-context" in empty["recommended_next_command"]
     assert validate_artifact_contract(empty)["ok"] is True
 
     missing_handoff = route_agent_context(root=tmp_path, handoff_path=tmp_path / "missing_handoff.json")
@@ -2213,7 +2238,12 @@ def test_agent_ready_builds_or_blocks_model_input(tmp_path: Path) -> None:
     assert ready["prompt_source"]
     assert ready["prompt_estimated_tokens"] > 0
     assert ready["prompt_text"].startswith("# Deep Context Federation Agent Context")
+    assert ready["source_identity_policy"]["source_ids_exposed"] is False
+    assert ready["prompt_pack"]["prompt_source"] == ready["prompt_source"]
+    assert ready["prompt_pack"]["prompt_text"].startswith("# Deep Context Federation Agent Context")
     assert validate_artifact_contract(ready)["ok"] is True
+    ready_boundary = build_public_boundary_audit([("agent_ready", ready)])
+    assert ready_boundary["status"] == "pass_public_boundary_audit"
 
     reused = build_agent_ready(
         root=manifest_root,
@@ -2593,10 +2623,10 @@ def test_task_brief_routes_agent_context(tmp_path: Path) -> None:
     assert query_plan["input_ref"] == ".dcf/deep_context_federation_latest.json"
     assert query_plan["read_model_ref"] == ".dcf/deep_context_federation_latest.sqlite"
     plan_commands = {row["command"] for row in query_plan["steps"]}
-    assert {"diagnose-context", "pack-task-context", "query-context", "query-context-store"} <= plan_commands
+    assert {"diagnose-context", "pack-task-context", "query-context", "query-read-model"} <= plan_commands
     assert query_plan["steps"][0]["read_role"] == "gate_first"
     assert query_plan["steps"][0]["stop_on_failure"] is True
-    read_model_steps = [row for row in query_plan["steps"] if row["command"] == "query-context-store"]
+    read_model_steps = [row for row in query_plan["steps"] if row["command"] == "query-read-model"]
     assert read_model_steps
     assert all(row["optional"] is True for row in read_model_steps)
     assert all("--read-model" in row["argv"] for row in read_model_steps)

@@ -10,6 +10,8 @@ from typing import Any
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.builder import utc_now
 from deep_context_federation.context_pack import estimate_tokens
+from deep_context_federation.source_identity import public_prompt_pack
+from deep_context_federation.source_identity import public_source_identity_policy
 
 AGENT_MODEL_INPUT_SCHEMA_VERSION = "deep_context_federation_agent_model_input_v1"
 
@@ -48,7 +50,7 @@ def build_agent_model_input(
     handoff_path: Path,
     include_prompt: bool = True,
 ) -> dict[str, Any]:
-    """Verify a handoff and emit prompt text only when it is safe to model-read."""
+    """Verify a handoff and release prompt text only when it is safe to model-read."""
 
     base_dir = handoff_path.expanduser().resolve().parent
     verification = verify_agent_handoff(payload, handoff_path=handoff_path)
@@ -88,6 +90,14 @@ def build_agent_model_input(
     ok = not failed
     if not include_prompt:
         prompt_text = ""
+    prompt_pack = public_prompt_pack(
+        prompt_source=prompt_path.as_posix() if prompt_path is not None and ok else "",
+        prompt_format="markdown" if ok else "",
+        prompt_bytes=prompt_bytes if ok else 0,
+        prompt_sha256=prompt_sha256 if ok else "",
+        prompt_estimated_tokens=prompt_estimated_tokens if ok else 0,
+        prompt_text=prompt_text if ok else "",
+    )
 
     return {
         "schema_version": AGENT_MODEL_INPUT_SCHEMA_VERSION,
@@ -96,6 +106,7 @@ def build_agent_model_input(
         "authority_effect": "none",
         "no_apply": True,
         "generated_at": utc_now(),
+        "source_identity_policy": public_source_identity_policy(audit_provenance_location="verified_handoff_and_prompt_file"),
         "input_ref": handoff_path.expanduser().resolve().as_posix(),
         "prompt_source": prompt_path.as_posix() if prompt_path is not None else "",
         "prompt_format": "markdown" if ok else "",
@@ -103,6 +114,7 @@ def build_agent_model_input(
         "prompt_sha256": prompt_sha256 if ok else "",
         "prompt_estimated_tokens": prompt_estimated_tokens if ok else 0,
         "prompt_text": prompt_text if ok else "",
+        "prompt_pack": prompt_pack,
         "handoff_summary": {
             "schema_version": payload.get("schema_version"),
             "status": payload.get("status"),
@@ -121,6 +133,8 @@ def build_agent_model_input(
             "external_model_calls": False,
             "source_or_authority_mutation": False,
             "prompt_emitted_only_after_verification": True,
+            "source_ids_exposed": False,
+            "source_identity_collapsed": True,
         },
     }
 

@@ -75,13 +75,13 @@ def route_agent_context(
 
     if discovery_status == "ready_model_input":
         status = "ready_agent_route"
-        action = "emit_model_input"
+        action = "release_model_input"
         route_steps.append(
             _step(
-                "00_emit_model_input",
+                "00_release_model_input",
                 action=action,
                 command=selected_command,
-                purpose="Verify handoff and emit prompt text for the model.",
+                purpose="Verify handoff and release prompt text for the model.",
                 terminal_model_input=True,
             )
         )
@@ -118,7 +118,7 @@ def route_agent_context(
                 _step(
                     "01_discover_again",
                     action="rediscover",
-                    command=f"dcf discover-model-readiness --root {_quote(root.as_posix())}",
+                    command=f"dcf check-model-readiness --root {_quote(root.as_posix())}",
                     purpose="Rediscover after handoff build before emitting model input.",
                 )
             )
@@ -137,7 +137,7 @@ def route_agent_context(
             )
     else:
         action = "scan_and_build"
-        selected_command = f"dcf map-repo --root {_quote(root.as_posix())} --output-dir {_quote(output_arg)} --write --build"
+        selected_command = f"dcf discover-project-context --root {_quote(root.as_posix())} --output-dir {_quote(output_arg)} --write --build"
         route_steps.append(
             _step(
                 "00_scan_and_build",

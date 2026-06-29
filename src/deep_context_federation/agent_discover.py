@@ -93,13 +93,13 @@ def discover_agent_context(*, root: Path, handoff_path: Path | None = None) -> d
         status = "federation_available"
 
     if ready_for_model_input:
-        recommended_next_command = f"dcf emit-model-input --input {_quote(selected_handoff)} --format prompt"
+        recommended_next_command = f"dcf release-model-input --input {_quote(selected_handoff)} --format prompt"
     elif selected_handoff:
         recommended_next_command = f"dcf verify-model-handoff --input {_quote(selected_handoff)}"
     elif manifests:
         recommended_next_command = f"dcf prepare-model-handoff --root {_quote(root.as_posix())} --manifest {_quote(manifests[0])} --task '<task>'"
     else:
-        recommended_next_command = f"dcf map-repo --root {_quote(root.as_posix())} --output-dir .dcf --write --build"
+        recommended_next_command = f"dcf discover-project-context --root {_quote(root.as_posix())} --output-dir .dcf --write --build"
 
     return {
         "schema_version": AGENT_DISCOVERY_SCHEMA_VERSION,

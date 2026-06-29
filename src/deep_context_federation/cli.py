@@ -93,6 +93,8 @@ from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import SQL_PRESETS
 from deep_context_federation.sqlite_query import markdown as sql_markdown
 from deep_context_federation.sqlite_query import query_sqlite
+from deep_context_federation.source_identity import public_prompt_pack
+from deep_context_federation.source_identity import public_source_identity_policy
 from deep_context_federation.target_review import markdown_target_review
 from deep_context_federation.target_review import review_targets
 from deep_context_federation.target_review_gate import evaluate_target_review_gate
@@ -118,8 +120,9 @@ COMMAND_ALIASES = {
     "capabilities": "describe-abilities",
     "schema": "describe-contracts",
     "validate-artifact": "check-artifact",
-    "native-integration-plan": "plan-capability-ownership",
-    "plan-native-ownership": "plan-capability-ownership",
+    "native-integration-plan": "plan-function-ownership",
+    "plan-native-ownership": "plan-function-ownership",
+    "plan-capability-ownership": "plan-function-ownership",
     "memory-ledger": "reuse-context",
     "index-context-memory": "reuse-context",
     "build-reuse-index": "reuse-context",
@@ -127,7 +130,8 @@ COMMAND_ALIASES = {
     "audit-unified-plane": "prove-unified-context",
     "pack-working-set": "select-context",
     "build": "assemble-context",
-    "scan": "map-repo",
+    "scan": "discover-project-context",
+    "map-repo": "discover-project-context",
     "bootstrap": "bootstrap-context",
     "intake": "prepare-task-intake",
     "workflow-plan": "plan-workflow",
@@ -139,16 +143,21 @@ COMMAND_ALIASES = {
     "agent-context-gate": "gate-model-context",
     "agent-handoff": "prepare-model-handoff",
     "verify-handoff": "verify-model-handoff",
-    "agent-model-input": "emit-model-input",
+    "agent-model-input": "release-model-input",
+    "emit-model-input": "release-model-input",
     "agent-profile": "validate-run-profile",
     "agent-profile-init": "init-run-profile",
     "agent-onboard": "onboard-runner",
-    "agent-discover": "discover-model-readiness",
-    "agent-route": "route-model-readiness",
+    "agent-discover": "check-model-readiness",
+    "discover-model-readiness": "check-model-readiness",
+    "agent-route": "decide-model-start",
+    "route-model-readiness": "decide-model-start",
     "agent-ready": "prepare-model-input",
     "operator-context": "summarize-operator-context",
-    "validate-manifest": "validate-inputs",
-    "compose-manifest": "combine-inputs",
+    "validate-manifest": "check-context-inputs",
+    "validate-inputs": "check-context-inputs",
+    "compose-manifest": "merge-context-inputs",
+    "combine-inputs": "merge-context-inputs",
     "verify": "verify-context",
     "query": "query-context",
     "pack": "pack-task-context",
@@ -161,9 +170,10 @@ COMMAND_ALIASES = {
     "quality-gate": "gate-quality",
     "rank": "rank-context",
     "diff": "diff-context",
-    "query-read-model": "query-context-store",
-    "sql": "query-context-store",
-    "bench": "benchmark-context-build",
+    "query-context-store": "query-read-model",
+    "sql": "query-read-model",
+    "bench": "measure-context-build-speed",
+    "benchmark-context-build": "measure-context-build-speed",
 }
 
 
@@ -268,6 +278,7 @@ def _agent_ready_profile_failure(*, args: argparse.Namespace, profile: Mapping[s
         "authority_effect": "none",
         "no_apply": True,
         "root": root.as_posix(),
+        "source_identity_policy": public_source_identity_policy(audit_provenance_location="profile_validation_artifact"),
         "task": str(normalized.get("task") or getattr(args, "task", "") or ""),
         "targets": list(normalized.get("targets") or getattr(args, "target", []) or []),
         "action_taken": "blocked_by_profile",
@@ -281,6 +292,7 @@ def _agent_ready_profile_failure(*, args: argparse.Namespace, profile: Mapping[s
         "prompt_format": "",
         "prompt_estimated_tokens": 0,
         "prompt_text": "",
+        "prompt_pack": public_prompt_pack(),
         "token_economics": {},
         "errors": [{"id": "agent_profile_invalid", "status": profile.get("status"), "profile_errors": list(profile.get("errors") or [])}],
         "outputs": {},
@@ -292,6 +304,8 @@ def _agent_ready_profile_failure(*, args: argparse.Namespace, profile: Mapping[s
             "external_model_calls": False,
             "source_or_authority_mutation": False,
             "prompt_emitted_only_after_model_input_pass": True,
+            "source_ids_exposed": False,
+            "source_identity_collapsed": True,
         },
     }
 
@@ -374,8 +388,8 @@ def build_parser() -> argparse.ArgumentParser:
     public_boundary.add_argument("--require-public-policy", action="store_true")
     public_boundary.add_argument("--output", type=Path)
     public_boundary.add_argument("--format", choices=["json", "markdown"], default="json")
-    native_integration = sub.add_parser("plan-capability-ownership", help="Plan DCF ownership of overlapping context functions.")
-    native_integration.set_defaults(capability=[])
+    native_integration = sub.add_parser("plan-function-ownership", help="Plan DCF ownership of overlapping context functions.")
+    native_integration.set_defaults(command="plan-capability-ownership", capability=[])
     native_integration.add_argument("--function", dest="capability", metavar="FUNCTION", action="append", help="DCF function name to inspect, such as trace-code-relationships or reuse-prior-context.")
     native_integration.add_argument("--capability", dest="capability", action="append", help=argparse.SUPPRESS)
     native_integration.add_argument("--output", type=Path)
@@ -429,7 +443,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_memory_import_args(build)
     build.add_argument("--write", action="store_true")
     build.add_argument("--json", action="store_true")
-    scan = sub.add_parser("map-repo", help="Read-only scan of a repo into starter federation sources.")
+    scan = sub.add_parser("discover-project-context", help="Read-only project scan into starter DCF context artifacts.")
     scan.set_defaults(command="scan")
     scan.add_argument("--root", type=Path, default=Path.cwd())
     scan.add_argument("--output-dir", type=Path, default=Path(".dcf"))
@@ -612,7 +626,8 @@ def build_parser() -> argparse.ArgumentParser:
     verify_handoff.add_argument("--input", type=Path, required=True)
     verify_handoff.add_argument("--output", type=Path)
     verify_handoff.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_model_input = sub.add_parser("emit-model-input", help="Fail-closed reader that emits model prompt text only after handoff verification passes.")
+    agent_model_input = sub.add_parser("release-model-input", help="Fail-closed reader that releases model prompt text only after handoff verification passes.")
+    agent_model_input.set_defaults(command="emit-model-input")
     agent_model_input.add_argument("--input", type=Path, required=True)
     agent_model_input.add_argument("--output", type=Path)
     agent_model_input.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
@@ -684,12 +699,14 @@ def build_parser() -> argparse.ArgumentParser:
     agent_onboard.add_argument("--no-content", action="store_true")
     agent_onboard.add_argument("--no-prompt", action="store_true")
     agent_onboard.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_discover = sub.add_parser("discover-model-readiness", help="Discover repo-local DCF handoff readiness for global wrappers.")
+    agent_discover = sub.add_parser("check-model-readiness", help="Check repo-local DCF handoff readiness for global wrappers.")
+    agent_discover.set_defaults(command="discover-model-readiness")
     agent_discover.add_argument("--root", type=Path, default=Path.cwd())
     agent_discover.add_argument("--handoff", type=Path)
     agent_discover.add_argument("--output", type=Path)
     agent_discover.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_route = sub.add_parser("route-model-readiness", help="Normalize DCF discovery into a global-wrapper route decision.")
+    agent_route = sub.add_parser("decide-model-start", help="Decide whether a global wrapper can start from existing DCF model input.")
+    agent_route.set_defaults(command="route-model-readiness")
     agent_route.add_argument("--root", type=Path, default=Path.cwd())
     agent_route.add_argument("--task", default="")
     agent_route.add_argument("--target", action="append", default=[])
@@ -732,11 +749,11 @@ def build_parser() -> argparse.ArgumentParser:
     operator_context.add_argument("--limit", type=int, default=50)
     operator_context.add_argument("--output", type=Path)
     operator_context.add_argument("--format", choices=["json", "markdown"], default="json")
-    validate = sub.add_parser("validate-inputs", help="Validate manifest shape before reading sources.")
+    validate = sub.add_parser("check-context-inputs", help="Validate manifest shape before reading sources.")
     validate.set_defaults(command="validate-manifest")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
-    compose = sub.add_parser("combine-inputs", help="Compose multiple federation manifests into one manifest.")
+    compose = sub.add_parser("merge-context-inputs", help="Compose multiple federation manifests into one manifest.")
     compose.set_defaults(command="compose-manifest")
     compose.add_argument("--manifest", type=Path, action="append", required=True)
     compose.add_argument("--output", type=Path, default=Path(".dcf") / "deep_context_federation.composed.json")
@@ -859,7 +876,7 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("--before", type=Path, required=True)
     diff.add_argument("--after", type=Path, required=True)
     diff.add_argument("--format", choices=["json", "markdown"], default="json")
-    sql = sub.add_parser("query-context-store", help="Query the generated read model.")
+    sql = sub.add_parser("query-read-model", help="Query the generated read model.")
     sql.set_defaults(command="query-read-model")
     sql.add_argument("--read-model", dest="sqlite", metavar="READ_MODEL", type=Path, default=Path(".dcf") / "deep_context_federation_latest.sqlite")
     sql.add_argument("--sqlite", dest="sqlite", type=Path, help=argparse.SUPPRESS)
@@ -868,7 +885,7 @@ def build_parser() -> argparse.ArgumentParser:
     sql.add_argument("--search", default="")
     sql.add_argument("--include-source-identity", action="store_true", help=argparse.SUPPRESS)
     sql.add_argument("--format", choices=["json", "markdown"], default="json")
-    bench = sub.add_parser("benchmark-context-build", help="Benchmark in-memory federation build time.")
+    bench = sub.add_parser("measure-context-build-speed", help="Benchmark in-memory federation build time.")
     bench.set_defaults(command="bench")
     add_common_source_args(bench)
     bench.add_argument("--iterations", type=int, default=5)

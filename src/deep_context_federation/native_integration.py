@@ -24,7 +24,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Trace code relationships",
         "absorbed_function_classes": ["symbol_indexing", "call_graph_navigation", "impact_navigation"],
         "dcf_native_owner": "code_relationship_projection",
-        "dcf_commands": ["map-repo", "bootstrap-context", "assemble-context", "trace-context", "resolve-evidence", "rank-context", "query-context-store"],
+        "dcf_commands": ["discover-project-context", "bootstrap-context", "assemble-context", "trace-context", "resolve-evidence", "rank-context", "query-read-model"],
         "native_surfaces": [
             "repo_code_symbols",
             "repo_dependency_graph",
@@ -38,7 +38,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns the unified symbol/entity graph and query plane. Upstream observations are collapsed into DCF graph semantics.",
         "remaining_gap": "Deep language-specific call resolution can still be improved, but DCF already owns the symbol graph projection and query contract.",
         "exit_criteria": [
-            "agent workflows call DCF trace-context/resolve-evidence/rank-context/query-context-store first",
+            "agent workflows call DCF trace-context/resolve-evidence/rank-context/query-read-model first",
             "symbol graph inputs are normalized into DCF entities and edges",
             "no wrapper reads a private symbol graph without DCF contract validation",
         ],
@@ -48,7 +48,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Map system surfaces",
         "absorbed_function_classes": ["surface_mapping", "split_detection", "ownership_gap_detection"],
         "dcf_native_owner": "system_surface_projection",
-        "dcf_commands": ["map-repo", "bootstrap-context", "query-context", "diagnose-context", "gate-quality"],
+        "dcf_commands": ["discover-project-context", "bootstrap-context", "query-context", "diagnose-context", "gate-quality"],
         "native_surfaces": [
             "repo_surface_map",
             "query_presets.surface-splits",
@@ -151,7 +151,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Orchestrate model readiness",
         "absorbed_function_classes": ["agent_launch", "prompt_packaging", "session_handoff"],
         "dcf_native_owner": "model_readiness_handoff",
-        "dcf_commands": ["init-run-profile", "validate-run-profile", "onboard-runner", "prepare-model-input", "prepare-model-handoff", "emit-model-input"],
+        "dcf_commands": ["init-run-profile", "validate-run-profile", "onboard-runner", "prepare-model-input", "prepare-model-handoff", "release-model-input"],
         "native_surfaces": [
             "agent_profile",
             "agent_onboard",
@@ -268,13 +268,13 @@ def build_native_integration_plan(*, capabilities: Iterable[str] | None = None) 
                 "step": "orchestration_entrypoint",
                 "goal": "All agents start through DCF onboard-runner or prepare-model-input.",
                 "owner_capability": "orchestrate_model_readiness",
-                "exit_gate": "agent_onboard and agent_ready artifacts validate and emit prompt only after gates pass",
+                "exit_gate": "agent_onboard and agent_ready artifacts validate and release prompt only after gates pass",
             },
             {
                 "step": "surface_and_symbol_unification",
                 "goal": "Surface and symbol questions resolve through DCF query/trace/resolve, not private tool outputs.",
                 "owner_capability": "map_system_surfaces + trace_code_relationships",
-                "exit_gate": "map-repo/bootstrap-context/assemble-context/verify-context pass with repo_surface_map and repo_code_symbols present",
+                "exit_gate": "discover-project-context/bootstrap-context/assemble-context/verify-context pass with repo_surface_map and repo_code_symbols present",
             },
             {
                 "step": "claim_evidence_lineage",

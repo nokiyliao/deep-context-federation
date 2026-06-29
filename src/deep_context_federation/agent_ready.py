@@ -13,6 +13,8 @@ from deep_context_federation.builder import read_json
 from deep_context_federation.builder import utc_now
 from deep_context_federation.input_fingerprint import build_input_fingerprint
 from deep_context_federation.input_fingerprint import compare_input_fingerprint
+from deep_context_federation.source_identity import public_prompt_pack
+from deep_context_federation.source_identity import public_source_identity_policy
 
 AGENT_READY_SCHEMA_VERSION = "deep_context_federation_agent_ready_v1"
 
@@ -128,6 +130,7 @@ def _failure(
         "authority_effect": "none",
         "no_apply": True,
         "generated_at": utc_now(),
+        "source_identity_policy": public_source_identity_policy(audit_provenance_location="route_handoff_and_model_input_artifacts"),
         "root": root.as_posix(),
         "task": task,
         "targets": list(targets),
@@ -141,6 +144,7 @@ def _failure(
         "prompt_format": "",
         "prompt_estimated_tokens": 0,
         "prompt_text": "",
+        "prompt_pack": public_prompt_pack(),
         "errors": [dict(row) for row in errors],
         "outputs": {},
         "safety_boundaries": {
@@ -151,6 +155,8 @@ def _failure(
             "external_model_calls": False,
             "source_or_authority_mutation": False,
             "prompt_emitted_only_after_model_input_pass": True,
+            "source_ids_exposed": False,
+            "source_identity_collapsed": True,
         },
     }
 
@@ -370,6 +376,7 @@ def build_agent_ready(
 
     model_input = build_agent_model_input(handoff, handoff_path=handoff_ref, include_prompt=include_prompt)
     ok = model_input.get("ok") is True
+    prompt_pack = model_input.get("prompt_pack") if isinstance(model_input.get("prompt_pack"), Mapping) else public_prompt_pack()
     return {
         "schema_version": AGENT_READY_SCHEMA_VERSION,
         "ok": ok,
@@ -377,6 +384,7 @@ def build_agent_ready(
         "authority_effect": "none",
         "no_apply": True,
         "generated_at": utc_now(),
+        "source_identity_policy": public_source_identity_policy(audit_provenance_location="route_handoff_and_model_input_artifacts"),
         "root": root.as_posix(),
         "task": task_text,
         "targets": list(targets),
@@ -395,6 +403,7 @@ def build_agent_ready(
         "prompt_format": model_input.get("prompt_format") if ok else "",
         "prompt_estimated_tokens": model_input.get("prompt_estimated_tokens") if ok else 0,
         "prompt_text": model_input.get("prompt_text") if ok else "",
+        "prompt_pack": prompt_pack,
         "token_economics": model_input.get("token_economics") if isinstance(model_input.get("token_economics"), Mapping) else {},
         "errors": list(model_input.get("errors") or []),
         "outputs": dict(handoff.get("outputs") if isinstance(handoff.get("outputs"), Mapping) else {}),
@@ -406,6 +415,8 @@ def build_agent_ready(
             "external_model_calls": False,
             "source_or_authority_mutation": False,
             "prompt_emitted_only_after_model_input_pass": True,
+            "source_ids_exposed": False,
+            "source_identity_collapsed": True,
         },
     }
 

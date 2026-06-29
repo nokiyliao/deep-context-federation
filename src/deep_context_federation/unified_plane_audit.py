@@ -39,10 +39,11 @@ HIDDEN_COMMAND_ALIASES = {
     "operator-context",
     "pack",
     "pack-working-set",
+    "plan-capability-ownership",
     "plan-native-ownership",
     "quality-gate",
     "query",
-    "query-read-model",
+    "query-context-store",
     "rank",
     "resolve",
     "review-gate",
@@ -51,11 +52,18 @@ HIDDEN_COMMAND_ALIASES = {
     "sql",
     "trace",
     "validate-artifact",
+    "validate-inputs",
     "validate-manifest",
     "verify",
     "verify-handoff",
     "workflow-plan",
     "workflow-run",
+    "map-repo",
+    "emit-model-input",
+    "discover-model-readiness",
+    "route-model-readiness",
+    "combine-inputs",
+    "benchmark-context-build",
 }
 
 REQUIRED_FUNCTION_COMMANDS = {
@@ -64,8 +72,8 @@ REQUIRED_FUNCTION_COMMANDS = {
     "select-context",
     "summarize-operator-context",
     "unify-context",
-    "plan-capability-ownership",
-    "query-context-store",
+    "plan-function-ownership",
+    "query-read-model",
 }
 
 SOURCE_IDENTITY_KEYS = {"source_id", "source_ids", "sources", "input_sources", "related_sources"}

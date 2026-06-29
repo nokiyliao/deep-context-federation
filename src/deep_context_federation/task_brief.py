@@ -203,8 +203,8 @@ def _query_plan(
         steps.append(
             {
                 "step_id": f"2{index}_query_read_model_{preset_name.replace('-', '_')}",
-                "command": "query-context-store",
-                "argv": ["query-context-store", "--read-model", read_model_path, "--preset", preset_name, "--limit", str(query_limit), "--format", "json"],
+                "command": "query-read-model",
+                "argv": ["query-read-model", "--read-model", read_model_path, "--preset", preset_name, "--limit", str(query_limit), "--format", "json"],
                 "read_role": "expand_if_read_model_available",
                 "artifact_role": "read_model_query",
                 "preset": preset_name,

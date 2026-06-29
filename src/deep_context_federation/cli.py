@@ -24,6 +24,8 @@ from deep_context_federation.agent_handoff_verify import markdown_agent_handoff_
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_model_input import markdown_agent_model_input
+from deep_context_federation.agent_ready import build_agent_ready
+from deep_context_federation.agent_ready import markdown_agent_ready
 from deep_context_federation.agent_route import markdown_agent_route
 from deep_context_federation.agent_route import route_agent_context
 from deep_context_federation.bench import benchmark_build
@@ -315,6 +317,36 @@ def build_parser() -> argparse.ArgumentParser:
     agent_route.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     agent_route.add_argument("--output", type=Path)
     agent_route.add_argument("--format", choices=["json", "markdown"], default="json")
+    agent_ready = sub.add_parser("agent-ready", help="Fail-closed DCF pipeline that emits model prompt text only when gates pass.")
+    agent_ready.add_argument("--root", type=Path, default=Path.cwd())
+    agent_ready.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+    agent_ready.add_argument("--manifest", type=Path, action="append", default=[])
+    agent_ready.add_argument("--task", default="")
+    agent_ready.add_argument("--target", action="append", default=[])
+    agent_ready.add_argument("--targets-file", type=Path)
+    agent_ready.add_argument("--handoff", type=Path)
+    agent_ready.add_argument("--quality-policy", type=Path)
+    agent_ready.add_argument("--target-review-policy", type=Path)
+    agent_ready.add_argument("--efficiency-policy", type=Path)
+    agent_ready.add_argument("--context-gate-policy", type=Path)
+    agent_ready.add_argument("--baseline", type=Path, action="append", default=[])
+    agent_ready.add_argument("--workflow-token-budget", type=int, default=4000)
+    agent_ready.add_argument("--context-token-budget", type=int, default=4000)
+    agent_ready.add_argument("--context-mode", choices=["read-first", "decision-allowed", "all"], default="read-first")
+    agent_ready.add_argument("--max-artifact-tokens", type=int, default=1200)
+    agent_ready.add_argument("--query-limit", type=int, default=10)
+    agent_ready.add_argument("--max-presets", type=int, default=3)
+    agent_ready.add_argument("--max-rows", type=int, default=80)
+    agent_ready.add_argument("--max-files", type=int, default=5000)
+    agent_ready.add_argument("--max-parse-bytes", type=int, default=1_000_000)
+    agent_ready.add_argument("--hash-files", action="store_true")
+    agent_ready.add_argument("--include-codebase-memory", action="store_true")
+    agent_ready.add_argument("--codebase-memory-cache-dir", type=Path)
+    agent_ready.add_argument("--include-details", action="store_true", help="Include full target adjudication details inside target review.")
+    agent_ready.add_argument("--no-content", action="store_true", help="Emit metadata-only context sections.")
+    agent_ready.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
+    agent_ready.add_argument("--output", type=Path)
+    agent_ready.add_argument("--format", choices=["json", "markdown", "prompt"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -876,6 +908,56 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0
+    if args.command == "agent-ready":
+        targets = list(args.target or [])
+        if args.targets_file:
+            targets.extend(read_targets_file(args.targets_file))
+        quality_policy = load_quality_gate_policy(args.quality_policy) if args.quality_policy else None
+        target_policy = load_target_review_gate_policy(args.target_review_policy) if args.target_review_policy else None
+        efficiency_policy = load_efficiency_gate_policy(args.efficiency_policy) if args.efficiency_policy else None
+        context_gate_policy = load_agent_context_gate_policy(args.context_gate_policy) if args.context_gate_policy else None
+        result = build_agent_ready(
+            root=args.root,
+            output_dir=args.output_dir,
+            manifests=args.manifest,
+            task=args.task,
+            targets=targets,
+            handoff_path=args.handoff,
+            quality_gate_policy=quality_policy,
+            target_review_gate_policy=target_policy,
+            efficiency_gate_policy=efficiency_policy,
+            agent_context_gate_policy=context_gate_policy,
+            quality_policy_path=args.quality_policy,
+            target_review_policy_path=args.target_review_policy,
+            workflow_token_budget=args.workflow_token_budget,
+            context_token_budget=args.context_token_budget,
+            context_mode=args.context_mode,
+            max_artifact_tokens=args.max_artifact_tokens,
+            query_limit=args.query_limit,
+            max_presets=args.max_presets,
+            max_rows=args.max_rows,
+            max_files=args.max_files,
+            max_parse_bytes=args.max_parse_bytes,
+            include_hashes=args.hash_files,
+            include_codebase_memory=args.include_codebase_memory,
+            codebase_memory_cache_dir=args.codebase_memory_cache_dir,
+            include_content=not args.no_content,
+            include_prompt=not args.no_prompt,
+            include_details=args.include_details,
+            extra_baselines=args.baseline,
+        )
+        if args.output:
+            result["outputs"] = dict(result.get("outputs") if isinstance(result.get("outputs"), dict) else {})
+            result["outputs"]["agent_ready_json"] = args.output.expanduser().resolve().as_posix()
+            write_json(args.output, result)
+        if args.format == "prompt":
+            if result["ok"]:
+                print(result.get("prompt_text") or "", end="" if str(result.get("prompt_text") or "").endswith("\n") else "\n")
+        elif args.format == "markdown":
+            print(markdown_agent_ready(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
     if args.command == "scan":
         if args.build and not args.write:
             print("scan --build requires --write so the generated manifest exists", flush=True)

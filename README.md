@@ -65,6 +65,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - agent context gate that enforces token, missing-artifact, truncation, and schema thresholds before model handoff
 - agent handoff command that runs the CI decision, bounded context bundle, and context gate in one pipeline
 - agent route command that normalizes discovery into a stable global-wrapper route decision
+- agent ready command that turns a safe handoff or manifest+task into verified model prompt input
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -241,6 +242,17 @@ python -m deep_context_federation.cli agent-route \
 ```
 
 `agent-route` is read-only and does not execute its recommended command. It normalizes discovery into `ready_agent_route`, `needs_agent_handoff`, `needs_task_agent_route`, `needs_bootstrap_agent_route`, `needs_manifest_refresh_agent_route`, or `blocked_agent_route`, then returns `route_steps` and `recommended_next_command`. This gives Codex, Claude, AGY, GitHub runners, or shell wrappers one stable routing contract instead of making each wrapper hard-code DCF status branching.
+
+When a wrapper wants DCF to perform the safe generated-artifact steps and return model input, use:
+
+```bash
+python -m deep_context_federation.cli agent-ready \
+  --root . \
+  --task "dashboard operator evidence authority" \
+  --format prompt
+```
+
+`agent-ready` is fail-closed. It emits prompt text only after an existing handoff passes `agent-model-input`, or after a manifest plus task builds a gated handoff that then passes `agent-model-input`. It does not auto-install tools, call external models, mutate source files, or claim project authority.
 
 Use lower-level discovery when a wrapper only needs to probe the repo state:
 
@@ -587,6 +599,8 @@ Run `dcf verify-handoff --input <handoff.json>` before giving a copied or extern
 For global wrappers, prefer `dcf agent-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic.
 
 Use `dcf agent-route --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `agent-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
+
+Use `dcf agent-ready --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then emit prompt text only if the final model-input gate passes.
 
 ## Capabilities Manifest
 

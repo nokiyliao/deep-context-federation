@@ -15,6 +15,7 @@ from deep_context_federation.agent_discover import AGENT_DISCOVERY_SCHEMA_VERSIO
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
+from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_route import AGENT_ROUTE_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import DEFAULT_JSON_NAME
@@ -476,6 +477,29 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "agent_ready",
+            "schema_version": AGENT_READY_SCHEMA_VERSION,
+            "producer": "agent-ready",
+            "consumer_commands": ["agent_router", "global_wrapper", "ci", "operator_context", "model_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "root",
+                "action_taken",
+                "route_summary",
+                "handoff_summary",
+                "model_input_summary",
+                "prompt_source",
+                "prompt_estimated_tokens",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "schema_registry",
             "schema_version": "deep_context_federation_schema_registry_v1",
             "producer": "schema",
@@ -788,6 +812,30 @@ def _commands() -> list[dict[str, Any]]:
             "output_schemas": [AGENT_ROUTE_SCHEMA_VERSION],
             "input_schemas": [],
             "options": ["--root", "--task", "--target", "--handoff", "--output-dir", "--output", "--format"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "agent-ready",
+            "intent": "Fail-closed DCF pipeline that turns an existing safe handoff or manifest+task into verified model prompt input.",
+            "writes": ["output_dir generated DCF artifacts when handoff build is required", "optional ready JSON when --output is set"],
+            "output_schemas": [AGENT_READY_SCHEMA_VERSION],
+            "input_schemas": [],
+            "options": [
+                "--root",
+                "--manifest",
+                "--task",
+                "--target",
+                "--handoff",
+                "--output-dir",
+                "--quality-policy",
+                "--target-review-policy",
+                "--efficiency-policy",
+                "--context-gate-policy",
+                "--workflow-token-budget",
+                "--context-token-budget",
+                "--format",
+            ],
             "authority_effect": "none",
             "no_apply": True,
         },

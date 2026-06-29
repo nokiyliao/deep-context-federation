@@ -15,6 +15,7 @@ from deep_context_federation.agent_discover import AGENT_DISCOVERY_SCHEMA_VERSIO
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
+from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_route import AGENT_ROUTE_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import MANIFEST_SCHEMA
@@ -877,6 +878,45 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "discovered": object_type,
                 "discovery_summary": object_type,
                 "wrapper_contract": object_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "agent_ready": _schema(
+            AGENT_READY_SCHEMA_VERSION,
+            "Deep Context Federation agent ready",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "root",
+                "action_taken",
+                "route_summary",
+                "handoff_summary",
+                "model_input_summary",
+                "prompt_source",
+                "prompt_estimated_tokens",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_ready", "fail_agent_ready"]},
+                **_boundary_props(),
+                "root": {"type": "string"},
+                "task": {"type": "string"},
+                "targets": array_type,
+                "action_taken": {"type": "string"},
+                "route_summary": object_type,
+                "handoff_summary": object_type,
+                "model_input_summary": object_type,
+                "prompt_source": {"type": "string"},
+                "prompt_format": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+                "prompt_text": {"type": "string"},
+                "token_economics": object_type,
+                "errors": array_type,
+                "outputs": object_type,
                 "safety_boundaries": object_type,
             },
         ),

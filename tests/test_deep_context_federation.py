@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from deep_context_federation.agent_discover import discover_agent_context
 from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
+from deep_context_federation.agent_ready import build_agent_ready
 from deep_context_federation.agent_route import route_agent_context
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
@@ -113,7 +115,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.36.0"
+    assert payload["package"]["version"] == "0.37.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -129,6 +131,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "agent-discover",
         "agent-handoff",
         "agent-model-input",
+        "agent-ready",
         "agent-route",
         "verify-handoff",
         "intake",
@@ -169,6 +172,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
+    assert by_kind["agent_ready"]["schema_version"] == "deep_context_federation_agent_ready_v1"
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
@@ -204,6 +208,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
+    assert by_kind["agent_ready"]["schema_version"] == "deep_context_federation_agent_ready_v1"
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
@@ -718,6 +723,14 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert route["route_steps"][0]["terminal_model_input"] is True
     assert "agent-model-input" in route["recommended_next_command"]
     assert validate_artifact_contract(route)["ok"] is True
+    ready = build_agent_ready(root=tmp_path, output_dir=tmp_path / "agent_ready", handoff_path=Path(result["outputs"]["agent_handoff_json"]))
+    assert ready["schema_version"] == "deep_context_federation_agent_ready_v1"
+    assert ready["ok"] is True
+    assert ready["status"] == "pass_agent_ready"
+    assert ready["action_taken"] == "read_existing_handoff"
+    assert ready["prompt_text"].startswith("# Deep Context Federation Agent Context")
+    assert ready["model_input_summary"]["status"] == "pass_agent_model_input"
+    assert validate_artifact_contract(ready)["ok"] is True
     assert context_path.exists()
     assert prompt_path.exists()
     assert prompt_path.read_text(encoding="utf-8").startswith("# Deep Context Federation Agent Context")
@@ -888,6 +901,50 @@ def test_agent_route_normalizes_discovery_for_global_wrappers(tmp_path: Path) ->
     assert "--target 'dashboard_readiness_projection'" in runnable["recommended_next_command"]
     assert runnable["wrapper_contract"]["rerun_agent_discover_after_nonterminal_steps"] is True
     assert validate_artifact_contract(runnable)["ok"] is True
+
+
+def test_agent_ready_builds_or_blocks_model_input(tmp_path: Path) -> None:
+    manifest_root = tmp_path / "manifest_ready"
+    manifest_root.mkdir()
+    manifest_path = manifest_root / "deep_context_federation.json"
+    manifest_path.write_text(EXAMPLE_MANIFEST.read_text(encoding="utf-8"), encoding="utf-8")
+
+    missing_task = build_agent_ready(root=manifest_root, output_dir=manifest_root / ".dcf")
+    assert missing_task["ok"] is False
+    assert missing_task["status"] == "fail_agent_ready"
+    assert {row["id"] for row in missing_task["errors"]} == {"task_required"}
+    assert missing_task["prompt_text"] == ""
+    assert validate_artifact_contract(missing_task)["ok"] is True
+
+    missing_handoff = build_agent_ready(root=manifest_root, output_dir=manifest_root / ".dcf", handoff_path=manifest_root / "missing.json")
+    assert missing_handoff["ok"] is False
+    assert missing_handoff["action_taken"] == "blocked_by_route"
+    assert missing_handoff["prompt_text"] == ""
+    assert validate_artifact_contract(missing_handoff)["ok"] is True
+
+    shutil.copytree(REPO_ROOT / "examples/fixtures", manifest_root / "fixtures")
+
+    ready = build_agent_ready(
+        root=manifest_root,
+        output_dir=manifest_root / ".dcf",
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        efficiency_gate_policy=load_efficiency_gate_policy(EXAMPLE_EFFICIENCY_GATE_POLICY),
+        agent_context_gate_policy=load_agent_context_gate_policy(EXAMPLE_AGENT_CONTEXT_GATE_POLICY),
+        workflow_token_budget=900,
+        context_token_budget=1800,
+        max_artifact_tokens=500,
+    )
+    assert ready["ok"] is True
+    assert ready["status"] == "pass_agent_ready"
+    assert ready["action_taken"] == "build_agent_handoff"
+    assert ready["route_summary"]["status"] == "needs_agent_handoff"
+    assert ready["handoff_summary"]["status"] in {"pass_agent_handoff", "warn_agent_handoff"}
+    assert ready["model_input_summary"]["status"] == "pass_agent_model_input"
+    assert ready["prompt_source"]
+    assert ready["prompt_estimated_tokens"] > 0
+    assert ready["prompt_text"].startswith("# Deep Context Federation Agent Context")
+    assert validate_artifact_contract(ready)["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

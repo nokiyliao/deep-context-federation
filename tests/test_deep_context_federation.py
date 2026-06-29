@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation, codebase_memory_source
+from deep_context_federation.capabilities import build_capabilities
 from deep_context_federation.cache import DEFAULT_CACHE_NAME
 from deep_context_federation.compose import compose_manifests
 from deep_context_federation.diff import diff_federations
@@ -43,6 +44,41 @@ def test_quality_gate_policy_example_loads() -> None:
     assert policy["unknown_keys"] == []
     assert policy["validation_errors"] == []
     assert "repo_file_inventory" in policy["require_sources"]
+
+
+def test_capabilities_manifest_is_machine_readable() -> None:
+    payload = build_capabilities()
+
+    assert payload["schema_version"] == "deep_context_federation_capabilities_v1"
+    assert payload["status"] == "ok"
+    assert payload["authority_effect"] == "none"
+    assert payload["no_apply"] is True
+    assert payload["package"]["cli"] == "dcf"
+    assert payload["package"]["version"] == "0.11.0"
+
+    command_names = {row["command"] for row in payload["commands"]}
+    assert {
+        "capabilities",
+        "bootstrap",
+        "build",
+        "scan",
+        "quality-gate",
+        "query",
+        "sql",
+        "doctor",
+    } <= command_names
+    query_presets = {row["preset"] for row in payload["query_presets"]}
+    assert {"surface-splits", "claim-lineage", "code-to-authority", "operator-projection"} <= query_presets
+    sql_presets = {row["preset"] for row in payload["sql_presets"]}
+    assert {"source-health", "search", "code-to-authority"} <= sql_presets
+
+    contracts = payload["contracts"]["artifact_contracts"]
+    by_kind = {row["artifact_kind"]: row for row in contracts}
+    assert by_kind["quality_gate_policy"]["schema_version"] == "deep_context_federation_quality_gate_policy_v1"
+    assert by_kind["quality_gate_policy"]["authority_effect"] == "none"
+    assert by_kind["quality_gate_policy"]["no_apply"] is True
+    assert by_kind["federation"]["schema_version"] == "deep_context_federation_v1"
+    assert payload["safety_boundaries"]["external_tool_install"] == "never"
 
 
 def test_build_verify_and_query_example(tmp_path: Path) -> None:

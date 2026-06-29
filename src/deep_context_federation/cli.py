@@ -11,6 +11,8 @@ from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.bootstrap import markdown_bootstrap
 from deep_context_federation.builder import DEFAULT_JSON_NAME, build_federation, read_json, write_json
+from deep_context_federation.capabilities import build_capabilities
+from deep_context_federation.capabilities import markdown_capabilities
 from deep_context_federation.compose import compose_manifests
 from deep_context_federation.compose import markdown_compose
 from deep_context_federation.diff import diff_federations
@@ -46,6 +48,9 @@ def add_common_source_args(parser: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dcf", description="Read-only deep context federation CLI.")
     sub = parser.add_subparsers(dest="command", required=True)
+    capabilities = sub.add_parser("capabilities", help="Describe DCF machine-readable contracts, commands, presets, and safety boundaries.")
+    capabilities.add_argument("--output", type=Path)
+    capabilities.add_argument("--format", choices=["json", "markdown"], default="json")
     build = sub.add_parser("build", help="Build a federation artifact from a manifest.")
     add_common_source_args(build)
     build.add_argument("--include-codebase-memory", action="store_true")
@@ -139,6 +144,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "capabilities":
+        result = build_capabilities()
+        if args.output:
+            result["outputs"] = {"capabilities_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_capabilities(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
     if args.command == "validate-manifest":
         manifest = read_json(args.manifest)
         result = validate_manifest(manifest, manifest_path=args.manifest)

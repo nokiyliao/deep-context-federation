@@ -2,6 +2,7 @@
 
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation
+from deep_context_federation.capabilities import build_capabilities
 from deep_context_federation.compose import compose_manifests
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
@@ -16,10 +17,12 @@ from deep_context_federation.rank import rank_sources
 from deep_context_federation.scanner import scan_repository
 from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.verifier import verify_federation
+from deep_context_federation.version import __version__
 
 __all__ = [
     "bootstrap_federation",
     "build_federation",
+    "build_capabilities",
     "compose_manifests",
     "diff_federations",
     "doctor_federation",
@@ -35,5 +38,3 @@ __all__ = [
     "validate_manifest",
     "verify_federation",
 ]
-
-__version__ = "0.10.0"

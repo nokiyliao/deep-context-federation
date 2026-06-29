@@ -51,6 +51,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - graph trace from any matching entity
 - manifest composition for merging self-scan output with curated evidence/context sources
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
+- self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - machine-readable quality gate for CI and agent routing
 - entity/source ranking for prioritization
 - doctor-style diagnostics with recommended actions
@@ -71,6 +72,14 @@ python -m pip install -e ".[dev]"
 ```
 
 ## Quickstart
+
+Inspect the tool's machine-readable contract surface:
+
+```bash
+python -m deep_context_federation.cli capabilities \
+  --format json \
+  --output .dcf/deep_context_federation_capabilities.json
+```
 
 Self-bootstrap a fresh repository into a verified federation:
 
@@ -238,6 +247,25 @@ Every scan summary includes lightweight performance fields such as `duration_sec
 6. write `deep_context_federation_bootstrap.json` and `DEEP_CONTEXT_FEDERATION_BOOTSTRAP.md`
 
 This is the recommended entrypoint for coding agents and CI because it produces one compact status object with scan, compose, build, verify, and doctor sections while preserving `authority_effect: none` and `no_apply: true`.
+
+## Capabilities Manifest
+
+`dcf capabilities` is the self-describing entrypoint for agent orchestration. It returns a stable JSON object with:
+
+- command names, intents, output schemas, and write boundaries
+- artifact contracts and generated source contracts
+- JSON query presets and SQLite query presets
+- edge types and local fusion roles
+- process exit-code meanings
+- explicit safety boundaries such as `authority_effect: none`, `no_apply: true`, no external installer, and generated-output-only writes
+
+Use it before dispatching DCF from CI, AGY, Codex, Claude, GitHub Actions, or another runner:
+
+```bash
+dcf capabilities \
+  --format json \
+  --output .dcf/deep_context_federation_capabilities.json
+```
 
 ## Quality Gate
 

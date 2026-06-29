@@ -26,6 +26,7 @@ from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.capabilities import CAPABILITIES_SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
+from deep_context_federation.context_advantage import CONTEXT_ADVANTAGE_SCHEMA_VERSION
 from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
 from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_SCHEMA_VERSION
@@ -175,6 +176,37 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "generated_at": {"type": "string"},
                 "strict": object_type,
                 "summary": object_type,
+                "checks": array_type,
+                "errors": array_type,
+                "warnings": array_type,
+                "next_actions": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "context_advantage": _schema(
+            CONTEXT_ADVANTAGE_SCHEMA_VERSION,
+            "Deep Context Federation context advantage proof",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "policy",
+                "summary",
+                "checks",
+                "errors",
+                "warnings",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_context_advantage", "warn_context_advantage", "fail_context_advantage"]},
+                **_boundary_props(),
+                "generated_at": {"type": "string"},
+                "policy": object_type,
+                "summary": object_type,
+                "evidence_refs": object_type,
                 "checks": array_type,
                 "errors": array_type,
                 "warnings": array_type,

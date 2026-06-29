@@ -31,6 +31,7 @@ from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import QUERY_PRESETS
 from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
+from deep_context_federation.context_advantage import CONTEXT_ADVANTAGE_SCHEMA_VERSION
 from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
 from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_SCHEMA_VERSION
@@ -589,6 +590,15 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "context_advantage",
+            "schema_version": CONTEXT_ADVANTAGE_SCHEMA_VERSION,
+            "producer": "prove-context-advantage",
+            "consumer_commands": ["ci", "agent_router", "operator_context", "global_wrapper"],
+            "top_level_required": ["schema_version", "ok", "status", "policy", "summary", "checks", "errors", "warnings", "safety_boundaries"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "unified_working_set",
             "schema_version": UNIFIED_WORKING_SET_SCHEMA_VERSION,
             "producer": "pack-working-set",
@@ -950,6 +960,26 @@ def _commands() -> list[dict[str, Any]]:
                 "--min-read-first-savings-percent",
                 "--min-gate-pass-savings-percent",
                 "--require-artifact-role",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "prove-context-advantage",
+            "intent": "Combine unified-plane and token-efficiency evidence into one fail-closed proof that DCF is the better default context entrypoint.",
+            "writes": ["optional context advantage proof JSON when --output is set"],
+            "output_schemas": [CONTEXT_ADVANTAGE_SCHEMA_VERSION],
+            "input_schemas": [UNIFIED_PLANE_AUDIT_SCHEMA_VERSION, EFFICIENCY_REPORT_SCHEMA_VERSION, EFFICIENCY_GATE_SCHEMA_VERSION],
+            "options": [
+                "--unified-plane-audit",
+                "--efficiency-report",
+                "--efficiency-gate",
+                "--min-read-first-savings-percent",
+                "--max-read-first-ratio",
+                "--allow-warn-unified-plane",
+                "--require-efficiency-gate",
+                "--output",
+                "--format",
             ],
             "authority_effect": "none",
             "no_apply": True,

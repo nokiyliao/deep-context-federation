@@ -44,6 +44,8 @@ from deep_context_federation.capabilities import build_capabilities
 from deep_context_federation.capabilities import markdown_capabilities
 from deep_context_federation.compose import compose_manifests
 from deep_context_federation.compose import markdown_compose
+from deep_context_federation.context_advantage import markdown_context_advantage
+from deep_context_federation.context_advantage import prove_context_advantage
 from deep_context_federation.context_pack import markdown_context_pack
 from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
@@ -470,6 +472,16 @@ def build_parser() -> argparse.ArgumentParser:
     efficiency_gate.add_argument("--require-artifact-role", action="append")
     efficiency_gate.add_argument("--output", type=Path)
     efficiency_gate.add_argument("--format", choices=["json", "markdown"], default="json")
+    context_advantage = sub.add_parser("prove-context-advantage", help="Prove DCF is the better default context entrypoint from integration and token evidence.")
+    context_advantage.add_argument("--unified-plane-audit", type=Path, required=True)
+    context_advantage.add_argument("--efficiency-report", type=Path, required=True)
+    context_advantage.add_argument("--efficiency-gate", type=Path)
+    context_advantage.add_argument("--min-read-first-savings-percent", type=float, default=50.0)
+    context_advantage.add_argument("--max-read-first-ratio", type=float, default=0.5)
+    context_advantage.add_argument("--allow-warn-unified-plane", action="store_true")
+    context_advantage.add_argument("--require-efficiency-gate", action="store_true")
+    context_advantage.add_argument("--output", type=Path)
+    context_advantage.add_argument("--format", choices=["json", "markdown"], default="json")
     agent_ci = sub.add_parser("decide-continuation", help="Run workflow, efficiency report, and efficiency gate into one continuation decision.")
     agent_ci.add_argument("--root", type=Path, default=Path.cwd())
     agent_ci.add_argument("--output-dir", type=Path, default=Path(".dcf"))
@@ -1106,6 +1118,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_efficiency_gate(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "prove-context-advantage":
+        unified_plane_audit = read_required_json(args.unified_plane_audit)
+        efficiency_report = read_required_json(args.efficiency_report)
+        efficiency_gate = read_required_json(args.efficiency_gate) if args.efficiency_gate else {}
+        result = prove_context_advantage(
+            unified_plane_audit=unified_plane_audit,
+            efficiency_report=efficiency_report,
+            efficiency_gate=efficiency_gate,
+            min_read_first_savings_percent=args.min_read_first_savings_percent,
+            max_read_first_ratio=args.max_read_first_ratio,
+            require_unified_plane_pass=not args.allow_warn_unified_plane,
+            require_efficiency_gate=args.require_efficiency_gate,
+        )
+        if args.output:
+            result["outputs"] = {"context_advantage_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_context_advantage(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

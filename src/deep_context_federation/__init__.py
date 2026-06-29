@@ -19,6 +19,7 @@ from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation
 from deep_context_federation.capabilities import build_capabilities
 from deep_context_federation.compose import compose_manifests
+from deep_context_federation.context_advantage import prove_context_advantage
 from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
@@ -102,6 +103,7 @@ __all__ = [
     "normalize_quality_gate_policy",
     "normalize_target_review_gate_policy",
     "pack_context",
+    "prove_context_advantage",
     "query_federation",
     "query_sqlite",
     "rank_entities",

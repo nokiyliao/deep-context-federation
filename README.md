@@ -61,6 +61,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - workflow run capsule that executes the read-only DCF chain and returns one compact handoff artifact
 - efficiency report that measures read-first and gate-pass token savings against generated baselines
 - efficiency gate that turns token-savings targets into CI or agent routing thresholds
+- context-advantage proof that combines unified-plane and token-efficiency evidence before claiming DCF is the better default entrypoint
 - continuation decision that chains workflow run, efficiency report, and efficiency gate into one read-first artifact
 - model context bundle that materializes selected `decide-continuation` read-plan artifacts into one bounded prompt/context payload
 - model context gate that enforces token, missing-artifact, truncation, and schema thresholds before model handoff
@@ -784,6 +785,28 @@ dcf audit-unified-plane \
   --ownership-plan .dcf/deep_context_federation_native_integration_plan.json \
   --context-index .dcf/deep_context_federation_unified_index.json \
   --working-set .dcf/deep_context_federation_selected_context.json \
+  --format markdown
+```
+
+## Context Advantage Proof
+
+`dcf prove-context-advantage` is the fail-closed proof surface for the core DCF claim: use DCF as the default model entrypoint because it is both integrated and measurably smaller than scattered context reads.
+
+It consumes existing artifacts only:
+
+- `audit-unified-plane`: proves DCF is one function-named, source-collapsed read plane
+- `efficiency-report`: measures read-first tokens against full-federation/generated-output baselines
+- optional `efficiency-gate`: enforces policy thresholds before accepting the proof
+
+The proof requires baseline evidence, read-first context smaller than baseline, a configurable savings threshold, and a passing unified-plane audit. It remains `authority_effect: none` / `no_apply: true`; it does not run tools, mutate files, or call external models.
+
+```bash
+dcf prove-context-advantage \
+  --unified-plane-audit .dcf/deep_context_federation_unified_plane_audit.json \
+  --efficiency-report .dcf/deep_context_federation_efficiency_report.json \
+  --efficiency-gate .dcf/deep_context_federation_efficiency_gate.json \
+  --min-read-first-savings-percent 50 \
+  --max-read-first-ratio 0.5 \
   --format markdown
 ```
 

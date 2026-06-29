@@ -33,6 +33,7 @@ from deep_context_federation.builder import build_federation, codebase_memory_so
 from deep_context_federation.capabilities import build_capabilities
 from deep_context_federation.cache import DEFAULT_CACHE_NAME
 from deep_context_federation.compose import compose_manifests
+from deep_context_federation.context_advantage import prove_context_advantage
 from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
@@ -240,7 +241,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.53.0"
+    assert payload["package"]["version"] == "0.54.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -250,6 +251,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "workflow-run",
         "efficiency-report",
         "efficiency-gate",
+        "prove-context-advantage",
         "decide-continuation",
         "pack-model-context",
         "gate-model-context",
@@ -299,6 +301,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["efficiency_gate"]["schema_version"] == "deep_context_federation_efficiency_gate_v1"
     assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
+    assert by_kind["context_advantage"]["schema_version"] == "deep_context_federation_context_advantage_v1"
     assert by_kind["agent_ci"]["schema_version"] == "deep_context_federation_agent_ci_v1"
     assert by_kind["agent_context"]["schema_version"] == "deep_context_federation_agent_context_v1"
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
@@ -350,6 +353,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["efficiency_gate"]["schema_version"] == "deep_context_federation_efficiency_gate_v1"
     assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
+    assert by_kind["context_advantage"]["schema_version"] == "deep_context_federation_context_advantage_v1"
     assert by_kind["agent_ci"]["schema_version"] == "deep_context_federation_agent_ci_v1"
     assert by_kind["agent_context"]["schema_version"] == "deep_context_federation_agent_context_v1"
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
@@ -480,6 +484,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "audit-unified-plane" in top_help.stdout
     assert "pack-working-set" in top_help.stdout
     assert "query-read-model" in top_help.stdout
+    assert "prove-context-advantage" in top_help.stdout
     assert "decide-continuation" in top_help.stdout
     assert "prepare-model-input" in top_help.stdout
     assert "native-integration-plan" not in top_help.stdout
@@ -548,6 +553,25 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert audit.returncode == 0
     assert "--context-index" in audit.stdout
     assert "--require-all-owned" in audit.stdout
+
+    advantage = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "prove-context-advantage",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert advantage.returncode == 0
+    assert "--unified-plane-audit" in advantage.stdout
+    assert "--efficiency-report" in advantage.stdout
+    assert "--min-read-first-savings-percent" in advantage.stdout
 
     brief = subprocess.run(
         [
@@ -893,6 +917,96 @@ def test_efficiency_gate_enforces_token_savings_policy(tmp_path: Path) -> None:
     assert "read_first_savings_minimum" in failed_ids
     assert validate_artifact_contract(strict_policy)["ok"] is True
     assert validate_artifact_contract(failed)["ok"] is True
+
+
+def test_context_advantage_proves_integrated_token_efficient_entrypoint(tmp_path: Path) -> None:
+    review_policy = {
+        "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "max_warn": 1,
+        "max_priority_score": 120,
+    }
+    run = build_workflow_run(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "workflow_run",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        token_budget=900,
+        max_files=200,
+    )
+    efficiency_report = build_efficiency_report(
+        run,
+        workflow_run_path=Path(run["outputs"]["workflow_run_json"]),
+    )
+    efficiency_gate = evaluate_efficiency_gate(efficiency_report)
+    capabilities = build_capabilities()
+    ownership = build_native_integration_plan(
+        capabilities=[
+            "symbol-call-graph",
+            "surface-map",
+            "long-term-context-memory",
+            "evidence-lineage",
+            "workflow-orchestration",
+        ]
+    )
+    federation = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "federation",
+        write=False,
+    )
+    context_index = build_unified_index(
+        federation=federation,
+        capabilities=capabilities,
+        native_plan=ownership,
+        limit=200,
+    )
+    working_set = build_unified_working_set(
+        unified_index=context_index,
+        query="dashboard operator authority",
+        limit=24,
+        min_facets=4,
+    )
+    unified_plane = audit_unified_plane(
+        capabilities=capabilities,
+        ownership_plan=ownership,
+        context_index=context_index,
+        working_set=working_set,
+    )
+
+    proof = prove_context_advantage(
+        unified_plane_audit=unified_plane,
+        efficiency_report=efficiency_report,
+        efficiency_gate=efficiency_gate,
+        require_efficiency_gate=True,
+    )
+
+    assert proof["schema_version"] == "deep_context_federation_context_advantage_v1"
+    assert proof["ok"] is True
+    assert proof["status"] == "pass_context_advantage"
+    assert proof["summary"]["advantage_score"] >= 80
+    assert proof["summary"]["read_first_savings_percent"] >= 50
+    check_ids = {row["id"] for row in proof["checks"]}
+    assert {
+        "unified_plane_ready",
+        "efficiency_report_ready",
+        "efficiency_gate_ready",
+        "read_first_smaller_than_baseline",
+        "read_first_savings_meets_advantage_threshold",
+    } <= check_ids
+    assert validate_artifact_contract(proof, artifact_kind="context_advantage")["ok"] is True
+
+    failed = prove_context_advantage(
+        unified_plane_audit=unified_plane,
+        efficiency_report=efficiency_report,
+        min_read_first_savings_percent=99.0,
+    )
+    assert failed["ok"] is False
+    assert failed["status"] == "fail_context_advantage"
+    assert any(row["id"] == "read_first_savings_meets_advantage_threshold" for row in failed["errors"])
 
 
 def test_agent_ci_runs_integrated_continuation_gate(tmp_path: Path) -> None:

@@ -20,6 +20,8 @@ from deep_context_federation.query import QUERY_SCHEMA_VERSION
 from deep_context_federation.resolve import RESOLVE_SCHEMA_VERSION
 from deep_context_federation.scanner import SCAN_SCHEMA_VERSION
 from deep_context_federation.target_review import TARGET_REVIEW_SCHEMA_VERSION
+from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION
+from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 
@@ -327,6 +329,39 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "recommended_next_targets": array_type,
                 "prompt_text": {"type": "string"},
                 "prompt_estimated_tokens": {"type": "integer"},
+            },
+        ),
+        "target_review_gate_policy": _schema(
+            TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION,
+            "Deep Context Federation target review gate policy",
+            ["schema_version", "authority_effect", "no_apply"],
+            {
+                **_boundary_props(),
+                "policy_id": {"type": "string"},
+                "description": {"type": "string"},
+                "max_blocked": {"type": ["integer", "null"]},
+                "max_no_match": {"type": ["integer", "null"]},
+                "max_advisory_only": {"type": ["integer", "null"]},
+                "max_warn": {"type": ["integer", "null"]},
+                "max_priority_score": {"type": ["integer", "null"]},
+                "min_average_confidence": {"type": ["number", "null"]},
+                "disallow_risk_flags": array_type,
+                "require_targets": array_type,
+            },
+        ),
+        "target_review_gate": _schema(
+            TARGET_REVIEW_GATE_SCHEMA_VERSION,
+            "Deep Context Federation target review gate",
+            ["schema_version", "ok", "status", "authority_effect", "no_apply", "policy", "checks", "errors", "summary"],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_target_review_gate", "fail_target_review_gate"]},
+                **_boundary_props(),
+                "policy": object_type,
+                "error_count": {"type": "integer"},
+                "checks": array_type,
+                "errors": array_type,
+                "summary": object_type,
             },
         ),
         "context_pack": _schema(

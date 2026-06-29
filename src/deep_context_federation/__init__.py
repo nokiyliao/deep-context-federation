@@ -23,6 +23,9 @@ from deep_context_federation.schemas import build_schema_registry
 from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.target_review import review_targets
+from deep_context_federation.target_review_gate import evaluate_target_review_gate
+from deep_context_federation.target_review_gate import load_target_review_gate_policy
+from deep_context_federation.target_review_gate import normalize_target_review_gate_policy
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.version import __version__
@@ -39,8 +42,11 @@ __all__ = [
     "diff_federations",
     "doctor_federation",
     "evaluate_quality_gate",
+    "evaluate_target_review_gate",
     "load_quality_gate_policy",
+    "load_target_review_gate_policy",
     "normalize_quality_gate_policy",
+    "normalize_target_review_gate_policy",
     "pack_context",
     "query_federation",
     "query_sqlite",

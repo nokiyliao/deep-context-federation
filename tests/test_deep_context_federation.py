@@ -33,6 +33,8 @@ from deep_context_federation.schemas import build_schema_registry
 from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.target_review import review_targets
+from deep_context_federation.target_review_gate import evaluate_target_review_gate
+from deep_context_federation.target_review_gate import normalize_target_review_gate_policy
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.verifier import verify_federation
 
@@ -62,7 +64,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.19.0"
+    assert payload["package"]["version"] == "0.20.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -80,6 +82,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "query",
         "resolve",
         "review-targets",
+        "review-gate",
         "sql",
         "doctor",
     } <= command_names
@@ -113,6 +116,8 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["resolve"]["schema_version"] == "deep_context_federation_resolve_v1"
     assert by_kind["adjudication"]["schema_version"] == "deep_context_federation_adjudicate_v1"
     assert by_kind["target_review"]["schema_version"] == "deep_context_federation_target_review_v1"
+    assert by_kind["target_review_gate"]["schema_version"] == "deep_context_federation_target_review_gate_v1"
+    assert by_kind["target_review_gate_policy"]["schema_version"] == "deep_context_federation_target_review_gate_policy_v1"
 
     policy = json.loads(EXAMPLE_QUALITY_GATE_POLICY.read_text(encoding="utf-8"))
     valid = validate_artifact_contract(policy)
@@ -286,6 +291,52 @@ def test_review_targets_prioritizes_target_portfolio(tmp_path: Path) -> None:
     assert result["prompt_text"].startswith("# Deep Context Federation Target Review")
     assert result["prompt_estimated_tokens"] <= 900
     assert validate_artifact_contract(result)["ok"] is True
+
+
+def test_target_review_gate_enforces_policy(tmp_path: Path) -> None:
+    payload = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=False,
+    )
+    review = review_targets(
+        payload,
+        targets=[
+            "dashboard_readiness_projection",
+            "missing_target_for_review",
+        ],
+        token_budget=900,
+    )
+
+    failed = evaluate_target_review_gate(review)
+    assert failed["schema_version"] == "deep_context_federation_target_review_gate_v1"
+    assert failed["ok"] is False
+    assert failed["status"] == "fail_target_review_gate"
+    failed_ids = {row["id"] for row in failed["errors"]}
+    assert "no_match_within_limit" in failed_ids
+    assert "priority_score_within_limit" in failed_ids
+    assert validate_artifact_contract(failed)["ok"] is True
+
+    policy = normalize_target_review_gate_policy(
+        {
+            "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+            "policy_id": "unit_target_review_gate",
+            "authority_effect": "none",
+            "no_apply": True,
+            "max_no_match": 1,
+            "max_priority_score": 120,
+            "max_warn": 1,
+            "require_targets": ["dashboard_readiness_projection", "missing_target_for_review"],
+        }
+    )
+    passed = evaluate_target_review_gate(review, policy=policy)
+    assert passed["ok"] is True
+    assert passed["status"] == "pass_target_review_gate"
+    assert passed["policy"]["policy_id"] == "unit_target_review_gate"
+    assert passed["summary"]["failed_check_count"] == 0
+    assert validate_artifact_contract(policy)["ok"] is True
+    assert validate_artifact_contract(passed)["ok"] is True
 
 
 def test_agent_intake_runs_full_agent_packet(tmp_path: Path) -> None:

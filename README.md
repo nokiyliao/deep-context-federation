@@ -52,6 +52,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - target resolver for claim/path/surface/symbol evidence cards
 - deterministic target adjudication across authority, evidence, and advisory tiers
 - batch target review for governance prioritization across many targets
+- target review gate for CI and agent routing thresholds
 - manifest composition for merging self-scan output with curated evidence/context sources
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - one-command agent intake packet for bootstrap, quality gate, and task brief
@@ -235,6 +236,12 @@ python -m deep_context_federation.cli review-targets \
   --input .dcf/deep_context_federation_latest.json \
   --target dashboard_readiness_projection \
   --target ui/dashboard/app.py \
+  --output .dcf/deep_context_federation_target_review.json
+
+python -m deep_context_federation.cli review-gate \
+  --input .dcf/deep_context_federation_target_review.json \
+  --max-no-match 0 \
+  --max-priority-score 99 \
   --format markdown
 
 python -m deep_context_federation.cli doctor \
@@ -428,6 +435,19 @@ It classifies related sources into authority, evidence, advisory, context, and u
 - optional full adjudication payloads with `--include-details`
 
 Targets can be passed repeatedly with `--target` or loaded from `--targets-file` as either a JSON list or newline-delimited text. This is the batch surface for large projects where an agent needs to decide which claims, paths, or surfaces deserve attention first.
+
+`dcf review-gate` turns that portfolio into a CI/agent routing gate. It checks policy thresholds such as:
+
+- `max_blocked`
+- `max_no_match`
+- `max_advisory_only`
+- `max_warn`
+- `max_priority_score`
+- `min_average_confidence`
+- disallowed risk flags
+- required reviewed targets
+
+Use `quality-gate` to verify federation health; use `review-gate` to decide whether a target portfolio is safe enough for agent continuation.
 
 ## Quality Gate
 

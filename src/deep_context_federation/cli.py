@@ -52,6 +52,9 @@ from deep_context_federation.sqlite_query import markdown as sql_markdown
 from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.target_review import markdown_target_review
 from deep_context_federation.target_review import review_targets
+from deep_context_federation.target_review_gate import evaluate_target_review_gate
+from deep_context_federation.target_review_gate import load_target_review_gate_policy
+from deep_context_federation.target_review_gate import markdown_target_review_gate
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.task_brief import markdown_task_brief
 from deep_context_federation.verifier import read_json as read_required_json
@@ -201,6 +204,19 @@ def build_parser() -> argparse.ArgumentParser:
     review_targets_parser.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     review_targets_parser.add_argument("--output", type=Path)
     review_targets_parser.add_argument("--format", choices=["json", "markdown"], default="json")
+    review_gate = sub.add_parser("review-gate", help="Evaluate a target review artifact against CI/agent policy.")
+    review_gate.add_argument("--input", type=Path, required=True)
+    review_gate.add_argument("--policy", type=Path)
+    review_gate.add_argument("--max-blocked", type=int)
+    review_gate.add_argument("--max-no-match", type=int)
+    review_gate.add_argument("--max-advisory-only", type=int)
+    review_gate.add_argument("--max-warn", type=int)
+    review_gate.add_argument("--max-priority-score", type=int)
+    review_gate.add_argument("--min-average-confidence", type=float)
+    review_gate.add_argument("--disallow-risk", action="append", dest="disallow_risk_flag")
+    review_gate.add_argument("--require-target", action="append")
+    review_gate.add_argument("--output", type=Path)
+    review_gate.add_argument("--format", choices=["json", "markdown"], default="json")
     doctor = sub.add_parser("doctor", help="Diagnose federation health and recommend next actions.")
     doctor.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     doctor.add_argument("--format", choices=["json", "markdown"], default="json")
@@ -516,6 +532,29 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0
+    if args.command == "review-gate":
+        payload = read_required_json(args.input)
+        policy = load_target_review_gate_policy(args.policy) if args.policy else None
+        result = evaluate_target_review_gate(
+            payload,
+            policy=policy,
+            max_blocked=args.max_blocked,
+            max_no_match=args.max_no_match,
+            max_advisory_only=args.max_advisory_only,
+            max_warn=args.max_warn,
+            max_priority_score=args.max_priority_score,
+            min_average_confidence=args.min_average_confidence,
+            disallow_risk_flags=args.disallow_risk_flag,
+            require_targets=args.require_target,
+        )
+        if args.output:
+            result["outputs"] = {"target_review_gate_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_target_review_gate(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
     if args.command == "doctor":
         payload = read_required_json(args.input)
         result = doctor_federation(payload)

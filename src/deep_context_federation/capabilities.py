@@ -31,6 +31,8 @@ from deep_context_federation.scanner import SURFACE_MAP_SCHEMA_VERSION
 from deep_context_federation.scanner import SYMBOL_MAP_SCHEMA_VERSION
 from deep_context_federation.sqlite_query import SQL_PRESETS
 from deep_context_federation.target_review import TARGET_REVIEW_SCHEMA_VERSION
+from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION
+from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 from deep_context_federation.version import __version__
@@ -148,8 +150,26 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "target_review",
             "schema_version": TARGET_REVIEW_SCHEMA_VERSION,
             "producer": "review-targets",
-            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "consumer_commands": ["review-gate", "agent_router", "ci", "operator_context"],
             "top_level_required": ["schema_version", "status", "target_count", "summary", "rows", "priority_order"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "target_review_gate_policy",
+            "schema_version": TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION,
+            "producer": "human_or_ci",
+            "consumer_commands": ["review-gate"],
+            "top_level_required": ["schema_version", "authority_effect", "no_apply"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "target_review_gate",
+            "schema_version": TARGET_REVIEW_GATE_SCHEMA_VERSION,
+            "producer": "review-gate",
+            "consumer_commands": ["agent_router", "ci"],
+            "top_level_required": ["schema_version", "ok", "status", "policy", "checks", "errors", "summary"],
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -372,6 +392,26 @@ def _commands() -> list[dict[str, Any]]:
             "writes": ["optional target review JSON when --output is set"],
             "output_schemas": [TARGET_REVIEW_SCHEMA_VERSION],
             "options": ["--target", "--targets-file", "--limit", "--token-budget", "--include-details", "--no-prompt"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "review-gate",
+            "intent": "Evaluate target review against CI/agent policy thresholds.",
+            "writes": ["optional target review gate JSON when --output is set"],
+            "output_schemas": [TARGET_REVIEW_GATE_SCHEMA_VERSION],
+            "input_schemas": [TARGET_REVIEW_SCHEMA_VERSION, TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION],
+            "options": [
+                "--policy",
+                "--max-blocked",
+                "--max-no-match",
+                "--max-advisory-only",
+                "--max-warn",
+                "--max-priority-score",
+                "--min-average-confidence",
+                "--disallow-risk",
+                "--require-target",
+            ],
             "authority_effect": "none",
             "no_apply": True,
         },

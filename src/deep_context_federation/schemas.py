@@ -37,6 +37,7 @@ from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_V
 from deep_context_federation.memory_ledger import MEMORY_LEDGER_SCHEMA_VERSION
 from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
 from deep_context_federation.operator_context import OPERATOR_CONTEXT_SCHEMA_VERSION
+from deep_context_federation.public_boundary import PUBLIC_BOUNDARY_AUDIT_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
@@ -476,6 +477,23 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "rows": array_type,
                 "source_identity_policy": object_type,
                 "source_snapshot": object_type,
+            },
+        ),
+        "public_boundary_audit": _schema(
+            PUBLIC_BOUNDARY_AUDIT_SCHEMA_VERSION,
+            "Deep Context Federation public boundary audit",
+            ["schema_version", "ok", "status", "authority_effect", "no_apply", "summary", "rows", "checks", "errors", "warnings", "safety_boundaries"],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_public_boundary_audit", "warn_public_boundary_audit", "fail_public_boundary_audit"]},
+                **_boundary_props(),
+                "generated_at": {"type": "string"},
+                "summary": object_type,
+                "rows": array_type,
+                "checks": array_type,
+                "errors": array_type,
+                "warnings": array_type,
+                "safety_boundaries": object_type,
             },
         ),
         "read_model_query": _schema(

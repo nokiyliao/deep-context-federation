@@ -793,6 +793,19 @@ dcf prove-unified-context \
   --format markdown
 ```
 
+## Public Boundary Audit
+
+`dcf prove-public-boundary` is the gate for deciding whether generated artifacts are safe to hand to a model, runner, or operator as public DCF context. It checks that artifacts declaring `source_identity_policy.source_ids_exposed: false` do not leak upstream source identity keys inside public sections such as `rows`, `operator_rows`, `expansion_plan`, or model handoff read plans.
+
+Raw federation files and raw opt-in query output can still exist as audit inputs. This command separates those audit surfaces from public model context instead of relying on agent memory.
+
+```bash
+dcf prove-public-boundary \
+  --input .dcf/deep_context_federation_selected_context.json \
+  --input .dcf/deep_context_federation_operator_context.json \
+  --format markdown
+```
+
 ## Operator Context Projection
 
 `dcf summarize-operator-context` is the operator-facing DCF function for current blockers and drift. It reads one federation artifact and emits a compact, source-hidden projection of:

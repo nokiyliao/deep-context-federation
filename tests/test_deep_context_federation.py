@@ -47,6 +47,7 @@ from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.memory_ledger import build_memory_ledger
 from deep_context_federation.native_integration import build_native_integration_plan
 from deep_context_federation.operator_context import build_operator_context
+from deep_context_federation.public_boundary import build_public_boundary_audit
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
 from deep_context_federation.quality_gate import normalize_quality_gate_policy
@@ -242,7 +243,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.57.0"
+    assert payload["package"]["version"] == "0.58.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -271,6 +272,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "map-repo",
         "describe-contracts",
         "check-artifact",
+        "prove-public-boundary",
         "plan-capability-ownership",
         "reuse-context",
         "unify-context",
@@ -311,6 +313,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["top_level_required"]
     assert by_kind["operator_context"]["schema_version"] == "deep_context_federation_operator_context_v1"
+    assert by_kind["public_boundary_audit"]["schema_version"] == "deep_context_federation_public_boundary_audit_v1"
     assert by_kind["query"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["read_model_query"]["schema_version"] == "deep_context_federation_sql_query_v1"
     assert by_kind["read_model_query"]["source_identity_policy"]["source_ids_exposed"] is False
@@ -368,6 +371,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["json_schema"]["required"]
     assert by_kind["operator_context"]["schema_version"] == "deep_context_federation_operator_context_v1"
+    assert by_kind["public_boundary_audit"]["schema_version"] == "deep_context_federation_public_boundary_audit_v1"
     assert by_kind["read_model_query"]["schema_version"] == "deep_context_federation_sql_query_v1"
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
@@ -498,6 +502,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "decide-continuation" in top_help.stdout
     assert "prepare-model-input" in top_help.stdout
     assert "summarize-operator-context" in top_help.stdout
+    assert "prove-public-boundary" in top_help.stdout
     assert "native-integration-plan" not in top_help.stdout
     assert "plan-native-ownership" not in top_help.stdout
     assert "memory-ledger" not in top_help.stdout
@@ -637,6 +642,24 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "--read-model" in read_model.stdout
     assert "--sqlite" not in read_model.stdout
     assert "--include-source-identity" not in read_model.stdout
+
+    public_boundary = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "prove-public-boundary",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert public_boundary.returncode == 0
+    assert "--input" in public_boundary.stdout
+    assert "--require-public-policy" in public_boundary.stdout
 
     operator_context = subprocess.run(
         [
@@ -809,6 +832,85 @@ def test_operator_context_summarizes_operator_projection_without_source_identity
     assert payload["outputs"]["operator_context_json"] == output_path.resolve().as_posix()
     assert output_path.exists()
     assert validate_artifact_contract(payload, artifact_kind="operator_context")["ok"] is True
+
+
+def test_public_boundary_audit_gates_public_source_identity(tmp_path: Path) -> None:
+    federation = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "federation",
+        write=True,
+    )
+    public_query = query_federation(federation, preset="claim-lineage", limit=20)
+    raw_query = query_federation(federation, preset="claim-lineage", limit=20, include_source_identity=True)
+    operator_context = build_operator_context(federation, limit=20)
+
+    passing = build_public_boundary_audit(
+        [
+            ("public_query", public_query),
+            ("operator_context", operator_context),
+        ]
+    )
+    assert passing["schema_version"] == "deep_context_federation_public_boundary_audit_v1"
+    assert passing["ok"] is True
+    assert passing["status"] == "pass_public_boundary_audit"
+    assert passing["summary"]["public_artifact_count"] == 2
+    assert validate_artifact_contract(passing, artifact_kind="public_boundary_audit")["ok"] is True
+
+    raw_audit = build_public_boundary_audit([("raw_query", raw_query)])
+    assert raw_audit["ok"] is True
+    assert raw_audit["status"] == "warn_public_boundary_audit"
+    assert raw_audit["warnings"][0]["id"] == "raw_source_identity_exposed"
+
+    leaky_public = {
+        "schema_version": "test_public_artifact_v1",
+        "status": "pass",
+        "authority_effect": "none",
+        "no_apply": True,
+        "source_identity_policy": {
+            "public_identity": "deep_context_federation",
+            "source_ids_exposed": False,
+        },
+        "rows": [{"source_id": "raw_source", "value": "should fail"}],
+    }
+    failing = build_public_boundary_audit([("leaky_public", leaky_public)])
+    assert failing["ok"] is False
+    assert failing["status"] == "fail_public_boundary_audit"
+    assert failing["errors"][0]["id"] == "public_source_identity_leak"
+
+    public_path = tmp_path / "public_query.json"
+    operator_path = tmp_path / "operator_context.json"
+    output_path = tmp_path / "public_boundary_audit.json"
+    public_path.write_text(json.dumps(public_query), encoding="utf-8")
+    operator_path.write_text(json.dumps(operator_context), encoding="utf-8")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "prove-public-boundary",
+            "--input",
+            str(public_path),
+            "--input",
+            str(operator_path),
+            "--output",
+            str(output_path),
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    payload = json.loads(completed.stdout)
+    assert payload["outputs"]["public_boundary_audit_json"] == output_path.resolve().as_posix()
+    assert output_path.exists()
+    assert validate_artifact_contract(payload, artifact_kind="public_boundary_audit")["ok"] is True
 
 
 def test_workflow_plan_sequences_bounded_agent_run(tmp_path: Path) -> None:

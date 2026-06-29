@@ -43,6 +43,7 @@ from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_
 from deep_context_federation.memory_ledger import MEMORY_LEDGER_SCHEMA_VERSION
 from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
 from deep_context_federation.operator_context import OPERATOR_CONTEXT_SCHEMA_VERSION
+from deep_context_federation.public_boundary import PUBLIC_BOUNDARY_AUDIT_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
@@ -157,6 +158,27 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "producer": "verify-context",
             "consumer_commands": ["bootstrap-context", "ci"],
             "top_level_required": ["schema_version", "ok", "status", "checks", "errors"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "public_boundary_audit",
+            "schema_version": PUBLIC_BOUNDARY_AUDIT_SCHEMA_VERSION,
+            "producer": "prove-public-boundary",
+            "consumer_commands": ["agent_router", "global_wrapper", "ci", "model_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "summary",
+                "rows",
+                "checks",
+                "errors",
+                "warnings",
+                "safety_boundaries",
+            ],
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -860,6 +882,15 @@ def _commands() -> list[dict[str, Any]]:
             "intent": "Validate an artifact against the built-in top-level JSON Schema contract subset.",
             "writes": ["optional --output JSON"],
             "output_schemas": ["deep_context_federation_contract_validation_v1"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "prove-public-boundary",
+            "intent": "Audit generated artifacts for public source-identity leakage before model or runner use.",
+            "writes": ["optional public boundary audit JSON when --output is set"],
+            "output_schemas": [PUBLIC_BOUNDARY_AUDIT_SCHEMA_VERSION],
+            "options": ["--input", "--require-public-policy", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },

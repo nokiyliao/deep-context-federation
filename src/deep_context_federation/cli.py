@@ -68,6 +68,9 @@ from deep_context_federation.native_integration import build_native_integration_
 from deep_context_federation.native_integration import markdown_native_integration_plan
 from deep_context_federation.operator_context import build_operator_context
 from deep_context_federation.operator_context import markdown_operator_context
+from deep_context_federation.public_boundary import build_public_boundary_audit
+from deep_context_federation.public_boundary import load_artifacts
+from deep_context_federation.public_boundary import markdown_public_boundary_audit
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
 from deep_context_federation.quality_gate import markdown_quality_gate
@@ -366,6 +369,11 @@ def build_parser() -> argparse.ArgumentParser:
     validate_artifact.add_argument("--artifact", choices=artifact_kinds())
     validate_artifact.add_argument("--output", type=Path)
     validate_artifact.add_argument("--format", choices=["json", "markdown"], default="json")
+    public_boundary = sub.add_parser("prove-public-boundary", help="Audit generated artifacts for public source-identity leakage.")
+    public_boundary.add_argument("--input", type=Path, action="append", required=True)
+    public_boundary.add_argument("--require-public-policy", action="store_true")
+    public_boundary.add_argument("--output", type=Path)
+    public_boundary.add_argument("--format", choices=["json", "markdown"], default="json")
     native_integration = sub.add_parser("plan-capability-ownership", help="Plan DCF ownership of overlapping context functions.")
     native_integration.set_defaults(capability=[])
     native_integration.add_argument("--function", dest="capability", metavar="FUNCTION", action="append", help="DCF function name to inspect, such as symbol-call-graph or long-term-context-memory.")
@@ -907,6 +915,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_contract_validation(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "prove-public-boundary":
+        result = build_public_boundary_audit(
+            load_artifacts(args.input),
+            require_public_policy=args.require_public_policy,
+        )
+        if args.output:
+            result["outputs"] = {"public_boundary_audit_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_public_boundary_audit(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

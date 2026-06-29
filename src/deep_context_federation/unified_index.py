@@ -244,7 +244,7 @@ def _command_rows(capabilities: Mapping[str, Any], *, limit: int) -> list[dict[s
                 "facet": "command",
                 "label": command,
                 "value": str(row.get("intent") or ""),
-                "score": 120 if command in {"unify-context", "prepare-model-input", "decide-continuation"} else 85,
+                "score": 120 if command in {"build-context-index", "pack-working-set", "prepare-model-input", "decide-continuation"} else 85,
                 "command": command,
                 "intent": str(row.get("intent") or ""),
                 "writes": _strings(row.get("writes")),

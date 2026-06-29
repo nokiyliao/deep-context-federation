@@ -122,7 +122,7 @@ python -m deep_context_federation.cli validate-artifact \
 Inspect how overlapping tools collapse into DCF-native capabilities:
 
 ```bash
-python -m deep_context_federation.cli plan-native-ownership \
+python -m deep_context_federation.cli plan-capability-ownership \
   --function symbol-call-graph \
   --function surface-map \
   --function long-term-context-memory \
@@ -130,23 +130,23 @@ python -m deep_context_federation.cli plan-native-ownership \
   --output .dcf/deep_context_federation_native_integration_plan.json
 ```
 
-Build the native memory ledger from generated DCF artifacts:
+Build the reusable context index from generated DCF artifacts:
 
 ```bash
-python -m deep_context_federation.cli index-context-memory \
+python -m deep_context_federation.cli build-reuse-index \
   --input-dir .dcf \
   --format json \
   --output .dcf/deep_context_federation_memory_ledger.json
 ```
 
-Collapse graph, memory, commands, and native capabilities into one DCF-native function-facet index:
+Collapse graph, reusable context, commands, and capability ownership into one DCF function-facet index:
 
 ```bash
-python -m deep_context_federation.cli unify-context \
+python -m deep_context_federation.cli build-context-index \
   --input .dcf/deep_context_federation_latest.json \
-  --memory-ledger .dcf/deep_context_federation_memory_ledger.json \
-  --capabilities .dcf/deep_context_federation_capabilities.json \
-  --native-plan .dcf/deep_context_federation_native_integration_plan.json \
+  --reuse-index .dcf/deep_context_federation_memory_ledger.json \
+  --ability-registry .dcf/deep_context_federation_capabilities.json \
+  --ownership-plan .dcf/deep_context_federation_native_integration_plan.json \
   --format json \
   --output .dcf/deep_context_federation_unified_index.json
 ```
@@ -270,7 +270,7 @@ python -m deep_context_federation.cli prepare-model-handoff \
   --output .dcf/deep_context_federation_agent_handoff.json
 ```
 
-`prepare-model-handoff` writes the underlying `decide-continuation`, `pack-model-context`, `gate-model-context`, `unify-context`, `select-context`, and `prepare-model-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `pack-model-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff records `model_handoff.selected_context_source`, a compact task-scoped DCF working set that appears in `read_first` without exposing upstream source identities. The full `model_handoff.unified_context_source` remains available as an audit artifact. The handoff includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
+`prepare-model-handoff` writes the underlying `decide-continuation`, `pack-model-context`, `gate-model-context`, `build-context-index`, `pack-working-set`, and `prepare-model-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `pack-model-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff records `model_handoff.selected_context_source`, a compact task-scoped DCF working set that appears in `read_first` without exposing upstream source identities. The full `model_handoff.unified_context_source` remains available as an audit artifact. The handoff includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
 
 Global wrappers can route from the current repo state before deciding what to run:
 
@@ -490,8 +490,8 @@ python -m deep_context_federation.cli rank \
   --kind entities \
   --format markdown
 
-python -m deep_context_federation.cli sql \
-  --sqlite .dcf/deep_context_federation_latest.sqlite \
+python -m deep_context_federation.cli query-read-model \
+  --read-model .dcf/deep_context_federation_latest.sqlite \
   --preset search \
   --search dashboard \
   --format markdown
@@ -511,7 +511,7 @@ dcf query --input .dcf/deep_context_federation_latest.json --preset surface-spli
 dcf trace --input .dcf/deep_context_federation_latest.json --match dashboard --depth 2 --format markdown
 dcf doctor --input .dcf/deep_context_federation_latest.json --format markdown
 dcf rank --input .dcf/deep_context_federation_latest.json --kind sources --format markdown
-dcf sql --sqlite .dcf/deep_context_federation_latest.sqlite --preset source-health
+dcf query-read-model --read-model .dcf/deep_context_federation_latest.sqlite --preset source-health
 ```
 
 From a fresh source checkout without installing first, prefix commands with `PYTHONPATH=src`:
@@ -708,7 +708,7 @@ dcf capabilities \
 
 ## Native Unified Integration
 
-`dcf plan-native-ownership` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names such as `symbol-call-graph`, `surface-map`, `long-term-context-memory`, `evidence-lineage`, `operator-projection`, and `workflow-orchestration`; the emitted artifact is DCF-only:
+`dcf plan-capability-ownership` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names such as `symbol-call-graph`, `surface-map`, `long-term-context-memory`, `evidence-lineage`, `operator-projection`, and `workflow-orchestration`; the emitted artifact is DCF-only:
 
 - `public_identity: deep_context_federation`
 - `hide_upstream_tool_identity: true`
@@ -719,15 +719,15 @@ dcf capabilities \
 This lets DCF absorb symbol graphs, surface maps, long-term memory, evidence lineage, operator projection, and model handoff into one query/index/governance plane. Any upstream provenance is retained only for internal audit and reproducibility, not as a competing source identity for agents or operators.
 
 ```bash
-dcf plan-native-ownership --format markdown
+dcf plan-capability-ownership --format markdown
 dcf validate-artifact \
   --input .dcf/deep_context_federation_native_integration_plan.json \
   --artifact native_integration_plan
 ```
 
-## Native Memory Ledger
+## Reusable Context Index
 
-`dcf index-context-memory` is the DCF-native replacement for scattered long-term context recall. It reads generated DCF artifacts such as `prepare-model-handoff`, `prepare-model-input`, `onboard-runner`, `workflow-run`, and `input-fingerprint`, then emits one reusable memory index:
+`dcf build-reuse-index` is the DCF function for scattered long-term context recall. It reads generated DCF artifacts such as `prepare-model-handoff`, `prepare-model-input`, `onboard-runner`, `workflow-run`, and `input-fingerprint`, then emits one reusable context index:
 
 - `rows`: normalized memory records for generated DCF artifacts
 - `reuse_index`: prompt/context entries that are safe to reuse
@@ -735,7 +735,7 @@ dcf validate-artifact \
 - `safety_boundaries`: confirms no source, authority, external model, watcher, or tool identity mutation
 
 ```bash
-dcf index-context-memory --input-dir .dcf --format markdown
+dcf build-reuse-index --input-dir .dcf --format markdown
 dcf validate-artifact \
   --input .dcf/deep_context_federation_memory_ledger.json \
   --artifact memory_ledger
@@ -745,7 +745,7 @@ The ledger is generated-output-only. It does not crawl the source tree by defaul
 
 ## Unified Context Index
 
-`dcf unify-context` is the DCF-native replacement for making agents manually jump across graph rows, memory rows, command manifests, and native integration plans. It emits one source-collapsed function-facet index:
+`dcf build-context-index` is the DCF function for making agents stop jumping across graph rows, reuse rows, command manifests, and capability ownership plans. It emits one source-collapsed function-facet index:
 
 - `surface`, `symbol`, `claim`, `path`, `artifact`, `memory`, `command`, `capability`, and `conflict` rows
 - `source_identity_policy` proving `source_ids_exposed: false` and `source_table_exposed: false`
@@ -755,18 +755,18 @@ The ledger is generated-output-only. It does not crawl the source tree by defaul
 The original artifacts remain the audit location. The unified index is the public DCF audit plane, with `authority_effect: none` and `no_apply: true`. `dcf prepare-model-handoff` builds this index automatically and records it in `model_handoff.unified_context_source`.
 
 ```bash
-dcf unify-context \
+dcf build-context-index \
   --input .dcf/deep_context_federation_latest.json \
-  --memory-ledger .dcf/deep_context_federation_memory_ledger.json \
-  --capabilities .dcf/deep_context_federation_capabilities.json \
-  --native-plan .dcf/deep_context_federation_native_integration_plan.json \
+  --reuse-index .dcf/deep_context_federation_memory_ledger.json \
+  --ability-registry .dcf/deep_context_federation_capabilities.json \
+  --ownership-plan .dcf/deep_context_federation_native_integration_plan.json \
   --query dashboard \
   --format markdown
 ```
 
 ## Selected Context
 
-`dcf select-context` is the optimized model read-first layer on top of `unify-context`. It selects a compact task-scoped working set from the full unified index:
+`dcf pack-working-set` is the optimized model read-first layer on top of `build-context-index`. It selects a compact task-scoped working set from the full unified index:
 
 - keeps `source_identity_policy.source_ids_exposed: false`
 - truncates long labels/values for predictable token use
@@ -778,7 +778,7 @@ dcf unify-context \
 `dcf prepare-model-handoff` runs this automatically and places the result in `model_handoff.selected_context_source`. The full unified index remains in `audit_artifacts`.
 
 ```bash
-dcf select-context \
+dcf pack-working-set \
   --input .dcf/deep_context_federation_unified_index.json \
   --query "dashboard operator" \
   --limit 24 \
@@ -1007,7 +1007,7 @@ The generated SQLite file is intended for agent and automation use. It contains:
 - `conflicts`
 - `search_index`
 
-SQL presets:
+Read-model presets:
 
 - `source-health`
 - `stale-sources`
@@ -1020,7 +1020,7 @@ SQL presets:
 Example:
 
 ```bash
-dcf sql --sqlite .dcf/deep_context_federation_latest.sqlite --preset search --search governance
+dcf query-read-model --read-model .dcf/deep_context_federation_latest.sqlite --preset search --search governance
 ```
 
 ## Source Quality

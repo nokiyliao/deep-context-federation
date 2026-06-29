@@ -24,7 +24,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Symbol and call graph intelligence",
         "absorbed_function_classes": ["symbol_indexing", "call_graph_navigation", "impact_navigation"],
         "dcf_native_owner": "repo_scan_symbol_dependency_graph",
-        "dcf_commands": ["scan", "bootstrap", "build", "trace", "resolve", "rank", "sql"],
+        "dcf_commands": ["scan", "bootstrap", "build", "trace", "resolve", "rank", "query-read-model"],
         "native_surfaces": [
             "repo_code_symbols",
             "repo_dependency_graph",
@@ -38,7 +38,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns the unified symbol/entity graph and query plane. Upstream observations are collapsed into DCF graph semantics.",
         "remaining_gap": "Deep language-specific call resolution can still be improved, but DCF already owns the symbol graph projection and query contract.",
         "exit_criteria": [
-            "agent workflows call DCF trace/resolve/rank/sql first",
+            "agent workflows call DCF trace/resolve/rank/query-read-model first",
             "symbol graph inputs are normalized into DCF entities and edges",
             "no wrapper reads a private symbol graph without DCF contract validation",
         ],
@@ -71,7 +71,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Long-term context memory and reuse",
         "absorbed_function_classes": ["long_term_context_recall", "session_memory", "context_reuse"],
         "dcf_native_owner": "memory_ledger_fingerprint_agent_handoff",
-        "dcf_commands": ["index-context-memory", "build", "diff", "prepare-model-handoff", "prepare-model-input", "onboard-runner", "efficiency-report"],
+        "dcf_commands": ["build-reuse-index", "build", "diff", "prepare-model-handoff", "prepare-model-input", "onboard-runner", "efficiency-report"],
         "native_surfaces": [
             "memory_ledger",
             "reuse_index",
@@ -87,7 +87,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns the memory retrieval contract, reuse index, and freshness gates. Existing memory databases can be one-time import material, not a separate identity, live watcher, or authority.",
         "remaining_gap": "Retention and compaction policy can be tuned, but DCF now owns the native memory ledger contract.",
         "exit_criteria": [
-            "accepted handoffs and fingerprints materialize into index-context-memory rows",
+            "accepted handoffs and fingerprints materialize into build-reuse-index rows",
             "fresh agents read DCF handoff/profile/onboard artifacts before private memory stores",
             "memory recall is bounded by DCF freshness and request-binding checks",
             "memory imports are one-shot, watcher-free, and collapsed into DCF-native records",
@@ -276,7 +276,7 @@ def build_native_integration_plan(*, capabilities: Iterable[str] | None = None) 
                 "step": "native_memory_ledger",
                 "goal": "Accepted handoffs and context fingerprints become DCF-native reusable memory.",
                 "owner_capability": "long_term_context_memory",
-                "exit_gate": "index-context-memory emits reusable rows with fingerprint-bound prompt sources",
+                "exit_gate": "build-reuse-index emits reusable rows with fingerprint-bound prompt sources",
             },
             {
                 "step": "operator_projection_convergence",

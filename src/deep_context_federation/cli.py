@@ -106,8 +106,13 @@ from deep_context_federation.workflow_run import markdown_workflow_run
 
 
 COMMAND_ALIASES = {
-    "native-integration-plan": "plan-native-ownership",
-    "memory-ledger": "index-context-memory",
+    "native-integration-plan": "plan-capability-ownership",
+    "plan-native-ownership": "plan-capability-ownership",
+    "memory-ledger": "build-reuse-index",
+    "index-context-memory": "build-reuse-index",
+    "unify-context": "build-context-index",
+    "select-context": "pack-working-set",
+    "sql": "query-read-model",
     "agent-ci": "decide-continuation",
     "agent-context": "pack-model-context",
     "agent-context-gate": "gate-model-context",
@@ -322,29 +327,32 @@ def build_parser() -> argparse.ArgumentParser:
     validate_artifact.add_argument("--artifact", choices=artifact_kinds())
     validate_artifact.add_argument("--output", type=Path)
     validate_artifact.add_argument("--format", choices=["json", "markdown"], default="json")
-    native_integration = sub.add_parser("plan-native-ownership", help="Plan DCF-native ownership of overlapping context-tool functions.")
+    native_integration = sub.add_parser("plan-capability-ownership", help="Plan DCF ownership of overlapping context functions.")
     native_integration.set_defaults(capability=[])
     native_integration.add_argument("--function", dest="capability", metavar="FUNCTION", action="append", help="DCF function name to inspect, such as symbol-call-graph or long-term-context-memory.")
     native_integration.add_argument("--capability", dest="capability", action="append", help=argparse.SUPPRESS)
     native_integration.add_argument("--output", type=Path)
     native_integration.add_argument("--format", choices=["json", "markdown"], default="json")
-    memory_ledger = sub.add_parser("index-context-memory", help="Materialize generated DCF artifacts into a native reusable context memory ledger.")
+    memory_ledger = sub.add_parser("build-reuse-index", help="Materialize generated DCF artifacts into a reusable context index.")
     memory_ledger.add_argument("--root", type=Path, default=Path.cwd())
     memory_ledger.add_argument("--input-dir", type=Path, action="append", default=[])
     memory_ledger.add_argument("--input-file", type=Path, action="append", default=[])
     memory_ledger.add_argument("--max-files", type=int, default=500)
     memory_ledger.add_argument("--output", type=Path)
     memory_ledger.add_argument("--format", choices=["json", "markdown"], default="json")
-    unified_index = sub.add_parser("unify-context", help="Build a DCF-native source-collapsed unified context index.")
+    unified_index = sub.add_parser("build-context-index", help="Build a source-collapsed DCF context index.")
     unified_index.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME, help="Federation JSON artifact.")
-    unified_index.add_argument("--memory-ledger", type=Path)
-    unified_index.add_argument("--capabilities", type=Path)
-    unified_index.add_argument("--native-plan", type=Path)
+    unified_index.add_argument("--reuse-index", dest="memory_ledger", metavar="REUSE_INDEX", type=Path)
+    unified_index.add_argument("--ability-registry", dest="capabilities", metavar="ABILITY_REGISTRY", type=Path)
+    unified_index.add_argument("--ownership-plan", dest="native_plan", metavar="OWNERSHIP_PLAN", type=Path)
+    unified_index.add_argument("--memory-ledger", dest="memory_ledger", type=Path, help=argparse.SUPPRESS)
+    unified_index.add_argument("--capabilities", dest="capabilities", type=Path, help=argparse.SUPPRESS)
+    unified_index.add_argument("--native-plan", dest="native_plan", type=Path, help=argparse.SUPPRESS)
     unified_index.add_argument("--query", default="")
     unified_index.add_argument("--limit", type=int, default=200)
     unified_index.add_argument("--output", type=Path)
     unified_index.add_argument("--format", choices=["json", "markdown"], default="json")
-    selected_context = sub.add_parser("select-context", help="Select a compact task-scoped DCF working set from a unified context index.")
+    selected_context = sub.add_parser("pack-working-set", help="Pack a compact task-scoped DCF working set from a context index.")
     selected_context.add_argument("--input", type=Path, default=Path(".dcf") / "deep_context_federation_unified_index.json", help="Unified context index JSON artifact.")
     selected_context.add_argument("--query", default="")
     selected_context.add_argument("--limit", type=int, default=24)
@@ -752,8 +760,9 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("--before", type=Path, required=True)
     diff.add_argument("--after", type=Path, required=True)
     diff.add_argument("--format", choices=["json", "markdown"], default="json")
-    sql = sub.add_parser("sql", help="Query the generated SQLite read model.")
-    sql.add_argument("--sqlite", type=Path, default=Path(".dcf") / "deep_context_federation_latest.sqlite")
+    sql = sub.add_parser("query-read-model", help="Query the generated read model.")
+    sql.add_argument("--read-model", dest="sqlite", metavar="READ_MODEL", type=Path, default=Path(".dcf") / "deep_context_federation_latest.sqlite")
+    sql.add_argument("--sqlite", dest="sqlite", type=Path, help=argparse.SUPPRESS)
     sql.add_argument("--preset", choices=sorted(SQL_PRESETS), required=True)
     sql.add_argument("--limit", type=int, default=50)
     sql.add_argument("--search", default="")
@@ -807,7 +816,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "plan-native-ownership":
+    if args.command == "plan-capability-ownership":
         result = build_native_integration_plan(capabilities=args.capability)
         if args.output:
             result["outputs"] = {"native_integration_plan_json": args.output.expanduser().resolve().as_posix()}
@@ -817,7 +826,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "index-context-memory":
+    if args.command == "build-reuse-index":
         result = build_memory_ledger(
             root=args.root,
             input_dirs=args.input_dir,
@@ -832,7 +841,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "unify-context":
+    if args.command == "build-context-index":
         federation = read_required_json(args.input)
         memory = read_required_json(args.memory_ledger) if args.memory_ledger else {}
         capabilities = read_required_json(args.capabilities) if args.capabilities else {}
@@ -857,7 +866,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "select-context":
+    if args.command == "pack-working-set":
         unified_index = read_required_json(args.input)
         result = build_unified_working_set(
             unified_index=unified_index,
@@ -1665,7 +1674,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0
-    if args.command == "sql":
+    if args.command == "query-read-model":
         result = query_sqlite(args.sqlite, preset=args.preset, limit=args.limit, search=args.search)
         if args.format == "markdown":
             print(sql_markdown(result))

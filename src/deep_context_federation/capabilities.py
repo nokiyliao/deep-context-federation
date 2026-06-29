@@ -522,7 +522,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "native_integration_plan",
             "schema_version": NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION,
-            "producer": "plan-native-ownership",
+            "producer": "plan-capability-ownership",
             "consumer_commands": ["capabilities", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
@@ -542,7 +542,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "memory_ledger",
             "schema_version": MEMORY_LEDGER_SCHEMA_VERSION,
-            "producer": "index-context-memory",
+            "producer": "build-reuse-index",
             "consumer_commands": ["prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
             "top_level_required": [
                 "schema_version",
@@ -561,8 +561,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "unified_index",
             "schema_version": UNIFIED_INDEX_SCHEMA_VERSION,
-            "producer": "unify-context",
-            "consumer_commands": ["select-context", "prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
+            "producer": "build-context-index",
+            "consumer_commands": ["pack-working-set", "prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -580,7 +580,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "unified_working_set",
             "schema_version": UNIFIED_WORKING_SET_SCHEMA_VERSION,
-            "producer": "select-context",
+            "producer": "pack-working-set",
             "consumer_commands": ["prepare-model-handoff", "prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
             "top_level_required": [
                 "schema_version",
@@ -794,8 +794,8 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "plan-native-ownership",
-            "intent": "Plan DCF-native ownership for overlapping context functions so adapter-only or consume-only remains non-final.",
+            "command": "plan-capability-ownership",
+            "intent": "Plan DCF ownership for overlapping context functions so adapter-only or consume-only remains non-final.",
             "writes": ["optional native integration plan JSON when --output is set"],
             "output_schemas": [NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION],
             "options": ["--function", "--output", "--format"],
@@ -803,8 +803,8 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "index-context-memory",
-            "intent": "Materialize generated DCF handoff, ready, onboard, workflow, and fingerprint artifacts into one reusable context memory ledger.",
+            "command": "build-reuse-index",
+            "intent": "Materialize generated DCF handoff, ready, onboard, workflow, and fingerprint artifacts into one reusable context index.",
             "writes": ["optional memory ledger JSON when --output is set"],
             "output_schemas": [MEMORY_LEDGER_SCHEMA_VERSION],
             "options": ["--input-dir", "--input-file", "--max-files", "--output", "--format"],
@@ -812,18 +812,18 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "unify-context",
-            "intent": "Collapse federation graph, memory, command, and native capability artifacts into one DCF-native function-facet index without exposing source identities.",
+            "command": "build-context-index",
+            "intent": "Collapse federation graph, reusable context, command, and capability artifacts into one DCF function-facet index without exposing source identities.",
             "writes": ["optional unified index JSON when --output is set"],
             "output_schemas": [UNIFIED_INDEX_SCHEMA_VERSION],
             "input_schemas": [SCHEMA_VERSION, MEMORY_LEDGER_SCHEMA_VERSION, CAPABILITIES_SCHEMA_VERSION, NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION],
-            "options": ["--input", "--memory-ledger", "--capabilities", "--native-plan", "--query", "--limit", "--output", "--format"],
+            "options": ["--input", "--reuse-index", "--ability-registry", "--ownership-plan", "--query", "--limit", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },
         {
-            "command": "select-context",
-            "intent": "Select a compact task-scoped machine working set from the unified context index for default model read-first use.",
+            "command": "pack-working-set",
+            "intent": "Pack a compact task-scoped machine working set from the context index for default model read-first use.",
             "writes": ["optional selected context JSON when --output is set"],
             "output_schemas": [UNIFIED_WORKING_SET_SCHEMA_VERSION],
             "input_schemas": [UNIFIED_INDEX_SCHEMA_VERSION],
@@ -1280,8 +1280,8 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "sql",
-            "intent": "Run named read-only SQLite query presets.",
+            "command": "query-read-model",
+            "intent": "Run named read-only generated read-model query presets.",
             "writes": [],
             "output_schemas": ["deep_context_federation_sql_query_v1"],
             "presets": sorted(SQL_PRESETS),

@@ -239,7 +239,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.49.0"
+    assert payload["package"]["version"] == "0.50.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -266,9 +266,10 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "scan",
         "schema",
         "validate-artifact",
-        "plan-native-ownership",
-        "index-context-memory",
-        "unify-context",
+        "plan-capability-ownership",
+        "build-reuse-index",
+        "build-context-index",
+        "pack-working-set",
         "adjudicate",
         "brief",
         "pack",
@@ -277,7 +278,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "resolve",
         "review-targets",
         "review-gate",
-        "sql",
+        "query-read-model",
         "doctor",
     } <= command_names
     query_presets = {row["preset"] for row in payload["query_presets"]}
@@ -409,7 +410,7 @@ def test_native_integration_plan_cli_validates(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "plan-native-ownership",
+            "plan-capability-ownership",
             "--function",
             "symbol-call-graph",
             "--function",
@@ -463,14 +464,20 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
         text=True,
     )
     assert top_help.returncode == 0
-    assert "plan-native-ownership" in top_help.stdout
-    assert "index-context-memory" in top_help.stdout
-    assert "unify-context" in top_help.stdout
-    assert "select-context" in top_help.stdout
+    assert "plan-capability-ownership" in top_help.stdout
+    assert "build-reuse-index" in top_help.stdout
+    assert "build-context-index" in top_help.stdout
+    assert "pack-working-set" in top_help.stdout
+    assert "query-read-model" in top_help.stdout
     assert "decide-continuation" in top_help.stdout
     assert "prepare-model-input" in top_help.stdout
     assert "native-integration-plan" not in top_help.stdout
+    assert "plan-native-ownership" not in top_help.stdout
     assert "memory-ledger" not in top_help.stdout
+    assert "index-context-memory" not in top_help.stdout
+    assert "unify-context" not in top_help.stdout
+    assert "select-context" not in top_help.stdout
+    assert " sql" not in top_help.stdout
     assert "agent-ci" not in top_help.stdout
     assert "agent-ready" not in top_help.stdout
 
@@ -500,7 +507,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "plan-native-ownership",
+            "plan-capability-ownership",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -512,6 +519,24 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert native.returncode == 0
     assert "--function" in native.stdout
     assert "--capability" not in native.stdout
+
+    read_model = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "query-read-model",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert read_model.returncode == 0
+    assert "--read-model" in read_model.stdout
+    assert "--sqlite" not in read_model.stdout
 
 
 def test_legacy_cli_names_remain_hidden_compatibility_aliases(tmp_path: Path) -> None:
@@ -1298,7 +1323,7 @@ def test_memory_ledger_cli_writes_valid_artifact(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "index-context-memory",
+            "build-reuse-index",
             "--root",
             str(tmp_path),
             "--input-dir",
@@ -1377,7 +1402,8 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     facets = {row["facet"] for row in unified["rows"]}
     assert {"surface", "symbol", "path", "memory", "command", "capability"} <= facets
     assert any(row["facet"] == "memory" and row["model_prompt_source"] == handoff["model_handoff"]["model_prompt_source"] for row in unified["rows"])
-    assert any(row["facet"] == "command" and row["command"] == "unify-context" for row in unified["rows"])
+    assert any(row["facet"] == "command" and row["command"] == "build-context-index" for row in unified["rows"])
+    assert not any(row["facet"] == "command" and row["command"] in {"unify-context", "select-context"} for row in unified["rows"])
 
     def assert_no_source_identity(value: object) -> None:
         if isinstance(value, Mapping):
@@ -1472,12 +1498,12 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "unify-context",
+            "build-context-index",
             "--input",
             str(federation["outputs"]["json"]),
-            "--capabilities",
+            "--ability-registry",
             str(capabilities_path),
-            "--native-plan",
+            "--ownership-plan",
             str(native_path),
             "--query",
             "dashboard",
@@ -1507,7 +1533,7 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "select-context",
+            "pack-working-set",
             "--input",
             str(output_path),
             "--query",

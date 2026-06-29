@@ -72,6 +72,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - runner onboarding command that generates the profile and runs the fail-closed ready path in one global-wrapper capsule
 - native integration plan that collapses overlapping tool identities into DCF-owned capabilities
 - memory ledger that materializes generated handoff, ready, onboard, workflow, and fingerprint artifacts into reusable DCF-native context memory
+- unified context index that collapses graph, memory, commands, and native capability rows into source-hidden function facets
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -136,6 +137,18 @@ python -m deep_context_federation.cli index-context-memory \
   --input-dir .dcf \
   --format json \
   --output .dcf/deep_context_federation_memory_ledger.json
+```
+
+Collapse graph, memory, commands, and native capabilities into one DCF-native function-facet index:
+
+```bash
+python -m deep_context_federation.cli unify-context \
+  --input .dcf/deep_context_federation_latest.json \
+  --memory-ledger .dcf/deep_context_federation_memory_ledger.json \
+  --capabilities .dcf/deep_context_federation_capabilities.json \
+  --native-plan .dcf/deep_context_federation_native_integration_plan.json \
+  --format json \
+  --output .dcf/deep_context_federation_unified_index.json
 ```
 
 Self-bootstrap a fresh repository into a verified federation:
@@ -729,6 +742,27 @@ dcf validate-artifact \
 ```
 
 The ledger is generated-output-only. It does not crawl the source tree by default, install memory tools, start watchers, or expose an upstream memory provider as a user-facing identity.
+
+## Unified Context Index
+
+`dcf unify-context` is the DCF-native replacement for making agents manually jump across graph rows, memory rows, command manifests, and native integration plans. It emits one source-collapsed function-facet index:
+
+- `surface`, `symbol`, `claim`, `path`, `artifact`, `memory`, `command`, `capability`, and `conflict` rows
+- `source_identity_policy` proving `source_ids_exposed: false` and `source_table_exposed: false`
+- graph scores, memory reuse rows, functional commands, and native capability ownership in one sorted working set
+- optional `--query` filtering without reopening separate source-specific tools
+
+The original artifacts remain the audit location. The unified index is the public DCF working plane for model and runner consumption, with `authority_effect: none` and `no_apply: true`.
+
+```bash
+dcf unify-context \
+  --input .dcf/deep_context_federation_latest.json \
+  --memory-ledger .dcf/deep_context_federation_memory_ledger.json \
+  --capabilities .dcf/deep_context_federation_capabilities.json \
+  --native-plan .dcf/deep_context_federation_native_integration_plan.json \
+  --query dashboard \
+  --format markdown
+```
 
 ## Schema Registry And Contract Validation
 

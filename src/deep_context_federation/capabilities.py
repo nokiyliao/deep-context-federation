@@ -55,6 +55,7 @@ from deep_context_federation.target_review import TARGET_REVIEW_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
+from deep_context_federation.unified_index import UNIFIED_INDEX_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 from deep_context_federation.version import __version__
 from deep_context_federation.workflow_plan import WORKFLOW_PLAN_SCHEMA_VERSION
@@ -557,6 +558,25 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "unified_index",
+            "schema_version": UNIFIED_INDEX_SCHEMA_VERSION,
+            "producer": "unify-context",
+            "consumer_commands": ["prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "source_identity_policy",
+                "summary",
+                "rows",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "agent_discovery",
             "schema_version": AGENT_DISCOVERY_SCHEMA_VERSION,
             "producer": "discover-model-readiness",
@@ -767,6 +787,16 @@ def _commands() -> list[dict[str, Any]]:
             "writes": ["optional memory ledger JSON when --output is set"],
             "output_schemas": [MEMORY_LEDGER_SCHEMA_VERSION],
             "options": ["--input-dir", "--input-file", "--max-files", "--output", "--format"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "unify-context",
+            "intent": "Collapse federation graph, memory, command, and native capability artifacts into one DCF-native function-facet index without exposing source identities.",
+            "writes": ["optional unified index JSON when --output is set"],
+            "output_schemas": [UNIFIED_INDEX_SCHEMA_VERSION],
+            "input_schemas": [SCHEMA_VERSION, MEMORY_LEDGER_SCHEMA_VERSION, CAPABILITIES_SCHEMA_VERSION, NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION],
+            "options": ["--input", "--memory-ledger", "--capabilities", "--native-plan", "--query", "--limit", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },

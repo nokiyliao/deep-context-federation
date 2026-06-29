@@ -49,6 +49,7 @@ from deep_context_federation.target_review_gate import evaluate_target_review_ga
 from deep_context_federation.target_review_gate import load_target_review_gate_policy
 from deep_context_federation.target_review_gate import normalize_target_review_gate_policy
 from deep_context_federation.task_brief import build_task_brief
+from deep_context_federation.unified_index import build_unified_index
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.version import __version__
 from deep_context_federation.workflow_plan import build_workflow_plan
@@ -77,6 +78,7 @@ __all__ = [
     "build_efficiency_report",
     "build_input_fingerprint",
     "build_task_brief",
+    "build_unified_index",
     "build_schema_registry",
     "compose_manifests",
     "compare_input_fingerprint",

@@ -93,6 +93,8 @@ from deep_context_federation.target_review_gate import load_target_review_gate_p
 from deep_context_federation.target_review_gate import markdown_target_review_gate
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.task_brief import markdown_task_brief
+from deep_context_federation.unified_index import build_unified_index
+from deep_context_federation.unified_index import markdown_unified_index
 from deep_context_federation.verifier import read_json as read_required_json
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.workflow_plan import build_workflow_plan
@@ -331,6 +333,15 @@ def build_parser() -> argparse.ArgumentParser:
     memory_ledger.add_argument("--max-files", type=int, default=500)
     memory_ledger.add_argument("--output", type=Path)
     memory_ledger.add_argument("--format", choices=["json", "markdown"], default="json")
+    unified_index = sub.add_parser("unify-context", help="Build a DCF-native source-collapsed unified context index.")
+    unified_index.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME, help="Federation JSON artifact.")
+    unified_index.add_argument("--memory-ledger", type=Path)
+    unified_index.add_argument("--capabilities", type=Path)
+    unified_index.add_argument("--native-plan", type=Path)
+    unified_index.add_argument("--query", default="")
+    unified_index.add_argument("--limit", type=int, default=200)
+    unified_index.add_argument("--output", type=Path)
+    unified_index.add_argument("--format", choices=["json", "markdown"], default="json")
     build = sub.add_parser("build", help="Build a federation artifact from a manifest.")
     add_common_source_args(build)
     add_memory_import_args(build)
@@ -805,6 +816,31 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_memory_ledger(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "unify-context":
+        federation = read_required_json(args.input)
+        memory = read_required_json(args.memory_ledger) if args.memory_ledger else {}
+        capabilities = read_required_json(args.capabilities) if args.capabilities else {}
+        native_plan = read_required_json(args.native_plan) if args.native_plan else {}
+        result = build_unified_index(
+            federation=federation,
+            federation_path=args.input.expanduser().resolve().as_posix(),
+            memory_ledger=memory,
+            memory_ledger_path=args.memory_ledger.expanduser().resolve().as_posix() if args.memory_ledger else "",
+            capabilities=capabilities,
+            capabilities_path=args.capabilities.expanduser().resolve().as_posix() if args.capabilities else "",
+            native_plan=native_plan,
+            native_plan_path=args.native_plan.expanduser().resolve().as_posix() if args.native_plan else "",
+            limit=args.limit,
+            query=args.query,
+        )
+        if args.output:
+            result["outputs"] = {"unified_index_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_unified_index(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

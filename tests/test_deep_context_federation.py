@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,7 @@ from deep_context_federation.target_review import review_targets
 from deep_context_federation.target_review_gate import evaluate_target_review_gate
 from deep_context_federation.target_review_gate import normalize_target_review_gate_policy
 from deep_context_federation.task_brief import build_task_brief
+from deep_context_federation.unified_index import build_unified_index
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.workflow_plan import build_workflow_plan
 from deep_context_federation.workflow_run import build_workflow_run
@@ -236,7 +238,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.44.0"
+    assert payload["package"]["version"] == "0.45.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -265,6 +267,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "validate-artifact",
         "plan-native-ownership",
         "index-context-memory",
+        "unify-context",
         "adjudicate",
         "brief",
         "pack",
@@ -300,6 +303,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
+    assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -345,6 +349,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
+    assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -457,6 +462,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert top_help.returncode == 0
     assert "plan-native-ownership" in top_help.stdout
     assert "index-context-memory" in top_help.stdout
+    assert "unify-context" in top_help.stdout
     assert "decide-continuation" in top_help.stdout
     assert "prepare-model-input" in top_help.stdout
     assert "native-integration-plan" not in top_help.stdout
@@ -1253,6 +1259,126 @@ def test_memory_ledger_cli_writes_valid_artifact(tmp_path: Path) -> None:
     assert payload["outputs"]["memory_ledger_json"] == ledger_path.resolve().as_posix()
     assert ledger_path.exists()
     assert validate_artifact_contract(payload, artifact_kind="memory_ledger")["ok"] is True
+
+
+def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
+    federation = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "federation",
+        write=True,
+    )
+    handoff = build_agent_handoff(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "handoff",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy={
+            "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+            "authority_effect": "none",
+            "no_apply": True,
+            "max_warn": 1,
+            "max_priority_score": 120,
+        },
+        efficiency_gate_policy=load_efficiency_gate_policy(EXAMPLE_EFFICIENCY_GATE_POLICY),
+        agent_context_gate_policy=load_agent_context_gate_policy(EXAMPLE_AGENT_CONTEXT_GATE_POLICY),
+        workflow_token_budget=900,
+        context_token_budget=1800,
+        max_artifact_tokens=500,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+    memory = build_memory_ledger(root=tmp_path, input_dirs=[tmp_path / "handoff"])
+    capabilities = build_capabilities()
+    native_plan = build_native_integration_plan(capabilities=["symbol-call-graph", "long-term-context-memory"])
+
+    unified = build_unified_index(
+        federation=federation,
+        federation_path=federation["outputs"]["json"],
+        memory_ledger=memory,
+        memory_ledger_path=(tmp_path / "memory_ledger.json").as_posix(),
+        capabilities=capabilities,
+        native_plan=native_plan,
+        limit=80,
+    )
+
+    assert unified["schema_version"] == "deep_context_federation_unified_index_v1"
+    assert unified["ok"] is True
+    assert unified["status"] == "pass_unified_index"
+    assert unified["authority_effect"] == "none"
+    assert unified["no_apply"] is True
+    assert unified["source_identity_policy"]["public_identity"] == "deep_context_federation"
+    assert unified["source_identity_policy"]["source_ids_exposed"] is False
+    assert unified["source_identity_policy"]["source_table_exposed"] is False
+    facets = {row["facet"] for row in unified["rows"]}
+    assert {"surface", "symbol", "path", "memory", "command", "capability"} <= facets
+    assert any(row["facet"] == "memory" and row["model_prompt_source"] == handoff["model_handoff"]["model_prompt_source"] for row in unified["rows"])
+    assert any(row["facet"] == "command" and row["command"] == "unify-context" for row in unified["rows"])
+
+    def assert_no_source_identity(value: object) -> None:
+        if isinstance(value, Mapping):
+            forbidden = {"source_id", "source_ids", "sources", "input_sources", "related_sources"}
+            assert not (forbidden & set(value.keys()))
+            for child in value.values():
+                assert_no_source_identity(child)
+        elif isinstance(value, list):
+            for child in value:
+                assert_no_source_identity(child)
+
+    assert_no_source_identity(unified["rows"])
+    assert validate_artifact_contract(unified, artifact_kind="unified_index")["ok"] is True
+
+
+def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
+    federation = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "federation",
+        write=True,
+    )
+    capabilities_path = tmp_path / "capabilities.json"
+    capabilities_path.write_text(json.dumps(build_capabilities(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    native_path = tmp_path / "native_plan.json"
+    native_path.write_text(json.dumps(build_native_integration_plan(capabilities=["surface-map"]), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    output_path = tmp_path / "unified_index.json"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "unify-context",
+            "--input",
+            str(federation["outputs"]["json"]),
+            "--capabilities",
+            str(capabilities_path),
+            "--native-plan",
+            str(native_path),
+            "--query",
+            "dashboard",
+            "--output",
+            str(output_path),
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    payload = json.loads(completed.stdout)
+    assert payload["schema_version"] == "deep_context_federation_unified_index_v1"
+    assert payload["outputs"]["unified_index_json"] == output_path.resolve().as_posix()
+    assert payload["source_identity_policy"]["source_ids_exposed"] is False
+    assert output_path.exists()
+    assert validate_artifact_contract(payload, artifact_kind="unified_index")["ok"] is True
 
 
 def test_agent_discovery_reports_repo_readiness_states(tmp_path: Path) -> None:

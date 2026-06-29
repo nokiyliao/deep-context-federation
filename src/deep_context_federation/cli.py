@@ -678,6 +678,7 @@ def build_parser() -> argparse.ArgumentParser:
     pack.add_argument("--format", choices=["json", "markdown"], default="json")
     brief = sub.add_parser("brief", help="Build a one-shot task routing brief with queries, doctor summary, and prompt pack.")
     brief.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
+    brief.add_argument("--read-model", type=Path)
     brief.add_argument("--task", required=True)
     brief.add_argument("--token-budget", type=int, default=4000)
     brief.add_argument("--query-limit", type=int, default=10)
@@ -1519,6 +1520,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             max_rows=args.max_rows,
             include_prompt=not args.no_prompt,
             input_path=args.input.as_posix(),
+            read_model_path=args.read_model.as_posix() if args.read_model else None,
         )
         if args.output:
             result["outputs"] = {"task_brief_json": args.output.expanduser().resolve().as_posix()}

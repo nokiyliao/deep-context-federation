@@ -393,6 +393,7 @@ Or generate a full task routing brief before handing work to an agent:
 ```bash
 python -m deep_context_federation.cli brief \
   --input .dcf/deep_context_federation_latest.json \
+  --read-model .dcf/deep_context_federation_latest.sqlite \
   --task "dashboard operator evidence authority" \
   --token-budget 4000 \
   --output .dcf/deep_context_federation_task_brief.json
@@ -842,10 +843,11 @@ This is the intended way to reduce model input tokens: run local federation quer
 - selected query presets with the terms that triggered them
 - compact routed query samples
 - doctor status and recommended actions
+- machine-readable `query_plan` steps with argv, read roles, stop gates, and optional read-model queries
 - embedded `context_pack.prompt_text`
 - token budget, compression, coverage, and recommended follow-up commands
 
-Use it when an agent should not decide from scratch whether to run `query`, `doctor`, `trace`, or `pack`. The brief remains `authority_effect: none` / `no_apply: true`; it routes context and diagnostics only.
+Use it when an agent should not decide from scratch whether to run `query`, `doctor`, `trace`, `pack`, or `query-read-model`. The brief remains `authority_effect: none` / `no_apply: true`; it routes context and diagnostics only. `query_plan` is execution guidance, not an executor: DCF records the intended `argv`, read role, and expansion policy, while the runner remains responsible for actually running those commands and honoring gates.
 
 ## Target Resolve
 

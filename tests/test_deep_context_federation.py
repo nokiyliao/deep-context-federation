@@ -239,7 +239,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.51.0"
+    assert payload["package"]["version"] == "0.52.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -285,6 +285,8 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert {"surface-splits", "claim-lineage", "code-to-authority", "operator-projection"} <= query_presets
     sql_presets = {row["preset"] for row in payload["sql_presets"]}
     assert {"source-health", "search", "code-to-authority"} <= sql_presets
+    by_command = {row["command"]: row for row in payload["commands"]}
+    assert "--read-model" in by_command["brief"]["options"]
 
     contracts = payload["contracts"]["artifact_contracts"]
     by_kind = {row["artifact_kind"]: row for row in contracts}
@@ -308,6 +310,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
     assert by_kind["unified_working_set"]["schema_version"] == "deep_context_federation_unified_working_set_v1"
     assert "expansion_plan" in by_kind["unified_working_set"]["top_level_required"]
+    assert "query_plan" in by_kind["task_brief"]["top_level_required"]
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -334,6 +337,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["contract_validation"]["schema_version"] == "deep_context_federation_contract_validation_v1"
     assert by_kind["context_pack"]["schema_version"] == "deep_context_federation_context_pack_v1"
     assert by_kind["task_brief"]["schema_version"] == "deep_context_federation_task_brief_v1"
+    assert "query_plan" in by_kind["task_brief"]["json_schema"]["required"]
     assert by_kind["agent_intake"]["schema_version"] == "deep_context_federation_agent_intake_v1"
     assert by_kind["resolve"]["schema_version"] == "deep_context_federation_resolve_v1"
     assert by_kind["adjudication"]["schema_version"] == "deep_context_federation_adjudicate_v1"
@@ -521,6 +525,23 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert native.returncode == 0
     assert "--function" in native.stdout
     assert "--capability" not in native.stdout
+
+    brief = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "brief",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert brief.returncode == 0
+    assert "--read-model" in brief.stdout
 
     read_model = subprocess.run(
         [
@@ -2080,8 +2101,24 @@ def test_task_brief_routes_agent_context(tmp_path: Path) -> None:
     selected_presets = {row["preset"] for row in brief["selected_presets"]}
     assert {"claim-lineage", "operator-projection"} <= selected_presets
     assert len(brief["routed_queries"]) == len(brief["selected_presets"])
+    query_plan = brief["query_plan"]
+    assert query_plan["schema_version"] == "deep_context_federation_task_query_plan_v1"
+    assert query_plan["authority_effect"] == "none"
+    assert query_plan["no_apply"] is True
+    assert query_plan["input_ref"] == ".dcf/deep_context_federation_latest.json"
+    assert query_plan["read_model_ref"] == ".dcf/deep_context_federation_latest.sqlite"
+    plan_commands = {row["command"] for row in query_plan["steps"]}
+    assert {"doctor", "pack", "query", "query-read-model"} <= plan_commands
+    assert query_plan["steps"][0]["read_role"] == "gate_first"
+    assert query_plan["steps"][0]["stop_on_failure"] is True
+    read_model_steps = [row for row in query_plan["steps"] if row["command"] == "query-read-model"]
+    assert read_model_steps
+    assert all(row["optional"] is True for row in read_model_steps)
+    assert all("--read-model" in row["argv"] for row in read_model_steps)
+    assert query_plan["expansion_policy"]["prefer_argv_over_command_string"] is True
     assert any(row["purpose"] == "generate_bounded_model_context" for row in brief["recommended_commands"])
     assert brief["safety_boundaries"]["mutation_allowed"] is False
+    assert brief["safety_boundaries"]["query_plan_executes_commands"] is False
     assert validate_artifact_contract(brief)["ok"] is True
 
 

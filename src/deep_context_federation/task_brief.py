@@ -137,6 +137,101 @@ def _recommended_commands(
     return commands
 
 
+def _default_read_model_path(input_path: str) -> str:
+    text = str(input_path or "").strip()
+    if text.endswith(".json"):
+        return text[:-5] + ".sqlite"
+    return ".dcf/deep_context_federation_latest.sqlite"
+
+
+def _query_plan(
+    *,
+    input_path: str,
+    read_model_path: str,
+    task: str,
+    terms: Sequence[str],
+    token_budget: int,
+    selected_presets: Sequence[Mapping[str, Any]],
+    query_limit: int,
+    max_rows: int,
+    include_prompt: bool,
+) -> dict[str, Any]:
+    steps: list[dict[str, Any]] = [
+        {
+            "step_id": "00_health_gate",
+            "command": "doctor",
+            "argv": ["doctor", "--input", input_path, "--format", "json"],
+            "read_role": "gate_first",
+            "artifact_role": "health_gate",
+            "stop_on_failure": True,
+        },
+        {
+            "step_id": "01_pack_bounded_context",
+            "command": "pack",
+            "argv": [
+                "pack",
+                "--input",
+                input_path,
+                "--task",
+                task,
+                "--token-budget",
+                str(token_budget),
+                "--max-rows",
+                str(max_rows),
+                "--format",
+                "json",
+            ]
+            + ([] if include_prompt else ["--no-prompt"]),
+            "read_role": "read_first",
+            "artifact_role": "bounded_context",
+            "stop_on_failure": False,
+        },
+    ]
+    for index, preset in enumerate(selected_presets, start=1):
+        preset_name = str(preset.get("preset") or "")
+        steps.append(
+            {
+                "step_id": f"1{index}_query_json_{preset_name.replace('-', '_')}",
+                "command": "query",
+                "argv": ["query", "--input", input_path, "--preset", preset_name, "--limit", str(query_limit), "--format", "json"],
+                "read_role": "expand_if_needed",
+                "artifact_role": "json_artifact_query",
+                "preset": preset_name,
+                "stop_on_failure": False,
+            }
+        )
+        steps.append(
+            {
+                "step_id": f"2{index}_query_read_model_{preset_name.replace('-', '_')}",
+                "command": "query-read-model",
+                "argv": ["query-read-model", "--read-model", read_model_path, "--preset", preset_name, "--limit", str(query_limit), "--format", "json"],
+                "read_role": "expand_if_read_model_available",
+                "artifact_role": "read_model_query",
+                "preset": preset_name,
+                "stop_on_failure": False,
+                "optional": True,
+            }
+        )
+    return {
+        "schema_version": "deep_context_federation_task_query_plan_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "task": task,
+        "terms": list(terms),
+        "input_ref": input_path,
+        "read_model_ref": read_model_path,
+        "selected_presets": [dict(row) for row in selected_presets],
+        "steps": steps,
+        "expansion_policy": {
+            "default_read_roles": ["gate_first", "read_first"],
+            "expand_read_roles": ["expand_if_needed", "expand_if_read_model_available"],
+            "audit_only": ["full_federation_json", "full_read_model"],
+            "prefer_argv_over_command_string": True,
+            "read_model_queries_are_optional": True,
+        },
+    }
+
+
 def build_task_brief(
     payload: Mapping[str, Any],
     *,
@@ -147,12 +242,14 @@ def build_task_brief(
     max_rows: int = 80,
     include_prompt: bool = True,
     input_path: str = ".dcf/deep_context_federation_latest.json",
+    read_model_path: str | None = None,
 ) -> dict[str, Any]:
     """Build a one-shot machine-readable routing brief for an agent task."""
 
     token_budget = max(300, int(token_budget))
     query_limit = max(1, int(query_limit))
     terms = _terms(task)
+    read_model_ref = str(read_model_path or _default_read_model_path(input_path))
     selected_presets = _select_presets(task, terms, max_presets=max_presets)
     routed_queries = _query_summaries(payload, selected_presets, limit=query_limit)
     context_pack = pack_context(
@@ -194,6 +291,17 @@ def build_task_brief(
         },
         "selected_presets": selected_presets,
         "routed_queries": routed_queries,
+        "query_plan": _query_plan(
+            input_path=input_path,
+            read_model_path=read_model_ref,
+            task=task,
+            terms=terms,
+            token_budget=token_budget,
+            selected_presets=selected_presets,
+            query_limit=query_limit,
+            max_rows=max_rows,
+            include_prompt=include_prompt,
+        ),
         "doctor_summary": {
             "status": doctor.get("status"),
             "ok": doctor.get("ok"),
@@ -217,6 +325,7 @@ def build_task_brief(
             "mutation_allowed": False,
             "external_model_calls": False,
             "use_prompt_text_as_context_only": True,
+            "query_plan_executes_commands": False,
         },
     }
     result["context_budget"]["brief_estimated_tokens"] = estimate_tokens(
@@ -251,6 +360,16 @@ def markdown_task_brief(result: Mapping[str, Any]) -> str:
         if isinstance(preset, Mapping):
             lines.append(f"- `{preset.get('preset')}` score=`{preset.get('score')}` matched=`{','.join(preset.get('matched_terms') or [])}`")
     if not result.get("selected_presets"):
+        lines.append("- none")
+    lines.extend(["", "## Query Plan", ""])
+    query_plan = result.get("query_plan") if isinstance(result.get("query_plan"), Mapping) else {}
+    for step in query_plan.get("steps") or []:
+        if isinstance(step, Mapping):
+            optional = " optional=true" if step.get("optional") else ""
+            lines.append(
+                f"- `{step.get('step_id')}` command=`{step.get('command')}` read_role=`{step.get('read_role')}`{optional}"
+            )
+    if not query_plan.get("steps"):
         lines.append("- none")
     lines.extend(["", "## Recommended Commands", ""])
     for command in result.get("recommended_commands") or []:

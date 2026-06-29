@@ -26,6 +26,7 @@ from deep_context_federation.quality_gate import normalize_quality_gate_policy
 from deep_context_federation.query import query_federation
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
+from deep_context_federation.resolve import resolve_target
 from deep_context_federation.scanner import scan_repository
 from deep_context_federation.schemas import build_schema_registry
 from deep_context_federation.schemas import validate_artifact_contract
@@ -59,7 +60,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.16.0"
+    assert payload["package"]["version"] == "0.17.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -74,6 +75,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "pack",
         "quality-gate",
         "query",
+        "resolve",
         "sql",
         "doctor",
     } <= command_names
@@ -104,6 +106,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["context_pack"]["schema_version"] == "deep_context_federation_context_pack_v1"
     assert by_kind["task_brief"]["schema_version"] == "deep_context_federation_task_brief_v1"
     assert by_kind["agent_intake"]["schema_version"] == "deep_context_federation_agent_intake_v1"
+    assert by_kind["resolve"]["schema_version"] == "deep_context_federation_resolve_v1"
 
     policy = json.loads(EXAMPLE_QUALITY_GATE_POLICY.read_text(encoding="utf-8"))
     valid = validate_artifact_contract(policy)
@@ -188,6 +191,36 @@ def test_task_brief_routes_agent_context(tmp_path: Path) -> None:
     assert any(row["purpose"] == "generate_bounded_model_context" for row in brief["recommended_commands"])
     assert brief["safety_boundaries"]["mutation_allowed"] is False
     assert validate_artifact_contract(brief)["ok"] is True
+
+
+def test_resolve_target_builds_evidence_card(tmp_path: Path) -> None:
+    payload = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=False,
+    )
+
+    result = resolve_target(
+        payload,
+        target="dashboard_readiness_projection",
+        limit=10,
+        token_budget=900,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_resolve_v1"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["status"] in {"matched", "warn"}
+    assert result["summary"]["matched_entity_count"] > 0
+    assert result["summary"]["related_source_count"] > 0
+    assert result["summary"]["related_edge_count"] > 0
+    assert result["context_pack"]["estimated_tokens"] <= 900
+    assert result["prompt_estimated_tokens"] <= 900
+    assert result["prompt_rendered_counts"]["matched_entities"] > 0
+    assert result["prompt_text"].startswith("# Deep Context Federation Target Resolution")
+    assert any(item["row"].get("value") == "dashboard_readiness_projection" for item in result["matched_entities"])
+    assert validate_artifact_contract(result)["ok"] is True
 
 
 def test_agent_intake_runs_full_agent_packet(tmp_path: Path) -> None:

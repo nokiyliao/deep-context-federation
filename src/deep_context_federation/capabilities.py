@@ -22,6 +22,7 @@ from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
+from deep_context_federation.resolve import RESOLVE_SCHEMA_VERSION
 from deep_context_federation.scanner import DEPENDENCY_GRAPH_SCHEMA_VERSION
 from deep_context_federation.scanner import FILE_INVENTORY_SCHEMA_VERSION
 from deep_context_federation.scanner import SCAN_SCHEMA_VERSION
@@ -55,7 +56,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "schema_version": SCHEMA_VERSION,
             "producer": "build",
             "default_outputs": [DEFAULT_JSON_NAME, DEFAULT_MD_NAME, DEFAULT_SQLITE_NAME],
-            "consumer_commands": ["verify", "query", "trace", "doctor", "rank", "diff", "quality-gate", "brief"],
+            "consumer_commands": ["verify", "query", "trace", "resolve", "doctor", "rank", "diff", "quality-gate", "brief"],
             "top_level_required": ["schema_version", "sources", "entities", "edges", "conflicts", "query_presets"],
             "authority_effect": "none",
             "no_apply": True,
@@ -120,6 +121,15 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "producer": "query",
             "consumer_commands": ["agent_router", "operator_context"],
             "top_level_required": ["schema_version", "preset", "status", "rows"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "resolve",
+            "schema_version": RESOLVE_SCHEMA_VERSION,
+            "producer": "resolve",
+            "consumer_commands": ["agent_router", "agent_prompt", "operator_context"],
+            "top_level_required": ["schema_version", "status", "target", "summary", "matched_entities", "related_sources"],
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -315,6 +325,15 @@ def _commands() -> list[dict[str, Any]]:
             "writes": [],
             "output_schemas": [QUERY_SCHEMA_VERSION],
             "presets": list(QUERY_PRESETS),
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "resolve",
+            "intent": "Resolve a claim, path, surface, or symbol target into an evidence card.",
+            "writes": ["optional resolve JSON when --output is set"],
+            "output_schemas": [RESOLVE_SCHEMA_VERSION],
+            "options": ["--target", "--limit", "--token-budget", "--no-prompt"],
             "authority_effect": "none",
             "no_apply": True,
         },

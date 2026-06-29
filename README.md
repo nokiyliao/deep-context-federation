@@ -49,6 +49,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - semantic edges such as `OWNS`, `SUPPORTS`, `DERIVES_FROM`, and `REFERENCES_SYMBOL`
 - SQLite read model with search presets
 - graph trace from any matching entity
+- target resolver for claim/path/surface/symbol evidence cards
 - manifest composition for merging self-scan output with curated evidence/context sources
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - one-command agent intake packet for bootstrap, quality gate, and task brief
@@ -218,6 +219,11 @@ python -m deep_context_federation.cli trace \
   --depth 2 \
   --format markdown
 
+python -m deep_context_federation.cli resolve \
+  --input .dcf/deep_context_federation_latest.json \
+  --target dashboard_readiness_projection \
+  --format markdown
+
 python -m deep_context_federation.cli doctor \
   --input .dcf/deep_context_federation_latest.json \
   --format markdown
@@ -372,6 +378,19 @@ This is the intended way to reduce model input tokens: run local federation quer
 - token budget, compression, coverage, and recommended follow-up commands
 
 Use it when an agent should not decide from scratch whether to run `query`, `doctor`, `trace`, or `pack`. The brief remains `authority_effect: none` / `no_apply: true`; it routes context and diagnostics only.
+
+## Target Resolve
+
+`dcf resolve` is the target-level evidence explorer. It takes a specific claim id, path, surface id, symbol, or keyword and emits a compact evidence card:
+
+- matched entities
+- neighboring graph edges
+- related source rows
+- related conflicts
+- target-specific prompt text and embedded context pack
+- recommended follow-up commands
+
+Use it after `brief` when the agent needs to inspect one concrete assertion, file, or surface instead of browsing every preset result. Like the rest of DCF, it is read-only and `authority_effect: none`.
 
 ## Quality Gate
 

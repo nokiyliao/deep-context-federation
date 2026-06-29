@@ -16,6 +16,7 @@ from deep_context_federation.quality_gate import normalize_quality_gate_policy
 from deep_context_federation.query import query_federation
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
+from deep_context_federation.resolve import resolve_target
 from deep_context_federation.scanner import scan_repository
 from deep_context_federation.schemas import build_schema_registry
 from deep_context_federation.schemas import validate_artifact_contract
@@ -42,6 +43,7 @@ __all__ = [
     "query_sqlite",
     "rank_entities",
     "rank_sources",
+    "resolve_target",
     "scan_repository",
     "trace_federation",
     "validate_artifact_contract",

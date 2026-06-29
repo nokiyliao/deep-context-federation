@@ -16,6 +16,7 @@ from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
+from deep_context_federation.resolve import RESOLVE_SCHEMA_VERSION
 from deep_context_federation.scanner import SCAN_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
@@ -232,6 +233,39 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "row_count": {"type": "integer"},
                 "rows": array_type,
                 "source_snapshot": object_type,
+            },
+        ),
+        "resolve": _schema(
+            RESOLVE_SCHEMA_VERSION,
+            "Deep Context Federation target evidence resolver",
+            [
+                "schema_version",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "target",
+                "summary",
+                "matched_entities",
+                "related_sources",
+                "related_edges",
+                "related_conflicts",
+            ],
+            {
+                "status": {"type": "string", "enum": ["matched", "warn", "no_match"]},
+                **_boundary_props(),
+                "target": {"type": "string"},
+                "terms": array_type,
+                "source_snapshot": object_type,
+                "summary": object_type,
+                "matched_entities": array_type,
+                "related_sources": array_type,
+                "related_edges": array_type,
+                "related_conflicts": array_type,
+                "context_pack": object_type,
+                "prompt_text": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+                "prompt_rendered_counts": object_type,
+                "recommended_commands": array_type,
             },
         ),
         "context_pack": _schema(

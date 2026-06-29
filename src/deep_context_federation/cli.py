@@ -34,6 +34,8 @@ from deep_context_federation.query import query_federation
 from deep_context_federation.rank import markdown_rank
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
+from deep_context_federation.resolve import markdown_resolve
+from deep_context_federation.resolve import resolve_target
 from deep_context_federation.scanner import markdown_scan
 from deep_context_federation.scanner import scan_repository
 from deep_context_federation.schemas import artifact_kinds
@@ -158,6 +160,14 @@ def build_parser() -> argparse.ArgumentParser:
     trace.add_argument("--depth", type=int, default=2)
     trace.add_argument("--limit", type=int, default=50)
     trace.add_argument("--format", choices=["json", "markdown"], default="json")
+    resolve = sub.add_parser("resolve", help="Resolve a claim/path/surface/symbol target into an evidence card.")
+    resolve.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
+    resolve.add_argument("--target", required=True)
+    resolve.add_argument("--limit", type=int, default=20)
+    resolve.add_argument("--token-budget", type=int, default=2500)
+    resolve.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text and embedded context prompt.")
+    resolve.add_argument("--output", type=Path)
+    resolve.add_argument("--format", choices=["json", "markdown"], default="json")
     doctor = sub.add_parser("doctor", help="Diagnose federation health and recommend next actions.")
     doctor.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     doctor.add_argument("--format", choices=["json", "markdown"], default="json")
@@ -415,6 +425,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = trace_federation(payload, match=args.match, depth=args.depth, limit=args.limit)
         if args.format == "markdown":
             print(markdown_trace(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "resolve":
+        payload = read_required_json(args.input)
+        result = resolve_target(
+            payload,
+            target=args.target,
+            limit=args.limit,
+            token_budget=args.token_budget,
+            include_prompt=not args.no_prompt,
+        )
+        if args.output:
+            result["outputs"] = {"resolve_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_resolve(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0

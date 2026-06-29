@@ -9,6 +9,8 @@ from typing import Sequence
 
 from deep_context_federation.adjudicate import adjudicate_target
 from deep_context_federation.adjudicate import markdown_adjudication
+from deep_context_federation.agent_context import build_agent_context
+from deep_context_federation.agent_context import markdown_agent_context
 from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.agent_ci import markdown_agent_ci
 from deep_context_federation.bench import benchmark_build
@@ -229,6 +231,15 @@ def build_parser() -> argparse.ArgumentParser:
     agent_ci.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     agent_ci.add_argument("--output", type=Path)
     agent_ci.add_argument("--format", choices=["json", "markdown"], default="json")
+    agent_context = sub.add_parser("agent-context", help="Bundle selected agent-ci read-plan artifacts into one bounded model context.")
+    agent_context.add_argument("--input", type=Path, required=True)
+    agent_context.add_argument("--mode", choices=["read-first", "decision-allowed", "all"], default="read-first")
+    agent_context.add_argument("--token-budget", type=int, default=4000)
+    agent_context.add_argument("--max-artifact-tokens", type=int, default=1200)
+    agent_context.add_argument("--no-content", action="store_true", help="Emit metadata-only sections without embedding artifact content.")
+    agent_context.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
+    agent_context.add_argument("--output", type=Path)
+    agent_context.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -632,6 +643,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_ci(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "agent-context":
+        payload = read_required_json(args.input)
+        result = build_agent_context(
+            payload,
+            agent_ci_path=args.input,
+            mode=args.mode,
+            token_budget=args.token_budget,
+            max_artifact_tokens=args.max_artifact_tokens,
+            include_content=not args.no_content,
+            include_prompt=not args.no_prompt,
+        )
+        if args.output:
+            result["outputs"] = {"agent_context_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_agent_context(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

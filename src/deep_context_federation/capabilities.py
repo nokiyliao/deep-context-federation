@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from deep_context_federation.adjudicate import ADJUDICATE_SCHEMA_VERSION
+from deep_context_federation.agent_context import AGENT_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import DEFAULT_JSON_NAME
@@ -327,6 +328,27 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "agent_context",
+            "schema_version": AGENT_CONTEXT_SCHEMA_VERSION,
+            "producer": "agent-context",
+            "consumer_commands": ["agent_prompt", "agent_router", "ci", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "input_ref",
+                "mode",
+                "summary",
+                "sections",
+                "skipped",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "schema_registry",
             "schema_version": "deep_context_federation_schema_registry_v1",
             "producer": "schema",
@@ -528,6 +550,16 @@ def _commands() -> list[dict[str, Any]]:
                 "--include-details",
                 "--no-prompt",
             ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "agent-context",
+            "intent": "Bundle selected agent-ci read-plan artifacts into one bounded model context.",
+            "writes": ["optional agent context JSON when --output is set"],
+            "output_schemas": [AGENT_CONTEXT_SCHEMA_VERSION],
+            "input_schemas": [AGENT_CI_SCHEMA_VERSION],
+            "options": ["--input", "--mode", "--token-budget", "--max-artifact-tokens", "--no-content", "--no-prompt", "--output"],
             "authority_effect": "none",
             "no_apply": True,
         },

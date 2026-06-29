@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from deep_context_federation.adjudicate import adjudicate_target
+from deep_context_federation.agent_context import build_agent_context
 from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
@@ -87,7 +88,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.26.0"
+    assert payload["package"]["version"] == "0.27.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -98,6 +99,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "efficiency-report",
         "efficiency-gate",
         "agent-ci",
+        "agent-context",
         "intake",
         "build",
         "scan",
@@ -129,6 +131,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
     assert by_kind["agent_ci"]["schema_version"] == "deep_context_federation_agent_ci_v1"
+    assert by_kind["agent_context"]["schema_version"] == "deep_context_federation_agent_context_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
     assert payload["safety_boundaries"]["external_tool_install"] == "never"
@@ -156,6 +159,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
     assert by_kind["agent_ci"]["schema_version"] == "deep_context_federation_agent_ci_v1"
+    assert by_kind["agent_context"]["schema_version"] == "deep_context_federation_agent_context_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
 
@@ -481,6 +485,69 @@ def test_agent_ci_stops_on_efficiency_gate_failure(tmp_path: Path) -> None:
     assert result["artifact_read_plan"]["ok"] is True
     assert result["contract_validation_summary"]["ok"] is True
     assert validate_artifact_contract(result)["ok"] is True
+
+
+def test_agent_context_materializes_bounded_read_plan(tmp_path: Path) -> None:
+    review_policy = {
+        "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "max_warn": 1,
+        "max_priority_score": 120,
+    }
+    agent_ci = build_agent_ci(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "agent_context",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        efficiency_gate_policy=load_efficiency_gate_policy(EXAMPLE_EFFICIENCY_GATE_POLICY),
+        token_budget=900,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+
+    result = build_agent_context(
+        agent_ci,
+        agent_ci_path=Path(agent_ci["outputs"]["agent_ci_json"]),
+        mode="read-first",
+        token_budget=1800,
+        max_artifact_tokens=500,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_agent_context_v1"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["ok"] is True
+    assert result["status"] in {"pass_agent_context", "warn_agent_context"}
+    assert result["mode"] == "read-first"
+    assert result["source_contract_validation"]["ok"] is True
+    assert result["summary"]["candidate_artifact_count"] >= result["summary"]["selected_artifact_count"] > 0
+    assert result["summary"]["selected_estimated_tokens"] <= int(result["token_budget"] * 0.65)
+    assert all(section["role"] == "read_first" for section in result["sections"])
+    assert all(section["content"] for section in result["sections"])
+    assert any(section["schema_version"] == "deep_context_federation_agent_ci_v1" for section in result["sections"])
+    assert result["prompt_text"].startswith("# Deep Context Federation Agent Context")
+    assert result["safety_boundaries"]["source_or_authority_mutation"] is False
+    assert validate_artifact_contract(result)["ok"] is True
+
+    metadata_only = build_agent_context(
+        agent_ci,
+        agent_ci_path=Path(agent_ci["outputs"]["agent_ci_json"]),
+        mode="decision-allowed",
+        token_budget=500,
+        max_artifact_tokens=100,
+        include_content=False,
+        include_prompt=False,
+    )
+    assert metadata_only["ok"] is True
+    assert metadata_only["include_content"] is False
+    assert metadata_only["prompt_text"] == ""
+    assert metadata_only["summary"]["selected_estimated_tokens"] == 0
+    assert all(section["content"] == "" for section in metadata_only["sections"])
+    assert validate_artifact_contract(metadata_only)["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

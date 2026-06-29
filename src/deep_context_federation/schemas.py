@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from deep_context_federation.adjudicate import ADJUDICATE_SCHEMA_VERSION
+from deep_context_federation.agent_context import AGENT_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import MANIFEST_SCHEMA
@@ -649,6 +650,43 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "next_reads": object_type,
                 "artifact_read_plan": object_type,
                 "outputs": object_type,
+                "safety_boundaries": object_type,
+                "prompt_text": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+                "json_estimated_tokens": {"type": "integer"},
+            },
+        ),
+        "agent_context": _schema(
+            AGENT_CONTEXT_SCHEMA_VERSION,
+            "Deep Context Federation agent context bundle",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "input_ref",
+                "mode",
+                "summary",
+                "sections",
+                "skipped",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_context", "warn_agent_context", "fail_agent_context"]},
+                **_boundary_props(),
+                "input_ref": {"type": "string"},
+                "mode": {"type": "string", "enum": ["read-first", "decision-allowed", "all"]},
+                "task": {"type": "string"},
+                "decision": object_type,
+                "token_budget": {"type": "integer"},
+                "max_artifact_tokens": {"type": "integer"},
+                "include_content": {"type": "boolean"},
+                "source_contract_validation": object_type,
+                "summary": object_type,
+                "sections": array_type,
+                "skipped": array_type,
                 "safety_boundaries": object_type,
                 "prompt_text": {"type": "string"},
                 "prompt_estimated_tokens": {"type": "integer"},

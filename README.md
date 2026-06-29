@@ -61,6 +61,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - efficiency report that measures read-first and gate-pass token savings against generated baselines
 - efficiency gate that turns token-savings targets into CI or agent routing thresholds
 - agent CI continuation decision that chains workflow run, efficiency report, and efficiency gate into one read-first artifact
+- agent context bundle that materializes selected `agent-ci` read-plan artifacts into one bounded prompt/context payload
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -188,6 +189,19 @@ python -m deep_context_federation.cli agent-ci \
 ```
 
 `agent-ci` writes the workflow run, efficiency report, efficiency gate, and final `agent_ci` artifact. External Codex, Claude, AGY, GitHub Actions, or another runner can read only `deep_context_federation_agent_ci.json` first, inspect `decision.action`, then follow `next_reads` instead of loading the full repository or full federation by default.
+
+Materialize that read plan into one bounded model context:
+
+```bash
+python -m deep_context_federation.cli agent-context \
+  --input .dcf/deep_context_federation_agent_ci.json \
+  --mode read-first \
+  --token-budget 4000 \
+  --max-artifact-tokens 1200 \
+  --output .dcf/deep_context_federation_agent_context.json
+```
+
+`agent-context` consumes the `agent_ci.artifact_read_plan`, embeds selected artifact content under a token budget, records skipped/truncated sections, and emits a single read-only `deep_context_federation_agent_context_v1` bundle for model prompts.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -465,6 +479,16 @@ and emits `deep_context_federation_agent_ci_v1` with:
 - `safety_boundaries` proving generated-output-only, no external model calls, and no source or authority mutation
 
 This is the preferred artifact for external orchestrators. It reduces model input by making the first read a compact decision artifact, then expanding only into the listed workflow, report, gate, or target evidence files when the decision allows.
+
+## Agent Context
+
+`dcf agent-context` is the second-stage context materializer. It reads a completed `agent_ci` artifact and selects artifacts from `artifact_read_plan` by mode:
+
+- `read-first`: only the mandatory first-read set
+- `decision-allowed`: first-read plus decision-allowed follow-up artifacts
+- `all`: every read-plan row
+
+It emits `deep_context_federation_agent_context_v1` with selected sections, skipped rows, truncation flags, source artifact hashes, prompt text, and token estimates. Use this when the next model call should receive one bounded context object instead of opening several JSON artifacts manually.
 
 ## Capabilities Manifest
 

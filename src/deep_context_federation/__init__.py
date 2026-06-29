@@ -1,6 +1,7 @@
 """Deep Context Federation public API."""
 
 from deep_context_federation.adjudicate import adjudicate_target
+from deep_context_federation.agent_context import build_agent_context
 from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation
@@ -41,6 +42,7 @@ __all__ = [
     "adjudicate_target",
     "bootstrap_federation",
     "build_federation",
+    "build_agent_context",
     "build_agent_ci",
     "build_workflow_plan",
     "build_workflow_run",

@@ -37,6 +37,20 @@ This tool is deliberately non-authoritative:
 
 It does not decide production truth. It only projects and checks consistency across existing truth surfaces.
 
+## Integrated Capabilities
+
+Deep Context Federation now combines several capabilities that are usually split across separate tools:
+
+- generic JSON federation for arbitrary governance artifacts
+- typed adapters for surface maps, symbol maps, and graph exports
+- claim-to-evidence lineage extraction
+- source health scoring and freshness warnings
+- semantic edges such as `OWNS`, `SUPPORTS`, `DERIVES_FROM`, and `REFERENCES_SYMBOL`
+- SQLite read model with search presets
+- graph trace from any matching entity
+- source fingerprint cache for incremental runs
+- local benchmark command for build-time tracking
+
 ## Install
 
 ```bash
@@ -73,6 +87,12 @@ python -m deep_context_federation.cli query \
   --preset claim-lineage \
   --format markdown
 
+python -m deep_context_federation.cli trace \
+  --input .dcf/deep_context_federation_latest.json \
+  --match dashboard \
+  --depth 2 \
+  --format markdown
+
 python -m deep_context_federation.cli sql \
   --sqlite .dcf/deep_context_federation_latest.sqlite \
   --preset search \
@@ -91,6 +111,7 @@ If installed as a package, use `dcf`:
 dcf build --manifest examples/deep_context_federation.example.json --root examples --output-dir .dcf --write
 dcf verify --manifest examples/deep_context_federation.example.json --root examples --input .dcf/deep_context_federation_latest.json
 dcf query --input .dcf/deep_context_federation_latest.json --preset surface-splits --format markdown
+dcf trace --input .dcf/deep_context_federation_latest.json --match dashboard --depth 2 --format markdown
 dcf sql --sqlite .dcf/deep_context_federation_latest.sqlite --preset source-health
 ```
 
@@ -163,6 +184,30 @@ dcf sql --sqlite .dcf/deep_context_federation_latest.sqlite --preset search --se
 ## Source Quality
 
 Each source row includes a `quality` object with a numeric score and reasons. The score penalizes stale sources, missing required sources, authority-boundary drift, missing verifiers, and optional unavailable adapters. This gives agents an immediate signal about which context is reliable enough to use and which needs refresh or owner review first.
+
+## Semantic Adapters
+
+The builder recognizes common export shapes:
+
+- `surfaces` or `surface_map.surfaces`: emits `surface_id`, `owner_id`, `path`, and `OWNS` / `DERIVES_FROM` edges.
+- `symbols` or `code_map.symbols`: emits `symbol_fqn`, `path`, `surface_id`, and `REFERENCES_SYMBOL` edges.
+- `nodes` / `edges` or `graph.nodes` / `graph.edges`: maps generic graph exports into federation entities and edge types.
+
+This is the layer that lets the tool absorb advantages from codegraph-style symbol maps, Understand Anything-style surface maps, evidence/claim reports, and codebase-memory-style graph exports without letting any single source become production authority.
+
+## Graph Trace
+
+Use `trace` to start from any matching entity and expand through federation edges:
+
+```bash
+dcf trace --input .dcf/deep_context_federation_latest.json --match dashboard --depth 2 --format markdown
+```
+
+The output is useful for "code-to-authority" and "claim-to-evidence" exploration because it traverses the unified entity graph rather than one source's private graph.
+
+## Incremental Cache
+
+`dcf build --write` writes `.dcf/source_fingerprints.json`. The next run reports changed, unchanged, new, and removed sources under `incremental_cache`. This does not change authority semantics; it gives automation a cheap signal for whether an expensive context refresh is actually needed.
 
 ## Benchmarking
 

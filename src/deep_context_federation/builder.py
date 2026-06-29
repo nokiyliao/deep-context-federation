@@ -13,6 +13,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from deep_context_federation.adapters import extract_adapter_items
+from deep_context_federation.cache import DEFAULT_CACHE_NAME
+from deep_context_federation.cache import compare_cache
+from deep_context_federation.cache import load_cache
+from deep_context_federation.cache import write_cache
+from deep_context_federation.graph import summarize_graph
 from deep_context_federation.manifest import validate_manifest
 
 SCHEMA_VERSION = "deep_context_federation_v1"
@@ -57,7 +63,6 @@ ENTITY_KEYS = {
     "artifact_id": "artifact_id",
     "claim_id": "claim_id",
     "surface_id": "surface_id",
-    "id": "surface_id",
     "contract_id": "contract_id",
     "task_id": "task_id",
     "thread_id": "thread_id",
@@ -542,6 +547,52 @@ def build_entities_and_edges(sources: Mapping[str, Mapping[str, Any]]) -> tuple[
             walk_entities(payload, source_id=source_id, entities=entities, edges=edges, source_entity_id=source_entity)
             conflicts.extend(claim_lineage(payload, source_id=source_id, entities=entities, edges=edges, source_entity_id=source_entity))
             conflicts.extend(surface_owner_conflicts(payload, source_id=source_id, entities=entities))
+            adapter_result = extract_adapter_items(
+                payload,
+                source_id=source_id,
+                role=str(source.get("role") or ""),
+            )
+            source["adapter"] = adapter_result.get("stats") or {}
+            for item in adapter_result.get("entities") or []:
+                if isinstance(item, Mapping):
+                    add_entity(
+                        entities,
+                        entity_type=str(item.get("entity_type") or ""),
+                        value=str(item.get("value") or ""),
+                        source_id=source_id,
+                        label=str(item.get("label") or ""),
+                        metadata=item.get("metadata") if isinstance(item.get("metadata"), Mapping) else {},
+                    )
+            for item in adapter_result.get("edges") or []:
+                if not isinstance(item, Mapping):
+                    continue
+                from_ref = item.get("from") if isinstance(item.get("from"), Mapping) else {}
+                to_ref = item.get("to") if isinstance(item.get("to"), Mapping) else {}
+                from_entity = add_entity(
+                    entities,
+                    entity_type=str(from_ref.get("entity_type") or ""),
+                    value=str(from_ref.get("value") or ""),
+                    source_id=source_id,
+                    label=str(from_ref.get("label") or ""),
+                    metadata=from_ref.get("metadata") if isinstance(from_ref.get("metadata"), Mapping) else {},
+                )
+                to_entity = add_entity(
+                    entities,
+                    entity_type=str(to_ref.get("entity_type") or ""),
+                    value=str(to_ref.get("value") or ""),
+                    source_id=source_id,
+                    label=str(to_ref.get("label") or ""),
+                    metadata=to_ref.get("metadata") if isinstance(to_ref.get("metadata"), Mapping) else {},
+                )
+                add_edge(
+                    edges,
+                    edge_type=str(item.get("edge_type") or ""),
+                    from_entity=from_entity,
+                    to_entity=to_entity,
+                    source_id=source_id,
+                    evidence=str(item.get("evidence") or ""),
+                )
+            conflicts.extend([dict(item) for item in adapter_result.get("conflicts") or [] if isinstance(item, Mapping)])
     return list(entities.values()), list(edges.values()), conflicts
 
 
@@ -793,6 +844,7 @@ def build_federation(
     manifest_verification = validate_manifest(manifest, manifest_path=manifest_path)
     if not manifest_verification["ok"]:
         raise ValueError(f"manifest validation failed: {manifest_verification['errors']}")
+    previous_cache = load_cache(output_dir / DEFAULT_CACHE_NAME)
     git = git_info(root)
     source_specs = [dict(item) for item in manifest.get("sources") or [] if isinstance(item, Mapping)]
     sources = {
@@ -803,6 +855,7 @@ def build_federation(
     codebase, codebase_conflicts = codebase_memory_source(root, include=include_codebase_memory, cache_dir=codebase_memory_cache_dir)
     sources["codebase_memory_mcp"] = codebase
     attach_source_quality(sources)
+    cache_state = compare_cache(sources, previous_cache)
     entities, edges, entity_conflicts = build_entities_and_edges(sources)
     conflicts = source_conflicts(sources, codebase_conflicts)
     conflicts.extend(entity_conflicts)
@@ -832,6 +885,8 @@ def build_federation(
         "entities": sorted(entities, key=lambda item: (str(item.get("entity_type")), str(item.get("value")))),
         "edges": sorted(edges, key=lambda item: (str(item.get("edge_type")), str(item.get("edge_id")))),
         "conflicts": sorted(conflicts, key=lambda item: (str(item.get("severity")), str(item.get("conflict_type")), str(item.get("conflict_id")))),
+        "graph_summary": summarize_graph({"entities": entities, "edges": edges}),
+        "incremental_cache": {key: value for key, value in cache_state.items() if key != "sources"},
         "codex_fusion_synthesis": fusion_synthesis(sources, conflicts),
         "query_presets": query_preset_summary(sources, entities, conflicts),
         "summary": {
@@ -858,4 +913,5 @@ def build_federation(
         write_json(output_dir / DEFAULT_JSON_NAME, payload)
         write_markdown(output_dir / DEFAULT_MD_NAME, markdown(payload))
         write_sqlite(output_dir / DEFAULT_SQLITE_NAME, payload)
+        write_cache(output_dir / DEFAULT_CACHE_NAME, cache_state)
     return payload

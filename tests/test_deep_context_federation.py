@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.builder import build_federation, codebase_memory_source
+from deep_context_federation.cache import DEFAULT_CACHE_NAME
+from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.query import query_federation
 from deep_context_federation.sqlite_query import query_sqlite
@@ -33,9 +35,12 @@ def test_build_verify_and_query_example(tmp_path: Path) -> None:
     assert payload["no_apply"] is True
     assert payload["summary"]["error_count"] == 0
     assert payload["summary"]["entity_count"] > 0
+    assert payload["graph_summary"]["edge_type_counts"]["OWNS"] > 0
+    assert payload["graph_summary"]["edge_type_counts"]["REFERENCES_SYMBOL"] > 0
     assert (tmp_path / "deep_context_federation_latest.json").exists()
     assert (tmp_path / "DEEP_CONTEXT_FEDERATION_LATEST.md").exists()
     assert (tmp_path / "deep_context_federation_latest.sqlite").exists()
+    assert (tmp_path / DEFAULT_CACHE_NAME).exists()
 
     manifest = json.loads(EXAMPLE_MANIFEST.read_text(encoding="utf-8"))
     result = verify_federation(payload, manifest=manifest, root=REPO_ROOT)
@@ -51,6 +56,30 @@ def test_build_verify_and_query_example(tmp_path: Path) -> None:
 
     source_health = query_sqlite(tmp_path / "deep_context_federation_latest.sqlite", preset="source-health", limit=10)
     assert source_health["row_count"] > 0
+
+    trace = trace_federation(payload, match="dashboard", depth=2, limit=20)
+    assert trace["schema_version"] == "deep_context_federation_trace_v1"
+    assert trace["seed_count"] > 0
+    assert trace["node_count"] > 0
+
+
+def test_incremental_cache_marks_unchanged_sources(tmp_path: Path) -> None:
+    first = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=True,
+    )
+    second = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=True,
+    )
+
+    assert first["incremental_cache"]["previous_cache_available"] is False
+    assert second["incremental_cache"]["previous_cache_available"] is True
+    assert second["incremental_cache"]["unchanged_source_count"] > 0
 
 
 def test_verifier_rejects_authority_drift(tmp_path: Path) -> None:

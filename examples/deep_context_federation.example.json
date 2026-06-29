@@ -31,6 +31,12 @@
       "role": "advisory_source_graph",
       "required": false,
       "path": "fixtures/advisory_code_map.json"
+    },
+    {
+      "source_id": "codegraph_export",
+      "role": "advisory_source_symbol_graph",
+      "required": false,
+      "path": "fixtures/codegraph_export.json"
     }
   ]
 }

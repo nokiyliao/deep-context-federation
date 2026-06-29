@@ -1,0 +1,41 @@
+{
+  "schema_version": "codegraph_export_v1",
+  "generated_at": "2026-01-01T00:00:04Z",
+  "authority_effect": "none",
+  "no_apply": true,
+  "nodes": [
+    {
+      "id": "dashboard.readiness.build_projection",
+      "kind": "symbol",
+      "symbol_fqn": "dashboard.readiness.build_projection",
+      "path": "ui/dashboard/readiness.py"
+    },
+    {
+      "id": "operator_dashboard",
+      "kind": "surface",
+      "surface_id": "operator_dashboard"
+    },
+    {
+      "id": "docs/PRODUCTION_AUTHORITY.md",
+      "kind": "path",
+      "path": "docs/PRODUCTION_AUTHORITY.md"
+    }
+  ],
+  "edges": [
+    {
+      "from": "ui/dashboard/readiness.py",
+      "to": "dashboard.readiness.build_projection",
+      "relation": "REFERENCES_SYMBOL"
+    },
+    {
+      "from": "dashboard.readiness.build_projection",
+      "to": "operator_dashboard",
+      "relation": "DERIVES_FROM"
+    },
+    {
+      "from": "operator_dashboard",
+      "to": "docs/PRODUCTION_AUTHORITY.md",
+      "relation": "SUPPORTS"
+    }
+  ]
+}

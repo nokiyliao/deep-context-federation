@@ -1,11 +1,19 @@
 """Deep Context Federation public API."""
 
 from deep_context_federation.builder import build_federation
+from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.query import query_federation
 from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.verifier import verify_federation
 
-__all__ = ["build_federation", "query_federation", "query_sqlite", "validate_manifest", "verify_federation"]
+__all__ = [
+    "build_federation",
+    "query_federation",
+    "query_sqlite",
+    "trace_federation",
+    "validate_manifest",
+    "verify_federation",
+]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

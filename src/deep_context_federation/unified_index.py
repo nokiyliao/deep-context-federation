@@ -37,6 +37,21 @@ ENTITY_FACETS = {
     "commit_sha": "commit",
 }
 
+WORKING_SET_FACET_PRIORITY = [
+    "conflict",
+    "claim",
+    "surface",
+    "symbol",
+    "path",
+    "memory",
+    "command",
+    "capability",
+    "artifact",
+    "contract",
+    "task",
+    "entity",
+]
+
 
 def _rows(value: Any) -> list[dict[str, Any]]:
     return [dict(item) for item in value or [] if isinstance(item, Mapping)]
@@ -389,6 +404,66 @@ def _compact_working_row(row: Mapping[str, Any], *, label_chars: int, value_char
     return _strip_identity(compact)
 
 
+def _rank_key(row: Mapping[str, Any]) -> tuple[int, int, str, str]:
+    return (
+        -int(row.get("query_match_score") or 0),
+        -int(row.get("score") or 0),
+        str(row.get("facet") or ""),
+        str(row.get("label") or ""),
+    )
+
+
+def _balanced_working_rows(
+    primary_rows: Sequence[Mapping[str, Any]],
+    fallback_rows: Sequence[Mapping[str, Any]],
+    *,
+    limit: int,
+    min_facets: int,
+) -> list[dict[str, Any]]:
+    """Return rows ordered to preserve facet coverage before filling by rank."""
+
+    limit = max(1, int(limit))
+    min_facets = max(0, int(min_facets))
+    rows_by_id: dict[str, dict[str, Any]] = {}
+    selected_ids: set[str] = set()
+    selected: list[dict[str, Any]] = []
+
+    def row_id(row: Mapping[str, Any]) -> str:
+        return str(row.get("row_id") or _stable_id("urow", [row.get("facet"), row.get("label"), row.get("value")]))
+
+    def add(row: Mapping[str, Any]) -> None:
+        if len(selected) >= limit:
+            return
+        key = row_id(row)
+        if key in selected_ids:
+            return
+        selected_ids.add(key)
+        rows_by_id[key] = dict(row)
+        selected.append(dict(row))
+
+    primary = sorted((dict(row) for row in primary_rows), key=_rank_key)
+    fallback = sorted((dict(row) for row in fallback_rows), key=_rank_key)
+    all_rows = [*primary, *fallback]
+    if min_facets:
+        covered: set[str] = set()
+        for facet in WORKING_SET_FACET_PRIORITY:
+            if len(covered) >= min_facets or len(selected) >= limit:
+                break
+            for row in all_rows:
+                if str(row.get("facet") or "") != facet:
+                    continue
+                if facet in covered:
+                    continue
+                add(row)
+                covered.add(facet)
+                break
+    for row in primary:
+        add(row)
+    for row in fallback:
+        add(row)
+    return [rows_by_id[row_id(row)] for row in selected[:limit]]
+
+
 def build_unified_working_set(
     *,
     unified_index: Mapping[str, Any],
@@ -398,6 +473,8 @@ def build_unified_working_set(
     label_chars: int = 96,
     value_chars: int = 160,
     max_tokens: int | None = None,
+    facet_mode: str = "balanced",
+    min_facets: int = 4,
 ) -> dict[str, Any]:
     """Build a compact, task-scoped machine working set from a unified index."""
 
@@ -405,6 +482,10 @@ def build_unified_working_set(
     token_budget = int(max_tokens) if max_tokens is not None else None
     if token_budget is not None:
         token_budget = max(1, token_budget)
+    facet_mode = str(facet_mode or "balanced").strip().lower()
+    if facet_mode not in {"balanced", "ranked"}:
+        facet_mode = "balanced"
+    min_facets = max(0, int(min_facets))
     terms = _terms(query)
     source_rows = _rows(unified_index.get("rows"))
     rows: list[dict[str, Any]] = []
@@ -413,12 +494,16 @@ def build_unified_working_set(
         if terms:
             candidate["query_match_score"] = int(candidate.get("query_match_score") or _count_terms(candidate, terms))
         rows.append(candidate)
-    if terms:
-        matched = [row for row in rows if int(row.get("query_match_score") or 0) > 0]
-        if matched:
-            rows = matched
-    rows.sort(key=lambda item: (-int(item.get("query_match_score") or 0), -int(item.get("score") or 0), str(item.get("facet") or ""), str(item.get("label") or "")))
-    candidates = [_compact_working_row(row, label_chars=label_chars, value_chars=value_chars) for row in rows[:limit]]
+    matched = [row for row in rows if int(row.get("query_match_score") or 0) > 0] if terms else []
+    unmatched = [row for row in rows if int(row.get("query_match_score") or 0) <= 0] if terms else []
+    primary_rows = matched if matched else rows
+    fallback_rows = unmatched if matched else []
+    if facet_mode == "ranked":
+        ordered_rows = sorted(primary_rows, key=_rank_key)
+        ordered_rows.extend(row for row in sorted(fallback_rows, key=_rank_key) if row not in ordered_rows)
+    else:
+        ordered_rows = _balanced_working_rows(primary_rows, fallback_rows, limit=limit, min_facets=min_facets)
+    candidates = [_compact_working_row(row, label_chars=label_chars, value_chars=value_chars) for row in ordered_rows[:limit]]
     warnings = []
 
     def build_payload(selected_rows: Sequence[Mapping[str, Any]], selected_warnings: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -446,6 +531,9 @@ def build_unified_working_set(
                 "omitted_row_count": max(0, len(source_rows) - len(selected_rows)),
                 "omitted_by_token_budget_count": max(0, len(candidates) - len(selected_rows)) if token_budget is not None else 0,
                 "facet_counts": dict(sorted(facet_counts.items())),
+                "covered_facet_count": len(facet_counts),
+                "min_facets": min_facets if facet_mode == "balanced" else 0,
+                "facet_coverage_met": len(facet_counts) >= min_facets if facet_mode == "balanced" else True,
                 "query_filtered": bool(terms),
                 "estimated_tokens": 0,
                 "max_tokens": token_budget,
@@ -458,6 +546,9 @@ def build_unified_working_set(
                 "label_chars": max(8, int(label_chars)),
                 "value_chars": max(8, int(value_chars)),
                 "max_tokens": token_budget,
+                "facet_mode": facet_mode,
+                "min_facets": min_facets if facet_mode == "balanced" else 0,
+                "facet_priority": WORKING_SET_FACET_PRIORITY if facet_mode == "balanced" else [],
                 "source_identity_collapsed": True,
             },
             "source_identity_policy": {
@@ -512,6 +603,18 @@ def build_unified_working_set(
             {
                 "id": "selected_context_minimum_exceeds_token_budget",
                 "detail": {"max_tokens": token_budget, "estimated_tokens": payload["summary"]["estimated_tokens"]},
+            }
+        )
+        payload["summary"]["warning_count"] = len(payload["warnings"])
+    if facet_mode == "balanced" and payload["summary"]["covered_facet_count"] < min_facets and len({str(row.get("facet") or "") for row in candidates}) >= min_facets:
+        payload["warnings"].append(
+            {
+                "id": "selected_context_facet_coverage_below_target",
+                "detail": {
+                    "min_facets": min_facets,
+                    "covered_facet_count": payload["summary"]["covered_facet_count"],
+                    "max_tokens": token_budget,
+                },
             }
         )
         payload["summary"]["warning_count"] = len(payload["warnings"])

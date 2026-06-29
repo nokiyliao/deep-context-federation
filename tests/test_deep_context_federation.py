@@ -239,7 +239,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.48.0"
+    assert payload["package"]["version"] == "0.49.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -1403,6 +1403,9 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     assert selected["source_identity_policy"]["source_ids_exposed"] is False
     assert selected["optimization_policy"]["purpose"] == "task_scoped_machine_read_first"
     assert selected["optimization_policy"]["full_index_role"] == "audit_only"
+    assert selected["optimization_policy"]["facet_mode"] == "balanced"
+    assert selected["summary"]["covered_facet_count"] >= 4
+    assert selected["summary"]["facet_coverage_met"] is True
     assert 0 < selected["summary"]["selected_row_count"] <= 12
     assert selected["summary"]["source_row_count"] == len(unified["rows"])
     assert len(json.dumps(selected, sort_keys=True)) < len(json.dumps(unified, sort_keys=True))
@@ -1423,6 +1426,30 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
         row["id"] == "selected_context_minimum_exceeds_token_budget" for row in budgeted["warnings"]
     )
     assert validate_artifact_contract(budgeted, artifact_kind="unified_working_set")["ok"] is True
+
+    tight = build_unified_working_set(
+        unified_index=unified,
+        unified_index_path=federation["outputs"]["json"],
+        query="dashboard operator",
+        limit=12,
+        max_tokens=500,
+        min_facets=4,
+    )
+    assert tight["optimization_policy"]["facet_mode"] == "balanced"
+    assert tight["summary"]["covered_facet_count"] <= 4
+    if tight["summary"]["facet_coverage_met"] is False:
+        assert any(row["id"] == "selected_context_facet_coverage_below_target" for row in tight["warnings"])
+
+    ranked = build_unified_working_set(
+        unified_index=unified,
+        unified_index_path=federation["outputs"]["json"],
+        query="dashboard operator",
+        limit=12,
+        facet_mode="ranked",
+    )
+    assert ranked["optimization_policy"]["facet_mode"] == "ranked"
+    assert ranked["summary"]["min_facets"] == 0
+    assert ranked["summary"]["facet_coverage_met"] is True
 
 
 def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
@@ -1489,6 +1516,8 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
             "8",
             "--max-tokens",
             "800",
+            "--min-facets",
+            "3",
             "--output",
             str(selected_path),
             "--format",
@@ -1508,6 +1537,8 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
     assert selected_payload["source_identity_policy"]["source_ids_exposed"] is False
     assert selected_payload["summary"]["selected_row_count"] <= 8
     assert selected_payload["summary"]["max_tokens"] == 800
+    assert selected_payload["optimization_policy"]["facet_mode"] == "balanced"
+    assert selected_payload["summary"]["min_facets"] == 3
     assert selected_payload["summary"]["estimated_tokens"] <= 800 or any(
         row["id"] == "selected_context_minimum_exceeds_token_budget" for row in selected_payload["warnings"]
     )

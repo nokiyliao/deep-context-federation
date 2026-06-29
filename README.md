@@ -771,6 +771,7 @@ dcf unify-context \
 - keeps `source_identity_policy.source_ids_exposed: false`
 - truncates long labels/values for predictable token use
 - supports `--max-tokens` so the selected JSON is packed to a model budget instead of a fixed row count
+- uses balanced facet selection by default, so surfaces, claims, conflicts, symbols, paths, commands, and capabilities do not silently collapse into one high-score row type
 - records `optimization_policy.full_index_role: audit_only`
 - preserves row ids, facets, scores, conflict attention, and command/capability hints
 
@@ -782,8 +783,12 @@ dcf select-context \
   --query "dashboard operator" \
   --limit 24 \
   --max-tokens 900 \
+  --facet-mode balanced \
+  --min-facets 4 \
   --format markdown
 ```
+
+Use `--facet-mode ranked` when strict score order is more important than broad system-surface coverage. In balanced mode, `summary.facet_coverage_met` and `selected_context_facet_coverage_below_target` make coverage loss explicit when the token budget is too small.
 
 ## Schema Registry And Contract Validation
 

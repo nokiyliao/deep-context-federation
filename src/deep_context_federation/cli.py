@@ -351,6 +351,8 @@ def build_parser() -> argparse.ArgumentParser:
     selected_context.add_argument("--label-chars", type=int, default=96)
     selected_context.add_argument("--value-chars", type=int, default=160)
     selected_context.add_argument("--max-tokens", type=int)
+    selected_context.add_argument("--facet-mode", choices=["balanced", "ranked"], default="balanced")
+    selected_context.add_argument("--min-facets", type=int, default=4)
     selected_context.add_argument("--output", type=Path)
     selected_context.add_argument("--format", choices=["json", "markdown"], default="json")
     build = sub.add_parser("build", help="Build a federation artifact from a manifest.")
@@ -865,6 +867,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             label_chars=args.label_chars,
             value_chars=args.value_chars,
             max_tokens=args.max_tokens,
+            facet_mode=args.facet_mode,
+            min_facets=args.min_facets,
         )
         if args.output:
             result["outputs"] = {"selected_context_json": args.output.expanduser().resolve().as_posix()}

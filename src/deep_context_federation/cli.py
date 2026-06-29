@@ -21,6 +21,8 @@ from deep_context_federation.query import query_federation
 from deep_context_federation.rank import markdown_rank
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
+from deep_context_federation.scanner import markdown_scan
+from deep_context_federation.scanner import scan_repository
 from deep_context_federation.sqlite_query import SQL_PRESETS
 from deep_context_federation.sqlite_query import markdown as sql_markdown
 from deep_context_federation.sqlite_query import query_sqlite
@@ -43,6 +45,15 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--codebase-memory-cache-dir", type=Path)
     build.add_argument("--write", action="store_true")
     build.add_argument("--json", action="store_true")
+    scan = sub.add_parser("scan", help="Read-only scan of a repo into starter federation sources.")
+    scan.add_argument("--root", type=Path, default=Path.cwd())
+    scan.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+    scan.add_argument("--write", action="store_true")
+    scan.add_argument("--build", action="store_true", help="Build a federation immediately from the generated manifest.")
+    scan.add_argument("--max-files", type=int, default=5000)
+    scan.add_argument("--max-parse-bytes", type=int, default=1_000_000)
+    scan.add_argument("--hash-files", action="store_true")
+    scan.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -121,6 +132,38 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         return 0 if payload["ok"] else 2
+    if args.command == "scan":
+        if args.build and not args.write:
+            print("scan --build requires --write so the generated manifest exists", flush=True)
+            return 2
+        result = scan_repository(
+            root=args.root,
+            output_dir=args.output_dir,
+            write=args.write,
+            max_files=args.max_files,
+            max_parse_bytes=args.max_parse_bytes,
+            include_hashes=args.hash_files,
+        )
+        if args.build:
+            federation = build_federation(
+                manifest_path=Path(str(result["outputs"]["manifest"])),
+                root=args.root,
+                output_dir=Path(str(result["output_dir"])),
+                write=True,
+            )
+            result["federation"] = {
+                "ok": federation["ok"],
+                "status": federation["status"],
+                "summary": federation["summary"],
+                "outputs": federation["outputs"],
+            }
+            result["ok"] = result["ok"] and federation["ok"]
+            result["status"] = "pass_scan_and_build" if federation["ok"] else "fail_scan_and_build"
+        if args.format == "markdown":
+            print(markdown_scan(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
     if args.command == "verify":
         payload = read_required_json(args.input)
         manifest = read_json(args.manifest)

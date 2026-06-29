@@ -7,6 +7,7 @@ dist/
 build/
 *.egg-info/
 .dcf/
+.dcf*/
 output/
 .codebase-memory/
 *.sqlite

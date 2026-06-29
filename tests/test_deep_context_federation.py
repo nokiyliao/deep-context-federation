@@ -18,6 +18,7 @@ from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.query import query_federation
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
+from deep_context_federation.scanner import scan_repository
 from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.verifier import verify_federation
 
@@ -224,3 +225,65 @@ def test_codebase_memory_adapter_safety(tmp_path: Path, monkeypatch: pytest.Monk
     unsafe, unsafe_conflicts = codebase_memory_source(tmp_path, include=True, cache_dir=tmp_path / "local")
     assert unsafe["status"] == "error"
     assert unsafe_conflicts[0]["conflict_type"] == "codebase_memory_policy_violation"
+
+
+def test_repo_scan_bootstraps_buildable_federation(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "src/pkg").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    (repo / "config").mkdir()
+    (repo / "output").mkdir()
+    (repo / "README.md").write_text("# Example\n", encoding="utf-8")
+    (repo / "config/app.json").write_text('{"enabled": true}\n', encoding="utf-8")
+    (repo / "output/ignored.json").write_text('{"large": true}\n', encoding="utf-8")
+    (repo / "src/pkg/mod.py").write_text(
+        "\n".join(
+            [
+                "class Thing:",
+                "    def run(self):",
+                "        return 1",
+                "",
+                "def helper():",
+                "    return Thing().run()",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (repo / "tests/test_mod.py").write_text("from src.pkg.mod import helper\n", encoding="utf-8")
+
+    result = scan_repository(root=repo, output_dir=repo / ".dcf-scan", write=True, max_files=100)
+
+    assert result["schema_version"] == "deep_context_federation_repo_scan_v1"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["summary"]["file_count"] == 4
+    assert result["summary"]["symbol_count"] >= 2
+    assert "output" in result["summary"]["skipped_dirs"]
+
+    manifest_path = Path(result["outputs"]["manifest"])
+    assert manifest_path.exists()
+    assert Path(result["outputs"]["inventory"]).exists()
+    assert Path(result["outputs"]["symbols"]).exists()
+    assert Path(result["outputs"]["surfaces"]).exists()
+
+    symbol_payload = json.loads(Path(result["outputs"]["symbols"]).read_text(encoding="utf-8"))
+    symbols = [row["symbol_fqn"] for row in symbol_payload["symbols"]]
+    assert any(symbol.endswith(".Thing") for symbol in symbols)
+    assert any(symbol.endswith(".helper") for symbol in symbols)
+
+    payload = build_federation(
+        manifest_path=manifest_path,
+        root=repo,
+        output_dir=repo / ".dcf-scan",
+        write=True,
+    )
+
+    assert payload["ok"] is True
+    assert payload["summary"]["error_count"] == 0
+    assert payload["graph_summary"]["edge_type_counts"]["OWNS"] > 0
+    assert payload["graph_summary"]["edge_type_counts"]["REFERENCES_SYMBOL"] > 0
+
+    query = query_federation(payload, preset="code-to-authority", limit=20)
+    values = {row["value"] for row in query["rows"]}
+    assert "src/pkg/mod.py" in values

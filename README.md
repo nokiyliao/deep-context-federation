@@ -42,6 +42,7 @@ It does not decide production truth. It only projects and checks consistency acr
 Deep Context Federation now combines several capabilities that are usually split across separate tools:
 
 - generic JSON federation for arbitrary governance artifacts
+- self-bootstrap repo scan that emits starter inventory, surface, and symbol sources
 - typed adapters for surface maps, symbol maps, and graph exports
 - claim-to-evidence lineage extraction
 - source health scoring and freshness warnings
@@ -67,6 +68,22 @@ python -m pip install -e ".[dev]"
 ```
 
 ## Quickstart
+
+Self-bootstrap a fresh repository into a starter federation:
+
+```bash
+python -m deep_context_federation.cli scan \
+  --root . \
+  --output-dir .dcf \
+  --write \
+  --build \
+  --format markdown
+
+python -m deep_context_federation.cli query \
+  --input .dcf/deep_context_federation_latest.json \
+  --preset code-to-authority \
+  --format markdown
+```
 
 Run the bundled example after installation:
 
@@ -138,6 +155,23 @@ PYTHONPATH=src python -m deep_context_federation.cli build \
   --output-dir .dcf \
   --write
 ```
+
+## Repo Scan Bootstrap
+
+`dcf scan` gives the tool a self-starting path on unfamiliar codebases. It walks the repository with safe default excludes (`.git`, `.venv`, `node_modules`, `output`, `data`, `.codebase-memory`, and generated `.dcf*` folders), then writes:
+
+- `repo_file_inventory.json`: file/path/artifact inventory with surface hints
+- `repo_python_symbols.json`: Python AST symbol map with path and surface links
+- `repo_surface_map.json`: starter surface map with owner placeholders
+- `deep_context_federation.generated.json`: manifest that can be fed into `dcf build`
+
+One command can scan and build:
+
+```bash
+dcf scan --root . --output-dir .dcf --write --build
+```
+
+The scanner is still read-only from an authority perspective: every generated source declares `authority_effect: none` and `no_apply: true`. It does not install external tools, start watchers, modify hooks, or replace project-specific authority manifests.
 
 ## Manifest
 

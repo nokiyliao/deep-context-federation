@@ -8,6 +8,8 @@ from typing import Any
 
 from deep_context_federation.adjudicate import ADJUDICATE_SCHEMA_VERSION
 from deep_context_federation.agent_context import AGENT_CONTEXT_SCHEMA_VERSION
+from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION
+from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import DEFAULT_JSON_NAME
@@ -349,6 +351,24 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "agent_context_gate_policy",
+            "schema_version": AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION,
+            "producer": "human_or_ci",
+            "consumer_commands": ["agent-context-gate"],
+            "top_level_required": ["schema_version", "authority_effect", "no_apply"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "agent_context_gate",
+            "schema_version": AGENT_CONTEXT_GATE_SCHEMA_VERSION,
+            "producer": "agent-context-gate",
+            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "top_level_required": ["schema_version", "ok", "status", "policy", "checks", "errors", "summary"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "schema_registry",
             "schema_version": "deep_context_federation_schema_registry_v1",
             "producer": "schema",
@@ -560,6 +580,26 @@ def _commands() -> list[dict[str, Any]]:
             "output_schemas": [AGENT_CONTEXT_SCHEMA_VERSION],
             "input_schemas": [AGENT_CI_SCHEMA_VERSION],
             "options": ["--input", "--mode", "--token-budget", "--max-artifact-tokens", "--no-content", "--no-prompt", "--output"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "agent-context-gate",
+            "intent": "Evaluate an agent context bundle against token, missing artifact, truncation, and schema policy thresholds.",
+            "writes": ["optional agent context gate JSON when --output is set"],
+            "output_schemas": [AGENT_CONTEXT_GATE_SCHEMA_VERSION],
+            "input_schemas": [AGENT_CONTEXT_SCHEMA_VERSION, AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION],
+            "options": [
+                "--input",
+                "--policy",
+                "--max-missing-artifacts",
+                "--max-skipped-artifacts",
+                "--max-truncated-artifacts",
+                "--max-selected-tokens",
+                "--max-prompt-tokens",
+                "--require-schema-version",
+                "--output",
+            ],
             "authority_effect": "none",
             "no_apply": True,
         },

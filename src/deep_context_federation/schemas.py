@@ -8,6 +8,8 @@ from typing import Any
 
 from deep_context_federation.adjudicate import ADJUDICATE_SCHEMA_VERSION
 from deep_context_federation.agent_context import AGENT_CONTEXT_SCHEMA_VERSION
+from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION
+from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import MANIFEST_SCHEMA
@@ -691,6 +693,42 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "prompt_text": {"type": "string"},
                 "prompt_estimated_tokens": {"type": "integer"},
                 "json_estimated_tokens": {"type": "integer"},
+            },
+        ),
+        "agent_context_gate_policy": _schema(
+            AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION,
+            "Deep Context Federation agent context gate policy",
+            ["schema_version", "authority_effect", "no_apply"],
+            {
+                **_boundary_props(),
+                "policy_id": {"type": "string"},
+                "description": {"type": "string"},
+                "require_context_ok": {"type": "boolean"},
+                "require_source_contract_ok": {"type": "boolean"},
+                "max_missing_artifacts": {"type": ["integer", "null"]},
+                "max_skipped_artifacts": {"type": ["integer", "null"]},
+                "max_truncated_artifacts": {"type": ["integer", "null"]},
+                "max_selected_tokens": {"type": ["integer", "null"]},
+                "max_prompt_tokens": {"type": ["integer", "null"]},
+                "enforce_prompt_within_token_budget": {"type": "boolean"},
+                "enforce_selected_within_content_budget": {"type": "boolean"},
+                "require_schema_versions": array_type,
+            },
+        ),
+        "agent_context_gate": _schema(
+            AGENT_CONTEXT_GATE_SCHEMA_VERSION,
+            "Deep Context Federation agent context gate",
+            ["schema_version", "ok", "status", "authority_effect", "no_apply", "policy", "checks", "errors", "summary"],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_context_gate", "fail_agent_context_gate"]},
+                **_boundary_props(),
+                "policy": object_type,
+                "check_count": {"type": "integer"},
+                "error_count": {"type": "integer"},
+                "checks": array_type,
+                "errors": array_type,
+                "summary": object_type,
             },
         ),
     }

@@ -2,6 +2,9 @@
 
 from deep_context_federation.adjudicate import adjudicate_target
 from deep_context_federation.agent_context import build_agent_context
+from deep_context_federation.agent_context_gate import evaluate_agent_context_gate
+from deep_context_federation.agent_context_gate import load_agent_context_gate_policy
+from deep_context_federation.agent_context_gate import normalize_agent_context_gate_policy
 from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation
@@ -54,13 +57,16 @@ __all__ = [
     "compose_manifests",
     "diff_federations",
     "doctor_federation",
+    "evaluate_agent_context_gate",
     "evaluate_efficiency_gate",
     "evaluate_quality_gate",
     "evaluate_target_review_gate",
     "load_efficiency_gate_policy",
+    "load_agent_context_gate_policy",
     "load_quality_gate_policy",
     "load_target_review_gate_policy",
     "normalize_efficiency_gate_policy",
+    "normalize_agent_context_gate_policy",
     "normalize_quality_gate_policy",
     "normalize_target_review_gate_policy",
     "pack_context",

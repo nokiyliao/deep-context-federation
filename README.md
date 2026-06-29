@@ -62,6 +62,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - efficiency gate that turns token-savings targets into CI or agent routing thresholds
 - agent CI continuation decision that chains workflow run, efficiency report, and efficiency gate into one read-first artifact
 - agent context bundle that materializes selected `agent-ci` read-plan artifacts into one bounded prompt/context payload
+- agent context gate that enforces token, missing-artifact, truncation, and schema thresholds before model handoff
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -202,6 +203,17 @@ python -m deep_context_federation.cli agent-context \
 ```
 
 `agent-context` consumes the `agent_ci.artifact_read_plan`, embeds selected artifact content under a token budget, records skipped/truncated sections, and emits a single read-only `deep_context_federation_agent_context_v1` bundle for model prompts.
+
+Gate the bounded context before handing it to a model:
+
+```bash
+python -m deep_context_federation.cli agent-context-gate \
+  --input .dcf/deep_context_federation_agent_context.json \
+  --policy examples/agent_context_gate_policy.example.json \
+  --output .dcf/deep_context_federation_agent_context_gate.json
+```
+
+The gate exits with code `2` when required context invariants fail, such as missing artifacts, prompt budget overflow, contract failure, or required schema versions not appearing in the selected context bundle.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -489,6 +501,19 @@ This is the preferred artifact for external orchestrators. It reduces model inpu
 - `all`: every read-plan row
 
 It emits `deep_context_federation_agent_context_v1` with selected sections, skipped rows, truncation flags, source artifact hashes, prompt text, and token estimates. Use this when the next model call should receive one bounded context object instead of opening several JSON artifacts manually.
+
+## Agent Context Gate
+
+`dcf agent-context-gate` evaluates that context bundle before model handoff. It checks:
+
+- the context artifact contract and read-only boundary
+- source `agent_ci` contract validation
+- missing, skipped, and truncated artifact counts
+- selected-context tokens and prompt tokens
+- prompt and selected content staying within declared budgets
+- required schema versions inside the selected sections
+
+Use `examples/agent_context_gate_policy.example.json` as a starter policy. The default gate is permissive about truncation and skipped rows, but strict about missing artifacts, read-only boundaries, source contract validity, and token budget overflow.
 
 ## Capabilities Manifest
 

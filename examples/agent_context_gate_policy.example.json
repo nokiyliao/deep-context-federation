@@ -1,0 +1,19 @@
+{
+  "schema_version": "deep_context_federation_agent_context_gate_policy_v1",
+  "policy_id": "example_agent_context_minimum",
+  "description": "Example policy for handing bounded DCF agent context to a model.",
+  "authority_effect": "none",
+  "no_apply": true,
+  "require_context_ok": true,
+  "require_source_contract_ok": true,
+  "max_missing_artifacts": 0,
+  "max_skipped_artifacts": null,
+  "max_truncated_artifacts": null,
+  "max_selected_tokens": null,
+  "max_prompt_tokens": null,
+  "enforce_prompt_within_token_budget": true,
+  "enforce_selected_within_content_budget": true,
+  "require_schema_versions": [
+    "deep_context_federation_agent_ci_v1"
+  ]
+}

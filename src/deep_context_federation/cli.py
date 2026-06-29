@@ -11,6 +11,9 @@ from deep_context_federation.adjudicate import adjudicate_target
 from deep_context_federation.adjudicate import markdown_adjudication
 from deep_context_federation.agent_context import build_agent_context
 from deep_context_federation.agent_context import markdown_agent_context
+from deep_context_federation.agent_context_gate import evaluate_agent_context_gate
+from deep_context_federation.agent_context_gate import load_agent_context_gate_policy
+from deep_context_federation.agent_context_gate import markdown_agent_context_gate
 from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.agent_ci import markdown_agent_ci
 from deep_context_federation.bench import benchmark_build
@@ -240,6 +243,17 @@ def build_parser() -> argparse.ArgumentParser:
     agent_context.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     agent_context.add_argument("--output", type=Path)
     agent_context.add_argument("--format", choices=["json", "markdown"], default="json")
+    agent_context_gate = sub.add_parser("agent-context-gate", help="Evaluate an agent-context bundle against token and artifact policy thresholds.")
+    agent_context_gate.add_argument("--input", type=Path, required=True)
+    agent_context_gate.add_argument("--policy", type=Path)
+    agent_context_gate.add_argument("--max-missing-artifacts", type=int)
+    agent_context_gate.add_argument("--max-skipped-artifacts", type=int)
+    agent_context_gate.add_argument("--max-truncated-artifacts", type=int)
+    agent_context_gate.add_argument("--max-selected-tokens", type=int)
+    agent_context_gate.add_argument("--max-prompt-tokens", type=int)
+    agent_context_gate.add_argument("--require-schema-version", action="append")
+    agent_context_gate.add_argument("--output", type=Path)
+    agent_context_gate.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -662,6 +676,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_context(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "agent-context-gate":
+        payload = read_required_json(args.input)
+        policy = load_agent_context_gate_policy(args.policy) if args.policy else None
+        result = evaluate_agent_context_gate(
+            payload,
+            policy=policy,
+            max_missing_artifacts=args.max_missing_artifacts,
+            max_skipped_artifacts=args.max_skipped_artifacts,
+            max_truncated_artifacts=args.max_truncated_artifacts,
+            max_selected_tokens=args.max_selected_tokens,
+            max_prompt_tokens=args.max_prompt_tokens,
+            require_schema_versions=args.require_schema_version,
+        )
+        if args.output:
+            result["outputs"] = {"agent_context_gate_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_agent_context_gate(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

@@ -70,9 +70,11 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_id": "long_term_context_memory",
         "capability_name": "Long-term context memory and reuse",
         "absorbed_function_classes": ["long_term_context_recall", "session_memory", "context_reuse"],
-        "dcf_native_owner": "dcf_fingerprint_sqlite_diff_agent_handoff",
-        "dcf_commands": ["build", "diff", "agent-handoff", "agent-ready", "agent-onboard", "efficiency-report"],
+        "dcf_native_owner": "memory_ledger_fingerprint_agent_handoff",
+        "dcf_commands": ["index-context-memory", "build", "diff", "prepare-model-handoff", "prepare-model-input", "onboard-runner", "efficiency-report"],
         "native_surfaces": [
+            "memory_ledger",
+            "reuse_index",
             "source_fingerprints",
             "sqlite read model",
             "architecture diff",
@@ -80,11 +82,12 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
             "agent_ready freshness gates",
         ],
         "integration_mode": "native_owned_capability",
-        "integration_status": "native_partial",
+        "integration_status": "native_available",
         "adapter_only": False,
-        "source_of_record_boundary": "DCF must own the memory retrieval contract and freshness gates. Existing memory databases can be one-time import material, not a separate identity, live watcher, or authority.",
-        "remaining_gap": "Add an append-only DCF memory ledger for accepted handoffs, decisions, and compact context fingerprints.",
+        "source_of_record_boundary": "DCF owns the memory retrieval contract, reuse index, and freshness gates. Existing memory databases can be one-time import material, not a separate identity, live watcher, or authority.",
+        "remaining_gap": "Retention and compaction policy can be tuned, but DCF now owns the native memory ledger contract.",
         "exit_criteria": [
+            "accepted handoffs and fingerprints materialize into index-context-memory rows",
             "fresh agents read DCF handoff/profile/onboard artifacts before private memory stores",
             "memory recall is bounded by DCF freshness and request-binding checks",
             "memory imports are one-shot, watcher-free, and collapsed into DCF-native records",
@@ -120,7 +123,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Operator projection and current truth cockpit",
         "absorbed_function_classes": ["governance_projection", "current_truth_projection", "blocker_cockpit"],
         "dcf_native_owner": "agent_ready_capabilities_query_gate",
-        "dcf_commands": ["capabilities", "query", "doctor", "agent-ready", "agent-onboard", "quality-gate"],
+        "dcf_commands": ["capabilities", "query", "doctor", "prepare-model-input", "onboard-runner", "quality-gate"],
         "native_surfaces": [
             "capabilities manifest",
             "query_presets.operator-projection",
@@ -134,7 +137,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns the agent/operator read model and gating view. Project dashboards may render DCF output but should not maintain a divergent projection contract or identity.",
         "remaining_gap": "Add first-class DCF cockpit summary rows for active blockers, dirty lanes, and current truth drift.",
         "exit_criteria": [
-            "operators and agents start from DCF capabilities/agent-ready output",
+            "operators and agents start from DCF capabilities/prepare-model-input output",
             "dashboard claims are checked against DCF query and quality gates",
             "current truth snapshots are normalized into DCF rows instead of queried separately by agents",
         ],
@@ -144,7 +147,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Agent workflow orchestration and handoff",
         "absorbed_function_classes": ["agent_launch", "prompt_packaging", "session_handoff"],
         "dcf_native_owner": "agent_profile_onboard_ready_handoff",
-        "dcf_commands": ["agent-profile-init", "agent-profile", "agent-onboard", "agent-ready", "agent-handoff", "agent-model-input"],
+        "dcf_commands": ["init-run-profile", "validate-run-profile", "onboard-runner", "prepare-model-input", "prepare-model-handoff", "emit-model-input"],
         "native_surfaces": [
             "agent_profile",
             "agent_onboard",
@@ -160,8 +163,8 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns the launch contract, freshness checks, token budget, and model prompt emission. Shell wrappers should call DCF rather than reimplement readiness logic.",
         "remaining_gap": "Global wrappers should be simplified until they only invoke DCF and display its pass/fail result.",
         "exit_criteria": [
-            "new agent sessions use agent-onboard or agent-ready",
-            "manual prompt packs are replaced by agent-handoff model_prompt_source",
+            "new agent sessions use onboard-runner or prepare-model-input",
+            "manual prompt packs are replaced by prepare-model-handoff model_prompt_source",
             "wrappers emit no model prompt when DCF gates fail",
         ],
     },
@@ -253,7 +256,7 @@ def build_native_integration_plan(*, capabilities: Iterable[str] | None = None) 
         "nativeization_sequence": [
             {
                 "step": "orchestration_entrypoint",
-                "goal": "All agents start through DCF agent-onboard or agent-ready.",
+                "goal": "All agents start through DCF onboard-runner or prepare-model-input.",
                 "owner_capability": "workflow_orchestration",
                 "exit_gate": "agent_onboard and agent_ready artifacts validate and emit prompt only after gates pass",
             },
@@ -273,7 +276,7 @@ def build_native_integration_plan(*, capabilities: Iterable[str] | None = None) 
                 "step": "native_memory_ledger",
                 "goal": "Accepted handoffs and context fingerprints become DCF-native reusable memory.",
                 "owner_capability": "long_term_context_memory",
-                "exit_gate": "append-only DCF memory ledger exists with freshness and request-binding checks",
+                "exit_gate": "index-context-memory emits reusable rows with fingerprint-bound prompt sources",
             },
             {
                 "step": "operator_projection_convergence",

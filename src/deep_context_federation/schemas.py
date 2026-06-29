@@ -33,6 +33,7 @@ from deep_context_federation.efficiency_report import EFFICIENCY_REPORT_SCHEMA_V
 from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_VERSION
+from deep_context_federation.memory_ledger import MEMORY_LEDGER_SCHEMA_VERSION
 from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
@@ -146,6 +147,36 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "summary": object_type,
                 "capabilities": array_type,
                 "nativeization_sequence": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "memory_ledger": _schema(
+            MEMORY_LEDGER_SCHEMA_VERSION,
+            "Deep Context Federation native memory ledger",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "summary",
+                "rows",
+                "reuse_index",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_memory_ledger", "warn_memory_ledger"]},
+                **_boundary_props(),
+                "generated_at": {"type": "string"},
+                "root": {"type": "string"},
+                "inputs": object_type,
+                "summary": object_type,
+                "rows": array_type,
+                "reuse_index": array_type,
+                "input_fingerprint_digests": array_type,
+                "warnings": array_type,
+                "errors": array_type,
                 "safety_boundaries": object_type,
             },
         ),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -59,6 +60,8 @@ from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.intake import markdown_agent_intake
 from deep_context_federation.manifest import validate_manifest
+from deep_context_federation.memory_ledger import build_memory_ledger
+from deep_context_federation.memory_ledger import markdown_memory_ledger
 from deep_context_federation.native_integration import build_native_integration_plan
 from deep_context_federation.native_integration import markdown_native_integration_plan
 from deep_context_federation.quality_gate import evaluate_quality_gate
@@ -96,6 +99,31 @@ from deep_context_federation.workflow_plan import build_workflow_plan
 from deep_context_federation.workflow_plan import markdown_workflow_plan
 from deep_context_federation.workflow_run import build_workflow_run
 from deep_context_federation.workflow_run import markdown_workflow_run
+
+
+COMMAND_ALIASES = {
+    "native-integration-plan": "plan-native-ownership",
+    "memory-ledger": "index-context-memory",
+    "agent-ci": "decide-continuation",
+    "agent-context": "pack-model-context",
+    "agent-context-gate": "gate-model-context",
+    "agent-handoff": "prepare-model-handoff",
+    "verify-handoff": "verify-model-handoff",
+    "agent-model-input": "emit-model-input",
+    "agent-profile": "validate-run-profile",
+    "agent-profile-init": "init-run-profile",
+    "agent-onboard": "onboard-runner",
+    "agent-discover": "discover-model-readiness",
+    "agent-route": "route-model-readiness",
+    "agent-ready": "prepare-model-input",
+}
+
+
+def _normalize_command_argv(argv: Sequence[str] | None) -> list[str]:
+    normalized = list(sys.argv[1:] if argv is None else argv)
+    if normalized:
+        normalized[0] = COMMAND_ALIASES.get(normalized[0], normalized[0])
+    return normalized
 
 
 def add_common_source_args(parser: argparse.ArgumentParser) -> None:
@@ -290,12 +318,19 @@ def build_parser() -> argparse.ArgumentParser:
     validate_artifact.add_argument("--artifact", choices=artifact_kinds())
     validate_artifact.add_argument("--output", type=Path)
     validate_artifact.add_argument("--format", choices=["json", "markdown"], default="json")
-    native_integration = sub.add_parser("native-integration-plan", help="Plan DCF-native ownership of overlapping context-tool functions.")
+    native_integration = sub.add_parser("plan-native-ownership", help="Plan DCF-native ownership of overlapping context-tool functions.")
     native_integration.set_defaults(capability=[])
     native_integration.add_argument("--function", dest="capability", metavar="FUNCTION", action="append", help="DCF function name to inspect, such as symbol-call-graph or long-term-context-memory.")
     native_integration.add_argument("--capability", dest="capability", action="append", help=argparse.SUPPRESS)
     native_integration.add_argument("--output", type=Path)
     native_integration.add_argument("--format", choices=["json", "markdown"], default="json")
+    memory_ledger = sub.add_parser("index-context-memory", help="Materialize generated DCF artifacts into a native reusable context memory ledger.")
+    memory_ledger.add_argument("--root", type=Path, default=Path.cwd())
+    memory_ledger.add_argument("--input-dir", type=Path, action="append", default=[])
+    memory_ledger.add_argument("--input-file", type=Path, action="append", default=[])
+    memory_ledger.add_argument("--max-files", type=int, default=500)
+    memory_ledger.add_argument("--output", type=Path)
+    memory_ledger.add_argument("--format", choices=["json", "markdown"], default="json")
     build = sub.add_parser("build", help="Build a federation artifact from a manifest.")
     add_common_source_args(build)
     add_memory_import_args(build)
@@ -392,7 +427,7 @@ def build_parser() -> argparse.ArgumentParser:
     efficiency_gate.add_argument("--require-artifact-role", action="append")
     efficiency_gate.add_argument("--output", type=Path)
     efficiency_gate.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_ci = sub.add_parser("agent-ci", help="Run workflow, efficiency report, and efficiency gate into one continuation decision.")
+    agent_ci = sub.add_parser("decide-continuation", help="Run workflow, efficiency report, and efficiency gate into one continuation decision.")
     agent_ci.add_argument("--root", type=Path, default=Path.cwd())
     agent_ci.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     agent_ci.add_argument("--manifest", type=Path, action="append", default=[])
@@ -415,7 +450,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_ci.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     agent_ci.add_argument("--output", type=Path)
     agent_ci.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_context = sub.add_parser("agent-context", help="Bundle selected agent-ci read-plan artifacts into one bounded model context.")
+    agent_context = sub.add_parser("pack-model-context", help="Bundle selected continuation read-plan artifacts into one bounded model context.")
     agent_context.add_argument("--input", type=Path, required=True)
     agent_context.add_argument("--mode", choices=["read-first", "decision-allowed", "all"], default="read-first")
     agent_context.add_argument("--token-budget", type=int, default=4000)
@@ -424,7 +459,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_context.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     agent_context.add_argument("--output", type=Path)
     agent_context.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_context_gate = sub.add_parser("agent-context-gate", help="Evaluate an agent-context bundle against token and artifact policy thresholds.")
+    agent_context_gate = sub.add_parser("gate-model-context", help="Evaluate a model-context bundle against token and artifact policy thresholds.")
     agent_context_gate.add_argument("--input", type=Path, required=True)
     agent_context_gate.add_argument("--policy", type=Path)
     agent_context_gate.add_argument("--max-missing-artifacts", type=int)
@@ -435,7 +470,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_context_gate.add_argument("--require-schema-version", action="append")
     agent_context_gate.add_argument("--output", type=Path)
     agent_context_gate.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_handoff = sub.add_parser("agent-handoff", help="Run agent-ci, agent-context, and agent-context-gate into one gated model handoff.")
+    agent_handoff = sub.add_parser("prepare-model-handoff", help="Run continuation, context packing, and context gate checks into one gated model handoff.")
     agent_handoff.add_argument("--root", type=Path, default=Path.cwd())
     agent_handoff.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     agent_handoff.add_argument("--manifest", type=Path, action="append", default=[])
@@ -463,20 +498,20 @@ def build_parser() -> argparse.ArgumentParser:
     agent_handoff.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text fields.")
     agent_handoff.add_argument("--output", type=Path)
     agent_handoff.add_argument("--format", choices=["json", "markdown"], default="json")
-    verify_handoff = sub.add_parser("verify-handoff", help="Verify a generated agent-handoff artifact before model use.")
+    verify_handoff = sub.add_parser("verify-model-handoff", help="Verify a generated model-handoff artifact before model use.")
     verify_handoff.add_argument("--input", type=Path, required=True)
     verify_handoff.add_argument("--output", type=Path)
     verify_handoff.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_model_input = sub.add_parser("agent-model-input", help="Fail-closed reader that emits model prompt text only after handoff verification passes.")
+    agent_model_input = sub.add_parser("emit-model-input", help="Fail-closed reader that emits model prompt text only after handoff verification passes.")
     agent_model_input.add_argument("--input", type=Path, required=True)
     agent_model_input.add_argument("--output", type=Path)
     agent_model_input.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
     agent_model_input.add_argument("--format", choices=["json", "markdown", "prompt"], default="json")
-    agent_profile = sub.add_parser("agent-profile", help="Validate and normalize an agent-ready profile for global wrappers.")
+    agent_profile = sub.add_parser("validate-run-profile", help="Validate and normalize a model-input run profile for global wrappers.")
     agent_profile.add_argument("--profile", type=Path, required=True)
     agent_profile.add_argument("--output", type=Path)
     agent_profile.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_profile_init = sub.add_parser("agent-profile-init", help="Generate a validated agent-ready profile for global wrappers.")
+    agent_profile_init = sub.add_parser("init-run-profile", help="Generate a validated model-input run profile for global wrappers.")
     agent_profile_init.add_argument("--root", type=Path, default=Path.cwd())
     agent_profile_init.add_argument("--output", type=Path, default=Path(".dcf") / "agent_ready_profile.json", help="Profile JSON path to write.")
     agent_profile_init.add_argument("--profile-id", default="")
@@ -507,10 +542,10 @@ def build_parser() -> argparse.ArgumentParser:
     agent_profile_init.add_argument("--no-content", action="store_true")
     agent_profile_init.add_argument("--no-prompt", action="store_true")
     agent_profile_init.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_onboard = sub.add_parser("agent-onboard", help="Generate an agent profile and run the fail-closed agent-ready path in one wrapper command.")
+    agent_onboard = sub.add_parser("onboard-runner", help="Generate a run profile and run the fail-closed model-input path in one wrapper command.")
     agent_onboard.add_argument("--root", type=Path, default=Path.cwd())
     agent_onboard.add_argument("--profile-output", type=Path, default=Path(".dcf") / "agent_ready_profile.json")
-    agent_onboard.add_argument("--output", type=Path, help="Optional agent-onboard capsule JSON path.")
+    agent_onboard.add_argument("--output", type=Path, help="Optional runner onboarding capsule JSON path.")
     agent_onboard.add_argument("--profile-id", default="")
     agent_onboard.add_argument("--description", default="")
     agent_onboard.add_argument("--task", required=True)
@@ -539,12 +574,12 @@ def build_parser() -> argparse.ArgumentParser:
     agent_onboard.add_argument("--no-content", action="store_true")
     agent_onboard.add_argument("--no-prompt", action="store_true")
     agent_onboard.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_discover = sub.add_parser("agent-discover", help="Discover repo-local DCF handoff readiness for global wrappers.")
+    agent_discover = sub.add_parser("discover-model-readiness", help="Discover repo-local DCF handoff readiness for global wrappers.")
     agent_discover.add_argument("--root", type=Path, default=Path.cwd())
     agent_discover.add_argument("--handoff", type=Path)
     agent_discover.add_argument("--output", type=Path)
     agent_discover.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_route = sub.add_parser("agent-route", help="Normalize DCF discovery into a global-wrapper route decision.")
+    agent_route = sub.add_parser("route-model-readiness", help="Normalize DCF discovery into a global-wrapper route decision.")
     agent_route.add_argument("--root", type=Path, default=Path.cwd())
     agent_route.add_argument("--task", default="")
     agent_route.add_argument("--target", action="append", default=[])
@@ -552,7 +587,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_route.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     agent_route.add_argument("--output", type=Path)
     agent_route.add_argument("--format", choices=["json", "markdown"], default="json")
-    agent_ready = sub.add_parser("agent-ready", help="Fail-closed DCF pipeline that emits model prompt text only when gates pass.")
+    agent_ready = sub.add_parser("prepare-model-input", help="Fail-closed DCF pipeline that emits model prompt text only when gates pass.")
     agent_ready.add_argument("--profile", type=Path, help="Optional machine-readable defaults for global wrappers.")
     agent_ready.add_argument("--root", type=Path, default=Path.cwd())
     agent_ready.add_argument("--output-dir", type=Path, default=Path(".dcf"))
@@ -707,7 +742,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = build_parser().parse_args(_normalize_command_argv(argv))
     if args.command == "capabilities":
         result = build_capabilities()
         if args.output:
@@ -748,13 +783,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "native-integration-plan":
+    if args.command == "plan-native-ownership":
         result = build_native_integration_plan(capabilities=args.capability)
         if args.output:
             result["outputs"] = {"native_integration_plan_json": args.output.expanduser().resolve().as_posix()}
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_native_integration_plan(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "index-context-memory":
+        result = build_memory_ledger(
+            root=args.root,
+            input_dirs=args.input_dir,
+            input_files=args.input_file,
+            max_files=args.max_files,
+        )
+        if args.output:
+            result["outputs"] = {"memory_ledger_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_memory_ledger(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
@@ -947,7 +997,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "agent-ci":
+    if args.command == "decide-continuation":
         targets = list(args.target or [])
         if args.targets_file:
             targets.extend(read_targets_file(args.targets_file))
@@ -998,7 +1048,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "agent-context":
+    if args.command == "pack-model-context":
         payload = read_required_json(args.input)
         result = build_agent_context(
             payload,
@@ -1017,7 +1067,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "agent-context-gate":
+    if args.command == "gate-model-context":
         payload = read_required_json(args.input)
         policy = load_agent_context_gate_policy(args.policy) if args.policy else None
         result = evaluate_agent_context_gate(
@@ -1038,7 +1088,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "agent-handoff":
+    if args.command == "prepare-model-handoff":
         targets = list(args.target or [])
         if args.targets_file:
             targets.extend(read_targets_file(args.targets_file))
@@ -1102,7 +1152,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "verify-handoff":
+    if args.command == "verify-model-handoff":
         payload = read_required_json(args.input)
         result = verify_agent_handoff(payload, handoff_path=args.input)
         if args.output:
@@ -1113,7 +1163,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "agent-model-input":
+    if args.command == "emit-model-input":
         payload = read_required_json(args.input)
         result = build_agent_model_input(payload, handoff_path=args.input, include_prompt=not args.no_prompt)
         if args.output:
@@ -1127,7 +1177,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "agent-profile":
+    if args.command == "validate-run-profile":
         result = load_agent_profile(args.profile)
         if args.output:
             result["outputs"] = {"agent_profile_json": args.output.expanduser().resolve().as_posix()}
@@ -1137,7 +1187,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "agent-profile-init":
+    if args.command == "init-run-profile":
         targets = list(args.target or [])
         if args.targets_file:
             targets.extend(read_targets_file(args.targets_file))
@@ -1178,7 +1228,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "agent-onboard":
+    if args.command == "onboard-runner":
         targets = list(args.target or [])
         if args.targets_file:
             targets.extend(read_targets_file(args.targets_file))
@@ -1222,7 +1272,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
-    if args.command == "agent-discover":
+    if args.command == "discover-model-readiness":
         result = discover_agent_context(root=args.root, handoff_path=args.handoff)
         if args.output:
             result["outputs"] = {"agent_discovery_json": args.output.expanduser().resolve().as_posix()}
@@ -1232,7 +1282,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0
-    if args.command == "agent-route":
+    if args.command == "route-model-readiness":
         result = route_agent_context(
             root=args.root,
             task=args.task,
@@ -1248,7 +1298,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0
-    if args.command == "agent-ready":
+    if args.command == "prepare-model-input":
         profile = load_agent_profile(args.profile) if args.profile else {}
         if profile and profile.get("ok") is not True:
             result = _agent_ready_profile_failure(args=args, profile=profile)

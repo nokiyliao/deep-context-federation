@@ -61,16 +61,17 @@ Deep Context Federation now combines several capabilities that are usually split
 - workflow run capsule that executes the read-only DCF chain and returns one compact handoff artifact
 - efficiency report that measures read-first and gate-pass token savings against generated baselines
 - efficiency gate that turns token-savings targets into CI or agent routing thresholds
-- agent CI continuation decision that chains workflow run, efficiency report, and efficiency gate into one read-first artifact
-- agent context bundle that materializes selected `agent-ci` read-plan artifacts into one bounded prompt/context payload
-- agent context gate that enforces token, missing-artifact, truncation, and schema thresholds before model handoff
-- agent handoff command that runs the CI decision, bounded context bundle, and context gate in one pipeline
-- agent route command that normalizes discovery into a stable global-wrapper route decision
-- agent ready command that turns a safe handoff or manifest+task into verified model prompt input
-- agent profile contract that lets global wrappers drive `agent-ready` from one validated JSON file
-- agent profile init command that generates that wrapper profile from repo-local manifest and policy paths
-- agent onboard command that generates the profile and runs the fail-closed ready path in one global-wrapper capsule
+- continuation decision that chains workflow run, efficiency report, and efficiency gate into one read-first artifact
+- model context bundle that materializes selected `decide-continuation` read-plan artifacts into one bounded prompt/context payload
+- model context gate that enforces token, missing-artifact, truncation, and schema thresholds before model handoff
+- model handoff command that runs the continuation decision, bounded context bundle, and context gate in one pipeline
+- model-readiness route command that normalizes discovery into a stable global-wrapper route decision
+- model-input preparation command that turns a safe handoff or manifest+task into verified model prompt input
+- run profile contract that lets global wrappers drive `prepare-model-input` from one validated JSON file
+- run profile init command that generates that wrapper profile from repo-local manifest and policy paths
+- runner onboarding command that generates the profile and runs the fail-closed ready path in one global-wrapper capsule
 - native integration plan that collapses overlapping tool identities into DCF-owned capabilities
+- memory ledger that materializes generated handoff, ready, onboard, workflow, and fingerprint artifacts into reusable DCF-native context memory
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -120,12 +121,21 @@ python -m deep_context_federation.cli validate-artifact \
 Inspect how overlapping tools collapse into DCF-native capabilities:
 
 ```bash
-python -m deep_context_federation.cli native-integration-plan \
+python -m deep_context_federation.cli plan-native-ownership \
   --function symbol-call-graph \
   --function surface-map \
   --function long-term-context-memory \
   --format json \
   --output .dcf/deep_context_federation_native_integration_plan.json
+```
+
+Build the native memory ledger from generated DCF artifacts:
+
+```bash
+python -m deep_context_federation.cli index-context-memory \
+  --input-dir .dcf \
+  --format json \
+  --output .dcf/deep_context_federation_memory_ledger.json
 ```
 
 Self-bootstrap a fresh repository into a verified federation:
@@ -199,7 +209,7 @@ python -m deep_context_federation.cli efficiency-gate \
 Or let DCF create the full continuation decision in one command:
 
 ```bash
-python -m deep_context_federation.cli agent-ci \
+python -m deep_context_federation.cli decide-continuation \
   --root . \
   --output-dir .dcf \
   --task "dashboard operator evidence authority" \
@@ -208,12 +218,12 @@ python -m deep_context_federation.cli agent-ci \
   --output .dcf/deep_context_federation_agent_ci.json
 ```
 
-`agent-ci` writes the workflow run, efficiency report, efficiency gate, and final `agent_ci` artifact. External Codex, Claude, AGY, GitHub Actions, or another runner can read only `deep_context_federation_agent_ci.json` first, inspect `decision.action`, then follow `next_reads` instead of loading the full repository or full federation by default.
+`decide-continuation` writes the workflow run, efficiency report, efficiency gate, and final `agent_ci` artifact. External Codex, Claude, AGY, GitHub Actions, or another runner can read only `deep_context_federation_agent_ci.json` first, inspect `decision.action`, then follow `next_reads` instead of loading the full repository or full federation by default.
 
 Materialize that read plan into one bounded model context:
 
 ```bash
-python -m deep_context_federation.cli agent-context \
+python -m deep_context_federation.cli pack-model-context \
   --input .dcf/deep_context_federation_agent_ci.json \
   --mode read-first \
   --token-budget 4000 \
@@ -221,12 +231,12 @@ python -m deep_context_federation.cli agent-context \
   --output .dcf/deep_context_federation_agent_context.json
 ```
 
-`agent-context` consumes the `agent_ci.artifact_read_plan`, embeds selected artifact content under a token budget, records skipped/truncated sections, and emits a single read-only `deep_context_federation_agent_context_v1` bundle for model prompts.
+`pack-model-context` consumes the `agent_ci.artifact_read_plan`, embeds selected artifact content under a token budget, records skipped/truncated sections, and emits a single read-only `deep_context_federation_agent_context_v1` bundle for model prompts.
 
 Gate the bounded context before handing it to a model:
 
 ```bash
-python -m deep_context_federation.cli agent-context-gate \
+python -m deep_context_federation.cli gate-model-context \
   --input .dcf/deep_context_federation_agent_context.json \
   --policy examples/agent_context_gate_policy.example.json \
   --output .dcf/deep_context_federation_agent_context_gate.json
@@ -237,7 +247,7 @@ The gate exits with code `2` when required context invariants fail, such as miss
 Or run the full gated handoff in one command:
 
 ```bash
-python -m deep_context_federation.cli agent-handoff \
+python -m deep_context_federation.cli prepare-model-handoff \
   --root . \
   --output-dir .dcf \
   --task "dashboard operator evidence authority" \
@@ -247,33 +257,33 @@ python -m deep_context_federation.cli agent-handoff \
   --output .dcf/deep_context_federation_agent_handoff.json
 ```
 
-`agent-handoff` writes the underlying `agent-ci`, `agent-context`, `agent-context-gate`, and `agent-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `agent-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff also includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
+`prepare-model-handoff` writes the underlying `decide-continuation`, `pack-model-context`, `gate-model-context`, and `prepare-model-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `pack-model-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff also includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
 
 Global wrappers can route from the current repo state before deciding what to run:
 
 ```bash
-python -m deep_context_federation.cli agent-route \
+python -m deep_context_federation.cli route-model-readiness \
   --root . \
   --task "dashboard operator evidence authority"
 ```
 
-`agent-route` is read-only and does not execute its recommended command. It normalizes discovery into `ready_agent_route`, `needs_agent_handoff`, `needs_task_agent_route`, `needs_bootstrap_agent_route`, `needs_manifest_refresh_agent_route`, or `blocked_agent_route`, then returns `route_steps` and `recommended_next_command`. This gives Codex, Claude, AGY, GitHub runners, or shell wrappers one stable routing contract instead of making each wrapper hard-code DCF status branching.
+`route-model-readiness` is read-only and does not execute its recommended command. It normalizes discovery into `ready_agent_route`, `needs_agent_handoff`, `needs_task_agent_route`, `needs_bootstrap_agent_route`, `needs_manifest_refresh_agent_route`, or `blocked_agent_route`, then returns `route_steps` and `recommended_next_command`. This gives Codex, Claude, AGY, GitHub runners, or shell wrappers one stable routing contract instead of making each wrapper hard-code DCF status branching.
 
 When a wrapper wants DCF to perform the safe generated-artifact steps and return model input, use:
 
 ```bash
-python -m deep_context_federation.cli agent-ready \
+python -m deep_context_federation.cli prepare-model-input \
   --root . \
   --task "dashboard operator evidence authority" \
   --format prompt
 ```
 
-`agent-ready` is fail-closed. It emits prompt text only after an existing handoff passes `agent-model-input`, or after a manifest plus task builds a gated handoff that then passes `agent-model-input`. It does not auto-install tools, call external models, mutate source files, or claim project authority.
+`prepare-model-input` is fail-closed. It emits prompt text only after an existing handoff passes `emit-model-input`, or after a manifest plus task builds a gated handoff that then passes `emit-model-input`. It does not auto-install tools, call external models, mutate source files, or claim project authority.
 
 For global wrappers that should not hard-code a long command line, validate a profile first:
 
 ```bash
-python -m deep_context_federation.cli agent-onboard \
+python -m deep_context_federation.cli onboard-runner \
   --root . \
   --profile-output .dcf/agent_ready_profile.json \
   --task "dashboard operator evidence authority" \
@@ -281,60 +291,60 @@ python -m deep_context_federation.cli agent-onboard \
   --output .dcf/deep_context_federation_agent_onboard.json
 ```
 
-`agent-onboard` is the one-command path for Codex, Claude, AGY, GitHub runners, or shell wrappers. It generates a profile, validates it, runs the fail-closed `agent-ready` path, and returns one machine-readable capsule with `profile_init_summary`, `profile_validation_summary`, `agent_ready_summary`, `model_input_ready`, prompt token counts, and output paths.
+`onboard-runner` is the one-command path for Codex, Claude, AGY, GitHub runners, or shell wrappers. It generates a profile, validates it, runs the fail-closed `prepare-model-input` path, and returns one machine-readable capsule with `profile_init_summary`, `profile_validation_summary`, `agent_ready_summary`, `model_input_ready`, prompt token counts, and output paths.
 
 When the wrapper wants to split generation and execution into separate audited steps:
 
 ```bash
-python -m deep_context_federation.cli agent-profile-init \
+python -m deep_context_federation.cli init-run-profile \
   --root . \
   --output .dcf/agent_ready_profile.json \
   --task "dashboard operator evidence authority" \
   --target dashboard_readiness_projection
 
-python -m deep_context_federation.cli agent-profile \
+python -m deep_context_federation.cli validate-run-profile \
   --profile .dcf/agent_ready_profile.json
 ```
 
 Then use the same profile as the single entrypoint:
 
 ```bash
-python -m deep_context_federation.cli agent-ready \
+python -m deep_context_federation.cli prepare-model-input \
   --profile .dcf/agent_ready_profile.json \
   --format prompt
 ```
 
-The profile schema is still read-only: `authority_effect: none` and `no_apply: true`. `agent-profile-init` writes only the generated profile file after input checks pass, then validates it with the same loader used by `agent-ready`. Relative paths resolve from the profile file, not from the caller's shell, so Codex, Claude, AGY, GitHub runners, or shell wrappers can share the same machine-readable launch contract without duplicating manifest, policy, target, and token-budget flags. Invalid profiles return `fail_agent_ready` with `action_taken: blocked_by_profile` and emit no prompt.
+The profile schema is still read-only: `authority_effect: none` and `no_apply: true`. `init-run-profile` writes only the generated profile file after input checks pass, then validates it with the same loader used by `prepare-model-input`. Relative paths resolve from the profile file, not from the caller's shell, so Codex, Claude, AGY, GitHub runners, or shell wrappers can share the same machine-readable launch contract without duplicating manifest, policy, target, and token-budget flags. Invalid profiles return `fail_agent_ready` with `action_taken: blocked_by_profile` and emit no prompt.
 
-Fresh `agent-handoff` artifacts include an `input_fingerprint` digest over the manifest and explicitly listed source files. When `agent-ready` reuses an existing handoff and can see the current manifest, it compares that digest first; if a manifest-declared source changed, it returns `fail_agent_ready` and emits no prompt.
+Fresh `prepare-model-handoff` artifacts include an `input_fingerprint` digest over the manifest and explicitly listed source files. When `prepare-model-input` reuses an existing handoff and can see the current manifest, it compares that digest first; if a manifest-declared source changed, it returns `fail_agent_ready` and emits no prompt.
 
 Use lower-level discovery when a wrapper only needs to probe the repo state:
 
 ```bash
-python -m deep_context_federation.cli agent-discover \
+python -m deep_context_federation.cli discover-model-readiness \
   --root .
 ```
 
-`agent-discover` is read-only. It reports whether a repo already has a verified handoff ready for `agent-model-input`, only has a manifest, only has federation artifacts, or is not configured yet. The output includes `recommended_next_command`; `agent-route` wraps that lower-level probe into a stronger global-wrapper contract.
+`discover-model-readiness` is read-only. It reports whether a repo already has a verified handoff ready for `emit-model-input`, only has a manifest, only has federation artifacts, or is not configured yet. The output includes `recommended_next_command`; `route-model-readiness` wraps that lower-level probe into a stronger global-wrapper contract.
 
-`agent-handoff` writes `deep_context_federation_agent_handoff_verification.json` automatically. Re-run verification explicitly when a handoff or generated prompt may have moved, been copied, or been modified:
+`prepare-model-handoff` writes `deep_context_federation_agent_handoff_verification.json` automatically. Re-run verification explicitly when a handoff or generated prompt may have moved, been copied, or been modified:
 
 ```bash
-python -m deep_context_federation.cli verify-handoff \
+python -m deep_context_federation.cli verify-model-handoff \
   --input .dcf/deep_context_federation_agent_handoff.json
 ```
 
-`verify-handoff` recomputes listed generated-artifact fingerprints, prompt/context token estimates, and token economics. It exits with code `2` if prompt files, context files, hashes, or economics no longer match the handoff.
+`verify-model-handoff` recomputes listed generated-artifact fingerprints, prompt/context token estimates, and token economics. It exits with code `2` if prompt files, context files, hashes, or economics no longer match the handoff.
 
 Emit the model prompt through a fail-closed reader:
 
 ```bash
-python -m deep_context_federation.cli agent-model-input \
+python -m deep_context_federation.cli emit-model-input \
   --input .dcf/deep_context_federation_agent_handoff.json \
   --format prompt
 ```
 
-`agent-model-input` verifies the handoff first. It prints prompt text only when the handoff, generated artifacts, and token economics pass verification; otherwise it exits with code `2` and emits no prompt in `prompt` mode.
+`emit-model-input` verifies the handoff first. It prints prompt text only when the handoff, generated artifacts, and token economics pass verification; otherwise it exits with code `2` and emits no prompt in `prompt` mode.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -593,9 +603,9 @@ Use a policy JSON or CLI overrides when a repo needs stricter context budgets. T
 
 A starter policy is available at `examples/efficiency_gate_policy.example.json`.
 
-## Agent CI
+## Continuation Decision
 
-`dcf agent-ci` is the highest-level machine entrypoint for token-sensitive agent continuation. It runs:
+`dcf decide-continuation` is the highest-level machine entrypoint for token-sensitive continuation. It runs:
 
 1. `workflow-run`
 2. `efficiency-report`
@@ -606,16 +616,16 @@ and emits `deep_context_federation_agent_ci_v1` with:
 - `decision.action`: `continue`, `continue_with_caution`, or `stop`
 - `decision.continue_agent`: boolean continuation gate
 - `workflow_run_summary`, `efficiency_report_summary`, and `efficiency_gate_summary`
-- `contract_validations`: built-in contract checks for the generated workflow, report, gate, and agent CI artifacts
+- `contract_validations`: built-in contract checks for the generated workflow, report, gate, and continuation artifacts
 - `next_reads.read_first` and `next_reads.read_next_if_decision_allows`
 - `artifact_read_plan`: ordered file refs with existence, schema version, byte size, and estimated tokens
 - `safety_boundaries` proving generated-output-only, no external model calls, and no source or authority mutation
 
 This is the preferred artifact for external orchestrators. It reduces model input by making the first read a compact decision artifact, then expanding only into the listed workflow, report, gate, or target evidence files when the decision allows.
 
-## Agent Context
+## Model Context Pack
 
-`dcf agent-context` is the second-stage context materializer. It reads a completed `agent_ci` artifact and selects artifacts from `artifact_read_plan` by mode:
+`dcf pack-model-context` is the second-stage context materializer. It reads a completed `agent_ci` artifact and selects artifacts from `artifact_read_plan` by mode:
 
 - `read-first`: only the mandatory first-read set
 - `decision-allowed`: first-read plus decision-allowed follow-up artifacts
@@ -623,9 +633,9 @@ This is the preferred artifact for external orchestrators. It reduces model inpu
 
 It emits `deep_context_federation_agent_context_v1` with selected sections, skipped rows, truncation flags, source artifact hashes, prompt text, and token estimates. Use this when the next model call should receive one bounded context object instead of opening several JSON artifacts manually.
 
-## Agent Context Gate
+## Model Context Gate
 
-`dcf agent-context-gate` evaluates that context bundle before model handoff. It checks:
+`dcf gate-model-context` evaluates that context bundle before model handoff. It checks:
 
 - the context artifact contract and read-only boundary
 - source `agent_ci` contract validation
@@ -636,33 +646,33 @@ It emits `deep_context_federation_agent_context_v1` with selected sections, skip
 
 Use `examples/agent_context_gate_policy.example.json` as a starter policy. The default gate is permissive about truncation and skipped rows, but strict about missing artifacts, read-only boundaries, source contract validity, and token budget overflow.
 
-## Agent Handoff
+## Model Handoff
 
-`dcf agent-handoff` is the highest-level runner entrypoint. It executes:
+`dcf prepare-model-handoff` is the highest-level runner entrypoint. It executes:
 
-1. `agent-ci`
-2. `agent-context`
-3. `agent-context-gate`
+1. `decide-continuation`
+2. `pack-model-context`
+3. `gate-model-context`
 
 and emits `deep_context_federation_agent_handoff_v1` with a final `decision`, compact summaries, generated output paths, and `model_handoff.model_prompt_source`. This is the command to use when an external runner wants one deterministic pass/fail handoff instead of orchestrating DCF subcommands itself.
 
 For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md`, not the full machine JSON. The JSON context is still recorded as `model_handoff.machine_context_source`, so agents can default to the smaller prompt-only surface and open the heavier JSON only when auditing evidence, hashes, or skipped/truncated rows. `model_handoff.token_economics` records prompt/context estimated tokens, ratio, and estimated savings; `read_first_artifacts` and `audit_artifacts` record path, bytes, SHA-256, and default-model-input flags.
 
-Run `dcf verify-handoff --input <handoff.json>` before giving a copied or externally transferred `model_prompt_source` to a model. The verifier is read-only and emits `deep_context_federation_agent_handoff_verification_v1`; it checks safety boundaries, pass/fail semantics, artifact hashes, prompt/context token estimates, and `token_economics` consistency. Fresh `dcf agent-handoff` runs already include the same verification summary and verification artifact.
+Run `dcf verify-model-handoff --input <handoff.json>` before giving a copied or externally transferred `model_prompt_source` to a model. The verifier is read-only and emits `deep_context_federation_agent_handoff_verification_v1`; it checks safety boundaries, pass/fail semantics, artifact hashes, prompt/context token estimates, and `token_economics` consistency. Fresh `dcf prepare-model-handoff` runs already include the same verification summary and verification artifact.
 
-For global wrappers, prefer `dcf agent-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic.
+For global wrappers, prefer `dcf emit-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic.
 
-Use `dcf agent-route --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `agent-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
+Use `dcf route-model-readiness --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `emit-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
 
-Use `dcf agent-ready --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then emit prompt text only if the final model-input gate passes.
+Use `dcf prepare-model-input --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then emit prompt text only if the final model-input gate passes.
 
-Use `dcf agent-onboard --root <repo> --profile-output <profile.json> --task '<task>' --format json` when the runner wants one onboarding capsule that creates the profile and immediately runs the safe ready path. The result is still read-only with respect to source and authority surfaces; it only writes generated DCF outputs.
+Use `dcf onboard-runner --root <repo> --profile-output <profile.json> --task '<task>' --format json` when the runner wants one onboarding capsule that creates the profile and immediately runs the safe ready path. The result is still read-only with respect to source and authority surfaces; it only writes generated DCF outputs.
 
-Use `dcf agent-profile-init --root <repo> --output <profile.json> --task '<task>'` to generate one launch contract, `dcf agent-profile --profile <profile.json>` to validate it, and then `dcf agent-ready --profile <profile.json> --format prompt` when the runner should consume that contract. Profile fields act as defaults; explicit CLI arguments can still add or override the operational request without changing the profile file.
+Use `dcf init-run-profile --root <repo> --output <profile.json> --task '<task>'` to generate one launch contract, `dcf validate-run-profile --profile <profile.json>` to validate it, and then `dcf prepare-model-input --profile <profile.json> --format prompt` when the runner should consume that contract. Profile fields act as defaults; explicit CLI arguments can still add or override the operational request without changing the profile file.
 
 Reused handoffs are freshness-aware when their original `input_fingerprint` is present. A changed manifest-declared source produces `input_fingerprint_mismatch`, so wrappers do not accidentally feed a model prompt built from stale evidence.
 
-Reused handoffs are also request-bound. If a wrapper supplies a task or targets when reusing a handoff, `agent-ready` compares them with the handoff's recorded `task` and `targets`; a mismatch returns `request_binding_mismatch` and emits no prompt.
+Reused handoffs are also request-bound. If a wrapper supplies a task or targets when reusing a handoff, `prepare-model-input` compares them with the handoff's recorded `task` and `targets`; a mismatch returns `request_binding_mismatch` and emits no prompt.
 
 ## Capabilities Manifest
 
@@ -685,7 +695,7 @@ dcf capabilities \
 
 ## Native Unified Integration
 
-`dcf native-integration-plan` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names such as `symbol-call-graph`, `surface-map`, `long-term-context-memory`, `evidence-lineage`, `operator-projection`, and `workflow-orchestration`; the emitted artifact is DCF-only:
+`dcf plan-native-ownership` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names such as `symbol-call-graph`, `surface-map`, `long-term-context-memory`, `evidence-lineage`, `operator-projection`, and `workflow-orchestration`; the emitted artifact is DCF-only:
 
 - `public_identity: deep_context_federation`
 - `hide_upstream_tool_identity: true`
@@ -693,14 +703,32 @@ dcf capabilities \
 - `consume_only_allowed: false`
 - `user_facing_source_identity_collapsed_to_dcf: true`
 
-This lets DCF absorb symbol graphs, surface maps, long-term memory, evidence lineage, operator projection, and agent handoff into one query/index/governance plane. Any upstream provenance is retained only for internal audit and reproducibility, not as a competing source identity for agents or operators.
+This lets DCF absorb symbol graphs, surface maps, long-term memory, evidence lineage, operator projection, and model handoff into one query/index/governance plane. Any upstream provenance is retained only for internal audit and reproducibility, not as a competing source identity for agents or operators.
 
 ```bash
-dcf native-integration-plan --format markdown
+dcf plan-native-ownership --format markdown
 dcf validate-artifact \
   --input .dcf/deep_context_federation_native_integration_plan.json \
   --artifact native_integration_plan
 ```
+
+## Native Memory Ledger
+
+`dcf index-context-memory` is the DCF-native replacement for scattered long-term context recall. It reads generated DCF artifacts such as `prepare-model-handoff`, `prepare-model-input`, `onboard-runner`, `workflow-run`, and `input-fingerprint`, then emits one reusable memory index:
+
+- `rows`: normalized memory records for generated DCF artifacts
+- `reuse_index`: prompt/context entries that are safe to reuse
+- `input_fingerprint_digests`: freshness anchors for request-bound reuse
+- `safety_boundaries`: confirms no source, authority, external model, watcher, or tool identity mutation
+
+```bash
+dcf index-context-memory --input-dir .dcf --format markdown
+dcf validate-artifact \
+  --input .dcf/deep_context_federation_memory_ledger.json \
+  --artifact memory_ledger
+```
+
+The ledger is generated-output-only. It does not crawl the source tree by default, install memory tools, start watchers, or expose an upstream memory provider as a user-facing identity.
 
 ## Schema Registry And Contract Validation
 

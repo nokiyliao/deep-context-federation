@@ -259,7 +259,7 @@ def build_agent_onboard(
         "model_input_ready": ok,
         "prompt_source": agent_ready.get("prompt_source") if ok else "",
         "prompt_estimated_tokens": agent_ready.get("prompt_estimated_tokens") if ok else 0,
-        "recommended_next_command": f"dcf agent-ready --profile '{resolved_profile_path.as_posix()}' --format prompt",
+        "recommended_next_command": f"dcf prepare-model-input --profile '{resolved_profile_path.as_posix()}' --format prompt",
         "agent_ready": agent_ready,
         "errors": list(agent_ready.get("errors") or []),
         "outputs": outputs,

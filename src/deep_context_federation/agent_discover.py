@@ -93,11 +93,11 @@ def discover_agent_context(*, root: Path, handoff_path: Path | None = None) -> d
         status = "federation_available"
 
     if ready_for_model_input:
-        recommended_next_command = f"dcf agent-model-input --input {_quote(selected_handoff)} --format prompt"
+        recommended_next_command = f"dcf emit-model-input --input {_quote(selected_handoff)} --format prompt"
     elif selected_handoff:
-        recommended_next_command = f"dcf verify-handoff --input {_quote(selected_handoff)}"
+        recommended_next_command = f"dcf verify-model-handoff --input {_quote(selected_handoff)}"
     elif manifests:
-        recommended_next_command = f"dcf agent-handoff --root {_quote(root.as_posix())} --manifest {_quote(manifests[0])} --task '<task>'"
+        recommended_next_command = f"dcf prepare-model-handoff --root {_quote(root.as_posix())} --manifest {_quote(manifests[0])} --task '<task>'"
     else:
         recommended_next_command = f"dcf scan --root {_quote(root.as_posix())} --output-dir .dcf --write --build"
 

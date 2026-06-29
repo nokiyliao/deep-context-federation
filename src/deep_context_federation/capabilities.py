@@ -39,6 +39,7 @@ from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_VERSION
 from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_INPUT_SCHEMA
+from deep_context_federation.memory_ledger import MEMORY_LEDGER_SCHEMA_VERSION
 from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
@@ -320,7 +321,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_ci",
             "schema_version": AGENT_CI_SCHEMA_VERSION,
-            "producer": "agent-ci",
+            "producer": "decide-continuation",
             "consumer_commands": ["agent_router", "ci", "operator_context", "github_runner"],
             "top_level_required": [
                 "schema_version",
@@ -345,7 +346,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_context",
             "schema_version": AGENT_CONTEXT_SCHEMA_VERSION,
-            "producer": "agent-context",
+            "producer": "pack-model-context",
             "consumer_commands": ["agent_prompt", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
@@ -367,7 +368,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "agent_context_gate_policy",
             "schema_version": AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION,
             "producer": "human_or_ci",
-            "consumer_commands": ["agent-context-gate"],
+            "consumer_commands": ["gate-model-context"],
             "top_level_required": ["schema_version", "authority_effect", "no_apply"],
             "authority_effect": "none",
             "no_apply": True,
@@ -375,7 +376,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_context_gate",
             "schema_version": AGENT_CONTEXT_GATE_SCHEMA_VERSION,
-            "producer": "agent-context-gate",
+            "producer": "gate-model-context",
             "consumer_commands": ["agent_router", "ci", "operator_context"],
             "top_level_required": ["schema_version", "ok", "status", "policy", "checks", "errors", "summary"],
             "authority_effect": "none",
@@ -384,8 +385,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_handoff",
             "schema_version": AGENT_HANDOFF_SCHEMA_VERSION,
-            "producer": "agent-handoff",
-            "consumer_commands": ["verify-handoff", "agent_router", "ci", "operator_context", "github_runner"],
+            "producer": "prepare-model-handoff",
+            "consumer_commands": ["verify-model-handoff", "agent_router", "ci", "operator_context", "github_runner"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -408,7 +409,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_handoff_verification",
             "schema_version": AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION,
-            "producer": "verify-handoff",
+            "producer": "verify-model-handoff",
             "consumer_commands": ["agent_router", "ci", "operator_context", "github_runner"],
             "top_level_required": [
                 "schema_version",
@@ -426,7 +427,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_model_input",
             "schema_version": AGENT_MODEL_INPUT_SCHEMA_VERSION,
-            "producer": "agent-model-input",
+            "producer": "emit-model-input",
             "consumer_commands": ["agent_runner", "ci", "operator_context", "github_runner"],
             "top_level_required": [
                 "schema_version",
@@ -445,8 +446,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_profile",
             "schema_version": AGENT_PROFILE_SCHEMA_VERSION,
-            "producer": "agent-profile-init_or_human",
-            "consumer_commands": ["agent-profile", "agent-ready", "agent-onboard", "global_wrapper"],
+            "producer": "init-run-profile_or_human",
+            "consumer_commands": ["validate-run-profile", "prepare-model-input", "onboard-runner", "global_wrapper"],
             "top_level_required": [
                 "schema_version",
                 "authority_effect",
@@ -458,8 +459,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_profile_validation",
             "schema_version": AGENT_PROFILE_VALIDATION_SCHEMA_VERSION,
-            "producer": "agent-profile",
-            "consumer_commands": ["agent-ready", "agent-onboard", "global_wrapper", "ci", "operator_context"],
+            "producer": "validate-run-profile",
+            "consumer_commands": ["prepare-model-input", "onboard-runner", "global_wrapper", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -477,8 +478,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_profile_init",
             "schema_version": AGENT_PROFILE_INIT_SCHEMA_VERSION,
-            "producer": "agent-profile-init",
-            "consumer_commands": ["agent-profile", "agent-ready", "global_wrapper", "ci"],
+            "producer": "init-run-profile",
+            "consumer_commands": ["validate-run-profile", "prepare-model-input", "global_wrapper", "ci"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -498,7 +499,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_onboard",
             "schema_version": AGENT_ONBOARD_SCHEMA_VERSION,
-            "producer": "agent-onboard",
+            "producer": "onboard-runner",
             "consumer_commands": ["global_wrapper", "ci", "operator_context", "model_runner"],
             "top_level_required": [
                 "schema_version",
@@ -519,7 +520,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "native_integration_plan",
             "schema_version": NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION,
-            "producer": "native-integration-plan",
+            "producer": "plan-native-ownership",
             "consumer_commands": ["capabilities", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
@@ -537,9 +538,28 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "memory_ledger",
+            "schema_version": MEMORY_LEDGER_SCHEMA_VERSION,
+            "producer": "index-context-memory",
+            "consumer_commands": ["prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "summary",
+                "rows",
+                "reuse_index",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "agent_discovery",
             "schema_version": AGENT_DISCOVERY_SCHEMA_VERSION,
-            "producer": "agent-discover",
+            "producer": "discover-model-readiness",
             "consumer_commands": ["agent_router", "global_wrapper", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
@@ -559,7 +579,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_route",
             "schema_version": AGENT_ROUTE_SCHEMA_VERSION,
-            "producer": "agent-route",
+            "producer": "route-model-readiness",
             "consumer_commands": ["agent_router", "global_wrapper", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
@@ -581,7 +601,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_ready",
             "schema_version": AGENT_READY_SCHEMA_VERSION,
-            "producer": "agent-ready",
+            "producer": "prepare-model-input",
             "consumer_commands": ["agent_router", "global_wrapper", "ci", "operator_context", "model_runner"],
             "top_level_required": [
                 "schema_version",
@@ -605,8 +625,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "input_fingerprint",
             "schema_version": INPUT_FINGERPRINT_SCHEMA_VERSION,
-            "producer": "agent-handoff",
-            "consumer_commands": ["agent-ready", "agent_router", "global_wrapper", "ci"],
+            "producer": "prepare-model-handoff",
+            "consumer_commands": ["prepare-model-input", "agent_router", "global_wrapper", "ci"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -624,7 +644,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "input_fingerprint_compare",
             "schema_version": INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION,
-            "producer": "agent-ready",
+            "producer": "prepare-model-input",
             "consumer_commands": ["agent_router", "global_wrapper", "ci"],
             "top_level_required": [
                 "schema_version",
@@ -640,7 +660,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "request_binding",
             "schema_version": "deep_context_federation_request_binding_v1",
-            "producer": "agent-ready",
+            "producer": "prepare-model-input",
             "consumer_commands": ["agent_router", "global_wrapper", "ci"],
             "top_level_required": [
                 "schema_version",
@@ -733,11 +753,20 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "native-integration-plan",
+            "command": "plan-native-ownership",
             "intent": "Plan DCF-native ownership for overlapping context functions so adapter-only or consume-only remains non-final.",
             "writes": ["optional native integration plan JSON when --output is set"],
             "output_schemas": [NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION],
             "options": ["--function", "--output", "--format"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "index-context-memory",
+            "intent": "Materialize generated DCF handoff, ready, onboard, workflow, and fingerprint artifacts into one reusable context memory ledger.",
+            "writes": ["optional memory ledger JSON when --output is set"],
+            "output_schemas": [MEMORY_LEDGER_SCHEMA_VERSION],
+            "options": ["--input-dir", "--input-file", "--max-files", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -843,9 +872,9 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-ci",
+            "command": "decide-continuation",
             "intent": "Run workflow-run, efficiency-report, and efficiency-gate into one machine-readable continuation decision.",
-            "writes": ["output_dir generated artifacts", "optional agent CI JSON when --output is set"],
+            "writes": ["output_dir generated artifacts", "optional continuation decision JSON when --output is set"],
             "output_schemas": [AGENT_CI_SCHEMA_VERSION, WORKFLOW_RUN_SCHEMA_VERSION, EFFICIENCY_REPORT_SCHEMA_VERSION, EFFICIENCY_GATE_SCHEMA_VERSION],
             "input_schemas": [
                 QUALITY_GATE_POLICY_SCHEMA_VERSION,
@@ -871,9 +900,9 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-context",
-            "intent": "Bundle selected agent-ci read-plan artifacts into one bounded model context.",
-            "writes": ["optional agent context JSON when --output is set"],
+            "command": "pack-model-context",
+            "intent": "Bundle selected decide-continuation read-plan artifacts into one bounded model context.",
+            "writes": ["optional model context JSON when --output is set"],
             "output_schemas": [AGENT_CONTEXT_SCHEMA_VERSION],
             "input_schemas": [AGENT_CI_SCHEMA_VERSION],
             "options": ["--input", "--mode", "--token-budget", "--max-artifact-tokens", "--no-content", "--no-prompt", "--output"],
@@ -881,9 +910,9 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-context-gate",
-            "intent": "Evaluate an agent context bundle against token, missing artifact, truncation, and schema policy thresholds.",
-            "writes": ["optional agent context gate JSON when --output is set"],
+            "command": "gate-model-context",
+            "intent": "Evaluate a model context bundle against token, missing artifact, truncation, and schema policy thresholds.",
+            "writes": ["optional model context gate JSON when --output is set"],
             "output_schemas": [AGENT_CONTEXT_GATE_SCHEMA_VERSION],
             "input_schemas": [AGENT_CONTEXT_SCHEMA_VERSION, AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION],
             "options": [
@@ -901,14 +930,14 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-handoff",
-            "intent": "Run agent-ci, agent-context, and agent-context-gate into one gated model handoff artifact.",
+            "command": "prepare-model-handoff",
+            "intent": "Run decide-continuation, pack-model-context, and gate-model-context into one gated model handoff artifact.",
             "writes": [
                 "output_dir generated artifacts",
-                "agent model prompt markdown",
+                "model prompt markdown",
                 "model handoff token economics and artifact fingerprints",
-                "agent handoff verification JSON and Markdown",
-                "optional agent handoff JSON when --output is set",
+                "model handoff verification JSON and Markdown",
+                "optional model handoff JSON when --output is set",
             ],
             "output_schemas": [
                 AGENT_HANDOFF_SCHEMA_VERSION,
@@ -942,8 +971,8 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "verify-handoff",
-            "intent": "Verify an agent-handoff artifact's safety boundary, generated artifact fingerprints, and token economics before model use.",
+            "command": "verify-model-handoff",
+            "intent": "Verify a model handoff artifact's safety boundary, generated artifact fingerprints, and token economics before model use.",
             "writes": ["optional verification JSON when --output is set"],
             "output_schemas": [AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION],
             "input_schemas": [AGENT_HANDOFF_SCHEMA_VERSION],
@@ -952,8 +981,8 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-model-input",
-            "intent": "Verify an agent handoff and emit model prompt text only when all handoff checks pass.",
+            "command": "emit-model-input",
+            "intent": "Verify a model handoff and emit model prompt text only when all handoff checks pass.",
             "writes": ["optional model input JSON when --output is set"],
             "output_schemas": [AGENT_MODEL_INPUT_SCHEMA_VERSION],
             "input_schemas": [AGENT_HANDOFF_SCHEMA_VERSION],
@@ -962,9 +991,9 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-profile",
-            "intent": "Validate and normalize a machine-readable agent-ready profile for global wrappers.",
-            "writes": ["optional agent profile JSON when --output is set"],
+            "command": "validate-run-profile",
+            "intent": "Validate and normalize a machine-readable prepare-model-input profile for global wrappers.",
+            "writes": ["optional run profile validation JSON when --output is set"],
             "output_schemas": [AGENT_PROFILE_VALIDATION_SCHEMA_VERSION],
             "input_schemas": [AGENT_PROFILE_SCHEMA_VERSION],
             "options": ["--profile", "--output", "--format"],
@@ -972,9 +1001,9 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-profile-init",
-            "intent": "Generate a validated machine-readable agent-ready profile from repo-local manifests and policies.",
-            "writes": ["agent-ready profile JSON at --output"],
+            "command": "init-run-profile",
+            "intent": "Generate a validated machine-readable prepare-model-input profile from repo-local manifests and policies.",
+            "writes": ["prepare-model-input profile JSON at --output"],
             "output_schemas": [AGENT_PROFILE_INIT_SCHEMA_VERSION, AGENT_PROFILE_SCHEMA_VERSION, AGENT_PROFILE_VALIDATION_SCHEMA_VERSION],
             "input_schemas": [MANIFEST_SCHEMA],
             "options": [
@@ -998,9 +1027,9 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-onboard",
-            "intent": "Generate a profile and run the fail-closed agent-ready path in one global-wrapper command.",
-            "writes": ["agent-ready profile JSON", "output_dir generated DCF artifacts", "optional onboard JSON when --output is set"],
+            "command": "onboard-runner",
+            "intent": "Generate a profile and run the fail-closed prepare-model-input path in one global-wrapper command.",
+            "writes": ["prepare-model-input profile JSON", "output_dir generated DCF artifacts", "optional runner onboarding JSON when --output is set"],
             "output_schemas": [
                 AGENT_ONBOARD_SCHEMA_VERSION,
                 AGENT_PROFILE_INIT_SCHEMA_VERSION,
@@ -1030,8 +1059,8 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-discover",
-            "intent": "Discover repo-local DCF handoff readiness and recommend the next fail-closed agent command for global wrappers.",
+            "command": "discover-model-readiness",
+            "intent": "Discover repo-local DCF handoff readiness and recommend the next fail-closed model-input command for global wrappers.",
             "writes": ["optional discovery JSON when --output is set"],
             "output_schemas": [AGENT_DISCOVERY_SCHEMA_VERSION],
             "input_schemas": [],
@@ -1040,7 +1069,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-route",
+            "command": "route-model-readiness",
             "intent": "Normalize DCF discovery into a stable route decision so global wrappers do not hard-code DCF status branching.",
             "writes": ["optional route JSON when --output is set"],
             "output_schemas": [AGENT_ROUTE_SCHEMA_VERSION],
@@ -1050,7 +1079,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "agent-ready",
+            "command": "prepare-model-input",
             "intent": "Fail-closed DCF pipeline that turns an existing safe handoff or manifest+task into verified model prompt input.",
             "writes": ["output_dir generated DCF artifacts when handoff build is required", "optional ready JSON when --output is set"],
             "output_schemas": [AGENT_READY_SCHEMA_VERSION],

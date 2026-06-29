@@ -44,7 +44,7 @@ def _truncate_text(text: str, max_tokens: int) -> tuple[str, bool]:
         return "", bool(text)
     if estimate_tokens(text) <= max_tokens:
         return text, False
-    suffix = "\n...<truncated by dcf agent-context>...\n"
+    suffix = "\n...<truncated by dcf pack-model-context>...\n"
 
     best = ""
     low = 0

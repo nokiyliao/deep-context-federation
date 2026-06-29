@@ -42,6 +42,7 @@ from deep_context_federation.efficiency_report import build_efficiency_report
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.manifest import validate_manifest
+from deep_context_federation.memory_ledger import build_memory_ledger
 from deep_context_federation.native_integration import build_native_integration_plan
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
@@ -235,7 +236,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.43.0"
+    assert payload["package"]["version"] == "0.44.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -245,24 +246,25 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "workflow-run",
         "efficiency-report",
         "efficiency-gate",
-        "agent-ci",
-        "agent-context",
-        "agent-context-gate",
-        "agent-discover",
-        "agent-handoff",
-        "agent-model-input",
-        "agent-onboard",
-        "agent-profile",
-        "agent-profile-init",
-        "agent-ready",
-        "agent-route",
-        "verify-handoff",
+        "decide-continuation",
+        "pack-model-context",
+        "gate-model-context",
+        "discover-model-readiness",
+        "prepare-model-handoff",
+        "emit-model-input",
+        "onboard-runner",
+        "validate-run-profile",
+        "init-run-profile",
+        "prepare-model-input",
+        "route-model-readiness",
+        "verify-model-handoff",
         "intake",
         "build",
         "scan",
         "schema",
         "validate-artifact",
-        "native-integration-plan",
+        "plan-native-ownership",
+        "index-context-memory",
         "adjudicate",
         "brief",
         "pack",
@@ -297,6 +299,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
+    assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -341,6 +344,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
+    assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -397,7 +401,7 @@ def test_native_integration_plan_cli_validates(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "native-integration-plan",
+            "plan-native-ownership",
             "--function",
             "symbol-call-graph",
             "--function",
@@ -437,6 +441,29 @@ def test_native_integration_plan_does_not_accept_source_names_as_functions() -> 
 def test_memory_import_cli_uses_function_names_in_help() -> None:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(REPO_ROOT / "src")
+    top_help = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert top_help.returncode == 0
+    assert "plan-native-ownership" in top_help.stdout
+    assert "index-context-memory" in top_help.stdout
+    assert "decide-continuation" in top_help.stdout
+    assert "prepare-model-input" in top_help.stdout
+    assert "native-integration-plan" not in top_help.stdout
+    assert "memory-ledger" not in top_help.stdout
+    assert "agent-ci" not in top_help.stdout
+    assert "agent-ready" not in top_help.stdout
+
     completed = subprocess.run(
         [
             sys.executable,
@@ -463,7 +490,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "native-integration-plan",
+            "plan-native-ownership",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -475,6 +502,38 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert native.returncode == 0
     assert "--function" in native.stdout
     assert "--capability" not in native.stdout
+
+
+def test_legacy_cli_names_remain_hidden_compatibility_aliases(tmp_path: Path) -> None:
+    output_path = tmp_path / "legacy_native_integration_plan.json"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "native-integration-plan",
+            "--function",
+            "symbol-call-graph",
+            "--output",
+            str(output_path),
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "pass_native_integration_plan"
+    assert payload["outputs"]["native_integration_plan_json"] == output_path.resolve().as_posix()
+    assert output_path.exists()
 
 
 def test_workflow_plan_sequences_bounded_agent_run(tmp_path: Path) -> None:
@@ -966,7 +1025,7 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert discovery["status"] == "ready_model_input"
     assert discovery["ready_for_model_input"] is True
     assert discovery["selected_handoff"] == Path(result["outputs"]["agent_handoff_json"]).as_posix()
-    assert "agent-model-input" in discovery["recommended_next_command"]
+    assert "emit-model-input" in discovery["recommended_next_command"]
     assert discovery["model_input_summary"]["status"] == "pass_agent_model_input"
     assert validate_artifact_contract(discovery)["ok"] is True
     route = route_agent_context(root=tmp_path, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
@@ -975,7 +1034,7 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert route["action"] == "emit_model_input"
     assert route["model_input_ready"] is True
     assert route["route_steps"][0]["terminal_model_input"] is True
-    assert "agent-model-input" in route["recommended_next_command"]
+    assert "emit-model-input" in route["recommended_next_command"]
     assert validate_artifact_contract(route)["ok"] is True
     ready = build_agent_ready(root=tmp_path, output_dir=tmp_path / "agent_ready", handoff_path=Path(result["outputs"]["agent_handoff_json"]))
     assert ready["schema_version"] == "deep_context_federation_agent_ready_v1"
@@ -1092,6 +1151,110 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert validate_artifact_contract(blocked_model_input)["ok"] is True
 
 
+def test_memory_ledger_materializes_reusable_dcf_handoffs(tmp_path: Path) -> None:
+    review_policy = {
+        "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "max_warn": 1,
+        "max_priority_score": 120,
+    }
+    handoff = build_agent_handoff(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "memory_handoff",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        efficiency_gate_policy=load_efficiency_gate_policy(EXAMPLE_EFFICIENCY_GATE_POLICY),
+        agent_context_gate_policy=load_agent_context_gate_policy(EXAMPLE_AGENT_CONTEXT_GATE_POLICY),
+        workflow_token_budget=900,
+        context_token_budget=1800,
+        max_artifact_tokens=500,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+
+    ledger = build_memory_ledger(root=tmp_path, input_dirs=[tmp_path / "memory_handoff"])
+
+    assert ledger["schema_version"] == "deep_context_federation_memory_ledger_v1"
+    assert ledger["ok"] is True
+    assert ledger["status"] == "pass_memory_ledger"
+    assert ledger["authority_effect"] == "none"
+    assert ledger["no_apply"] is True
+    assert ledger["summary"]["memory_row_count"] >= 3
+    assert ledger["summary"]["reusable_row_count"] >= 1
+    assert ledger["summary"]["input_fingerprint_digest_count"] >= 1
+    assert ledger["safety_boundaries"]["external_tool_identity_required"] is False
+    assert ledger["safety_boundaries"]["source_or_authority_mutation"] is False
+    handoff_rows = [row for row in ledger["rows"] if row["artifact_kind"] == "agent_handoff"]
+    assert len(handoff_rows) == 1
+    assert handoff_rows[0]["reusable"] is True
+    assert handoff_rows[0]["model_prompt_source"] == handoff["model_handoff"]["model_prompt_source"]
+    assert handoff_rows[0]["input_fingerprint_digest"] == handoff["input_fingerprint"]["digest"]
+    assert any(row["model_prompt_source"] for row in ledger["reuse_index"])
+    assert validate_artifact_contract(ledger, artifact_kind="memory_ledger")["ok"] is True
+
+
+def test_memory_ledger_cli_writes_valid_artifact(tmp_path: Path) -> None:
+    output_dir = tmp_path / "memory_cli"
+    build_agent_handoff(
+        root=REPO_ROOT / "examples",
+        output_dir=output_dir,
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy={
+            "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+            "authority_effect": "none",
+            "no_apply": True,
+            "max_warn": 1,
+            "max_priority_score": 120,
+        },
+        efficiency_gate_policy=load_efficiency_gate_policy(EXAMPLE_EFFICIENCY_GATE_POLICY),
+        agent_context_gate_policy=load_agent_context_gate_policy(EXAMPLE_AGENT_CONTEXT_GATE_POLICY),
+        workflow_token_budget=900,
+        context_token_budget=1800,
+        max_artifact_tokens=500,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+    ledger_path = tmp_path / "memory_ledger.json"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "index-context-memory",
+            "--root",
+            str(tmp_path),
+            "--input-dir",
+            str(output_dir),
+            "--output",
+            str(ledger_path),
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "pass_memory_ledger"
+    assert payload["outputs"]["memory_ledger_json"] == ledger_path.resolve().as_posix()
+    assert ledger_path.exists()
+    assert validate_artifact_contract(payload, artifact_kind="memory_ledger")["ok"] is True
+
+
 def test_agent_discovery_reports_repo_readiness_states(tmp_path: Path) -> None:
     empty = discover_agent_context(root=tmp_path)
     assert empty["status"] == "not_configured"
@@ -1102,7 +1265,7 @@ def test_agent_discovery_reports_repo_readiness_states(tmp_path: Path) -> None:
     missing_handoff = discover_agent_context(root=tmp_path, handoff_path=tmp_path / "missing_handoff.json")
     assert missing_handoff["status"] == "blocked_handoff_unreadable"
     assert missing_handoff["ready_for_model_input"] is False
-    assert "verify-handoff" in missing_handoff["recommended_next_command"]
+    assert "verify-model-handoff" in missing_handoff["recommended_next_command"]
     assert validate_artifact_contract(missing_handoff)["ok"] is True
 
     manifest_root = tmp_path / "manifest_only"
@@ -1113,7 +1276,7 @@ def test_agent_discovery_reports_repo_readiness_states(tmp_path: Path) -> None:
     assert manifest_only["status"] == "manifest_available"
     assert manifest_only["ready_for_model_input"] is False
     assert manifest_only["discovered"]["manifests"] == [manifest_path.as_posix()]
-    assert "agent-handoff" in manifest_only["recommended_next_command"]
+    assert "prepare-model-handoff" in manifest_only["recommended_next_command"]
     assert validate_artifact_contract(manifest_only)["ok"] is True
 
 
@@ -1129,7 +1292,7 @@ def test_agent_route_normalizes_discovery_for_global_wrappers(tmp_path: Path) ->
     assert missing_handoff["status"] == "blocked_agent_route"
     assert missing_handoff["action"] == "verify_handoff"
     assert missing_handoff["route_ready"] is False
-    assert "verify-handoff" in missing_handoff["recommended_next_command"]
+    assert "verify-model-handoff" in missing_handoff["recommended_next_command"]
     assert validate_artifact_contract(missing_handoff)["ok"] is True
 
     manifest_root = tmp_path / "manifest_only"
@@ -1152,7 +1315,7 @@ def test_agent_route_normalizes_discovery_for_global_wrappers(tmp_path: Path) ->
     assert runnable["status"] == "needs_agent_handoff"
     assert runnable["action"] == "build_agent_handoff"
     assert runnable["route_ready"] is True
-    assert "agent-handoff" in runnable["recommended_next_command"]
+    assert "prepare-model-handoff" in runnable["recommended_next_command"]
     assert manifest_path.as_posix() in runnable["recommended_next_command"]
     assert "--target 'dashboard_readiness_projection'" in runnable["recommended_next_command"]
     assert runnable["wrapper_contract"]["rerun_agent_discover_after_nonterminal_steps"] is True
@@ -1302,7 +1465,7 @@ def test_agent_ready_cli_uses_profile(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "agent-ready",
+            "prepare-model-input",
             "--profile",
             str(profile_path),
             "--format",
@@ -1343,7 +1506,7 @@ def test_agent_profile_init_cli_feeds_agent_ready(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "agent-profile-init",
+            "init-run-profile",
             "--root",
             str(profile_root),
             "--output",
@@ -1385,7 +1548,7 @@ def test_agent_profile_init_cli_feeds_agent_ready(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "agent-ready",
+            "prepare-model-input",
             "--profile",
             str(profile_path),
             "--format",
@@ -1443,7 +1606,7 @@ def test_agent_onboard_builds_profile_and_ready(tmp_path: Path) -> None:
     assert result["prompt_estimated_tokens"] > 0
     assert Path(result["outputs"]["agent_profile_json"]).exists()
     assert Path(result["outputs"]["agent_handoff_json"]).exists()
-    assert "agent-ready --profile" in result["recommended_next_command"]
+    assert "prepare-model-input --profile" in result["recommended_next_command"]
     assert validate_artifact_contract(result, artifact_kind="agent_onboard")["ok"] is True
     assert validate_artifact_contract(result["agent_ready"], artifact_kind="agent_ready")["ok"] is True
 
@@ -1465,7 +1628,7 @@ def test_agent_onboard_cli_single_command(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "agent-onboard",
+            "onboard-runner",
             "--root",
             str(profile_root),
             "--profile-output",

@@ -103,7 +103,7 @@ def route_agent_context(
             status = "needs_agent_handoff"
             manifest_arg = _manifest_args(manifests[:1])
             selected_command = (
-                f"dcf agent-handoff --root {_quote(root.as_posix())} --output-dir {_quote(output_arg)}"
+                f"dcf prepare-model-handoff --root {_quote(root.as_posix())} --output-dir {_quote(output_arg)}"
                 f"{manifest_arg} --task {_quote(task_text)}{_target_args(targets)}"
             )
             route_steps.append(
@@ -118,14 +118,14 @@ def route_agent_context(
                 _step(
                     "01_discover_again",
                     action="rediscover",
-                    command=f"dcf agent-discover --root {_quote(root.as_posix())}",
+                    command=f"dcf discover-model-readiness --root {_quote(root.as_posix())}",
                     purpose="Rediscover after handoff build before emitting model input.",
                 )
             )
         else:
             status = "needs_task_agent_route"
             route_ready = False
-            requires_user_input.append({"id": "task_required", "description": "agent-handoff requires a task string"})
+            requires_user_input.append({"id": "task_required", "description": "prepare-model-handoff requires a task string"})
             selected_command = str(discovery.get("recommended_next_command") or "")
             route_steps.append(
                 _step(

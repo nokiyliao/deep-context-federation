@@ -59,6 +59,8 @@ from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.task_brief import markdown_task_brief
 from deep_context_federation.verifier import read_json as read_required_json
 from deep_context_federation.verifier import verify_federation
+from deep_context_federation.workflow_plan import build_workflow_plan
+from deep_context_federation.workflow_plan import markdown_workflow_plan
 
 
 def add_common_source_args(parser: argparse.ArgumentParser) -> None:
@@ -135,6 +137,26 @@ def build_parser() -> argparse.ArgumentParser:
     intake.add_argument("--max-rows", type=int, default=80)
     intake.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text inside the embedded task brief.")
     intake.add_argument("--format", choices=["json", "markdown"], default="json")
+    workflow_plan = sub.add_parser("workflow-plan", help="Emit a read-only run plan that orders DCF commands, gates, and bounded context reads.")
+    workflow_plan.add_argument("--root", type=Path, default=Path.cwd())
+    workflow_plan.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+    workflow_plan.add_argument("--task", required=True)
+    workflow_plan.add_argument("--target", action="append", default=[])
+    workflow_plan.add_argument("--targets-file", type=Path)
+    workflow_plan.add_argument("--quality-policy", type=Path)
+    workflow_plan.add_argument("--target-review-policy", type=Path)
+    workflow_plan.add_argument("--token-budget", type=int, default=4000)
+    workflow_plan.add_argument("--query-limit", type=int, default=10)
+    workflow_plan.add_argument("--max-presets", type=int, default=3)
+    workflow_plan.add_argument("--max-rows", type=int, default=80)
+    workflow_plan.add_argument("--max-files", type=int, default=5000)
+    workflow_plan.add_argument("--max-parse-bytes", type=int, default=1_000_000)
+    workflow_plan.add_argument("--hash-files", action="store_true")
+    workflow_plan.add_argument("--include-codebase-memory", action="store_true")
+    workflow_plan.add_argument("--codebase-memory-cache-dir", type=Path)
+    workflow_plan.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
+    workflow_plan.add_argument("--output", type=Path)
+    workflow_plan.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -382,6 +404,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
+    if args.command == "workflow-plan":
+        targets = list(args.target or [])
+        if args.targets_file:
+            targets.extend(read_targets_file(args.targets_file))
+        result = build_workflow_plan(
+            task=args.task,
+            root=args.root,
+            output_dir=args.output_dir,
+            targets=targets,
+            quality_policy=args.quality_policy,
+            target_review_policy=args.target_review_policy,
+            token_budget=args.token_budget,
+            query_limit=args.query_limit,
+            max_presets=args.max_presets,
+            max_rows=args.max_rows,
+            max_files=args.max_files,
+            max_parse_bytes=args.max_parse_bytes,
+            include_hashes=args.hash_files,
+            include_codebase_memory=args.include_codebase_memory,
+            codebase_memory_cache_dir=args.codebase_memory_cache_dir,
+            include_prompt=not args.no_prompt,
+        )
+        if args.output:
+            result["outputs"]["workflow_plan_json"] = args.output.expanduser().resolve().as_posix()
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_workflow_plan(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
     if args.command == "scan":
         if args.build and not args.write:
             print("scan --build requires --write so the generated manifest exists", flush=True)

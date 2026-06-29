@@ -29,11 +29,13 @@ from deep_context_federation.target_review_gate import normalize_target_review_g
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.version import __version__
+from deep_context_federation.workflow_plan import build_workflow_plan
 
 __all__ = [
     "adjudicate_target",
     "bootstrap_federation",
     "build_federation",
+    "build_workflow_plan",
     "build_capabilities",
     "build_agent_intake",
     "build_task_brief",

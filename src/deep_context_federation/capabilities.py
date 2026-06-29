@@ -36,6 +36,7 @@ from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 from deep_context_federation.version import __version__
+from deep_context_federation.workflow_plan import WORKFLOW_PLAN_SCHEMA_VERSION
 
 CAPABILITIES_SCHEMA_VERSION = "deep_context_federation_capabilities_v1"
 
@@ -203,7 +204,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "agent_intake",
             "schema_version": AGENT_INTAKE_SCHEMA_VERSION,
             "producer": "intake",
-            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "consumer_commands": ["workflow-plan", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -213,6 +214,23 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "quality_gate_summary",
                 "task_brief_summary",
                 "outputs",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "workflow_plan",
+            "schema_version": WORKFLOW_PLAN_SCHEMA_VERSION,
+            "producer": "workflow-plan",
+            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "status",
+                "task",
+                "steps",
+                "gates",
+                "token_efficiency",
+                "safety_boundaries",
             ],
             "authority_effect": "none",
             "no_apply": True,
@@ -315,6 +333,26 @@ def _commands() -> list[dict[str, Any]]:
             "writes": ["output_dir generated artifacts"],
             "output_schemas": [AGENT_INTAKE_SCHEMA_VERSION, BOOTSTRAP_SCHEMA_VERSION, QUALITY_GATE_SCHEMA_VERSION, TASK_BRIEF_SCHEMA_VERSION],
             "options": ["--task", "--policy", "--token-budget", "--query-limit", "--max-presets", "--max-rows", "--no-prompt"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "workflow-plan",
+            "intent": "Emit a read-only execution plan that sequences intake, validation, target review, gates, and bounded context reads.",
+            "writes": ["optional workflow plan JSON when --output is set"],
+            "output_schemas": [WORKFLOW_PLAN_SCHEMA_VERSION],
+            "options": [
+                "--task",
+                "--target",
+                "--targets-file",
+                "--quality-policy",
+                "--target-review-policy",
+                "--token-budget",
+                "--query-limit",
+                "--max-presets",
+                "--max-rows",
+                "--no-prompt",
+            ],
             "authority_effect": "none",
             "no_apply": True,
         },

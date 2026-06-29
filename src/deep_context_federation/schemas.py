@@ -24,6 +24,7 @@ from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_POLICY
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
+from deep_context_federation.workflow_plan import WORKFLOW_PLAN_SCHEMA_VERSION
 
 SCHEMA_REGISTRY_SCHEMA_VERSION = "deep_context_federation_schema_registry_v1"
 CONTRACT_VALIDATION_SCHEMA_VERSION = "deep_context_federation_contract_validation_v1"
@@ -467,6 +468,39 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "next_actions": array_type,
                 "outputs": object_type,
                 "safety_boundaries": object_type,
+            },
+        ),
+        "workflow_plan": _schema(
+            WORKFLOW_PLAN_SCHEMA_VERSION,
+            "Deep Context Federation workflow plan",
+            [
+                "schema_version",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "task",
+                "steps",
+                "gates",
+                "token_efficiency",
+                "safety_boundaries",
+            ],
+            {
+                "status": {"type": "string", "enum": ["ready_with_targets", "ready_no_targets"]},
+                **_boundary_props(),
+                "task": {"type": "string"},
+                "root": {"type": "string"},
+                "output_dir": {"type": "string"},
+                "targets": array_type,
+                "target_count": {"type": "integer"},
+                "steps": array_type,
+                "gates": array_type,
+                "warnings": array_type,
+                "token_efficiency": object_type,
+                "outputs": object_type,
+                "safety_boundaries": object_type,
+                "prompt_text": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+                "json_estimated_tokens": {"type": "integer"},
             },
         ),
     }

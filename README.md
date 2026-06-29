@@ -56,6 +56,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - manifest composition for merging self-scan output with curated evidence/context sources
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - one-command agent intake packet for bootstrap, quality gate, and task brief
+- workflow plan artifact that sequences intake, validation, target review, gates, and bounded context reads
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -121,6 +122,20 @@ python -m deep_context_federation.cli intake \
   --token-budget 4000 \
   --format markdown
 ```
+
+Plan a run before any agent reads broad context:
+
+```bash
+python -m deep_context_federation.cli workflow-plan \
+  --root . \
+  --output-dir .dcf \
+  --task "dashboard operator evidence authority" \
+  --target dashboard_readiness_projection \
+  --target research_only_boundary \
+  --output .dcf/deep_context_federation_workflow_plan.json
+```
+
+The plan does not execute commands. It emits the intended run order, stop gates, artifact paths, and token-efficiency guidance so a model can first read a compact plan and then expand only into the bounded `task_brief`, `target_review`, or target resolver artifacts it actually needs.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -323,6 +338,18 @@ Every scan summary includes lightweight performance fields such as `duration_sec
 6. write `deep_context_federation_bootstrap.json` and `DEEP_CONTEXT_FEDERATION_BOOTSTRAP.md`
 
 Use `bootstrap` when you only need the federation artifact. Use `intake` when a coding agent or CI job needs a single packet with repo state, quality gate, and task routed model context while preserving `authority_effect: none` and `no_apply: true`.
+
+## Workflow Plan
+
+`dcf workflow-plan` is a planning layer for agent orchestration. It returns `deep_context_federation_workflow_plan_v1`, a small JSON artifact that lists:
+
+- ordered DCF commands and their expected output schemas
+- deterministic stop gates before wider context expansion
+- target review and review gate steps when targets are supplied
+- model first reads and context that should be skipped by default
+- safety boundaries proving the plan is read-only and does not execute commands
+
+This is the preferred first artifact for token-sensitive agents. It lets Codex, Claude, AGY, GitHub runners, or another orchestrator decide whether to continue from a compact contract rather than loading the full federation, SQLite export, README set, or raw source tree.
 
 ## Capabilities Manifest
 

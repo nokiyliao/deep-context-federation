@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
+from deep_context_federation.adjudicate import ADJUDICATE_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import SCHEMA_VERSION
@@ -266,6 +267,37 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "prompt_estimated_tokens": {"type": "integer"},
                 "prompt_rendered_counts": object_type,
                 "recommended_commands": array_type,
+            },
+        ),
+        "adjudication": _schema(
+            ADJUDICATE_SCHEMA_VERSION,
+            "Deep Context Federation deterministic target adjudication",
+            [
+                "schema_version",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "target",
+                "verdict",
+                "confidence_score",
+                "support",
+                "conflict_summary",
+                "recommended_use",
+            ],
+            {
+                "status": {"type": "string", "const": "ok"},
+                **_boundary_props(),
+                "target": {"type": "string"},
+                "verdict": {"type": "string", "enum": ["supported", "warn", "blocked", "advisory_only", "no_match"]},
+                "confidence_score": {"type": "integer"},
+                "risk_flags": array_type,
+                "support": object_type,
+                "conflict_summary": object_type,
+                "resolve_summary": object_type,
+                "resolve": object_type,
+                "recommended_use": object_type,
+                "prompt_text": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
             },
         ),
         "context_pack": _schema(

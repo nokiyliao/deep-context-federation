@@ -1,5 +1,6 @@
 """Deep Context Federation public API."""
 
+from deep_context_federation.adjudicate import adjudicate_target
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation
 from deep_context_federation.capabilities import build_capabilities
@@ -26,6 +27,7 @@ from deep_context_federation.verifier import verify_federation
 from deep_context_federation.version import __version__
 
 __all__ = [
+    "adjudicate_target",
     "bootstrap_federation",
     "build_federation",
     "build_capabilities",

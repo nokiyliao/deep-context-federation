@@ -8,6 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from deep_context_federation.adjudicate import adjudicate_target
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation, codebase_memory_source
@@ -60,7 +61,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.17.0"
+    assert payload["package"]["version"] == "0.18.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -71,6 +72,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "scan",
         "schema",
         "validate-artifact",
+        "adjudicate",
         "brief",
         "pack",
         "quality-gate",
@@ -107,6 +109,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["task_brief"]["schema_version"] == "deep_context_federation_task_brief_v1"
     assert by_kind["agent_intake"]["schema_version"] == "deep_context_federation_agent_intake_v1"
     assert by_kind["resolve"]["schema_version"] == "deep_context_federation_resolve_v1"
+    assert by_kind["adjudication"]["schema_version"] == "deep_context_federation_adjudicate_v1"
 
     policy = json.loads(EXAMPLE_QUALITY_GATE_POLICY.read_text(encoding="utf-8"))
     valid = validate_artifact_contract(policy)
@@ -220,6 +223,34 @@ def test_resolve_target_builds_evidence_card(tmp_path: Path) -> None:
     assert result["prompt_rendered_counts"]["matched_entities"] > 0
     assert result["prompt_text"].startswith("# Deep Context Federation Target Resolution")
     assert any(item["row"].get("value") == "dashboard_readiness_projection" for item in result["matched_entities"])
+    assert validate_artifact_contract(result)["ok"] is True
+
+
+def test_adjudicate_target_classifies_support(tmp_path: Path) -> None:
+    payload = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=False,
+    )
+
+    result = adjudicate_target(
+        payload,
+        target="dashboard_readiness_projection",
+        limit=10,
+        token_budget=900,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_adjudicate_v1"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["verdict"] in {"supported", "warn"}
+    assert result["confidence_score"] >= 50
+    assert result["support"]["authority_sources"]
+    assert result["recommended_use"]["model_context_allowed"] is True
+    assert result["recommended_use"]["safe_for_mutation"] is False
+    assert result["prompt_text"].startswith("# Deep Context Federation Adjudication")
+    assert result["prompt_estimated_tokens"] <= 900
     assert validate_artifact_contract(result)["ok"] is True
 
 

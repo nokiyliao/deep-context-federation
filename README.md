@@ -50,6 +50,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - SQLite read model with search presets
 - graph trace from any matching entity
 - target resolver for claim/path/surface/symbol evidence cards
+- deterministic target adjudication across authority, evidence, and advisory tiers
 - manifest composition for merging self-scan output with curated evidence/context sources
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - one-command agent intake packet for bootstrap, quality gate, and task brief
@@ -224,6 +225,11 @@ python -m deep_context_federation.cli resolve \
   --target dashboard_readiness_projection \
   --format markdown
 
+python -m deep_context_federation.cli adjudicate \
+  --input .dcf/deep_context_federation_latest.json \
+  --target dashboard_readiness_projection \
+  --format markdown
+
 python -m deep_context_federation.cli doctor \
   --input .dcf/deep_context_federation_latest.json \
   --format markdown
@@ -391,6 +397,18 @@ Use it when an agent should not decide from scratch whether to run `query`, `doc
 - recommended follow-up commands
 
 Use it after `brief` when the agent needs to inspect one concrete assertion, file, or surface instead of browsing every preset result. Like the rest of DCF, it is read-only and `authority_effect: none`.
+
+## Target Adjudication
+
+`dcf adjudicate` builds on `resolve` and emits a deterministic verdict for one target:
+
+- `supported`: enough authority/evidence support and no risk flags
+- `warn`: usable as model context, but with caveats
+- `blocked`: error conflict present
+- `advisory_only`: only advisory context was found
+- `no_match`: no relevant target evidence found
+
+It classifies related sources into authority, evidence, advisory, context, and unavailable buckets, computes a bounded confidence score, and reports whether the result is allowed for model context or requires human review. It never authorizes mutation; `safe_for_mutation` is always false.
 
 ## Quality Gate
 

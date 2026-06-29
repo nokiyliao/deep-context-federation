@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Sequence
 
+from deep_context_federation.adjudicate import adjudicate_target
+from deep_context_federation.adjudicate import markdown_adjudication
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.bootstrap import markdown_bootstrap
@@ -168,6 +170,14 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text and embedded context prompt.")
     resolve.add_argument("--output", type=Path)
     resolve.add_argument("--format", choices=["json", "markdown"], default="json")
+    adjudicate = sub.add_parser("adjudicate", help="Adjudicate a target into authority/evidence/advisory support and a deterministic verdict.")
+    adjudicate.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
+    adjudicate.add_argument("--target", required=True)
+    adjudicate.add_argument("--limit", type=int, default=20)
+    adjudicate.add_argument("--token-budget", type=int, default=2500)
+    adjudicate.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
+    adjudicate.add_argument("--output", type=Path)
+    adjudicate.add_argument("--format", choices=["json", "markdown"], default="json")
     doctor = sub.add_parser("doctor", help="Diagnose federation health and recommend next actions.")
     doctor.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     doctor.add_argument("--format", choices=["json", "markdown"], default="json")
@@ -442,6 +452,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_resolve(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "adjudicate":
+        payload = read_required_json(args.input)
+        result = adjudicate_target(
+            payload,
+            target=args.target,
+            limit=args.limit,
+            token_budget=args.token_budget,
+            include_prompt=not args.no_prompt,
+        )
+        if args.output:
+            result["outputs"] = {"adjudication_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_adjudication(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0

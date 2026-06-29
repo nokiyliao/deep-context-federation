@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
+from deep_context_federation.adjudicate import ADJUDICATE_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import DEFAULT_JSON_NAME
 from deep_context_federation.builder import DEFAULT_MD_NAME
@@ -56,7 +57,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "schema_version": SCHEMA_VERSION,
             "producer": "build",
             "default_outputs": [DEFAULT_JSON_NAME, DEFAULT_MD_NAME, DEFAULT_SQLITE_NAME],
-            "consumer_commands": ["verify", "query", "trace", "resolve", "doctor", "rank", "diff", "quality-gate", "brief"],
+            "consumer_commands": ["verify", "query", "trace", "resolve", "adjudicate", "doctor", "rank", "diff", "quality-gate", "brief"],
             "top_level_required": ["schema_version", "sources", "entities", "edges", "conflicts", "query_presets"],
             "authority_effect": "none",
             "no_apply": True,
@@ -128,8 +129,17 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "resolve",
             "schema_version": RESOLVE_SCHEMA_VERSION,
             "producer": "resolve",
-            "consumer_commands": ["agent_router", "agent_prompt", "operator_context"],
+            "consumer_commands": ["adjudicate", "agent_router", "agent_prompt", "operator_context"],
             "top_level_required": ["schema_version", "status", "target", "summary", "matched_entities", "related_sources"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "adjudication",
+            "schema_version": ADJUDICATE_SCHEMA_VERSION,
+            "producer": "adjudicate",
+            "consumer_commands": ["agent_router", "agent_prompt", "operator_context"],
+            "top_level_required": ["schema_version", "status", "target", "verdict", "confidence_score", "support", "recommended_use"],
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -333,6 +343,15 @@ def _commands() -> list[dict[str, Any]]:
             "intent": "Resolve a claim, path, surface, or symbol target into an evidence card.",
             "writes": ["optional resolve JSON when --output is set"],
             "output_schemas": [RESOLVE_SCHEMA_VERSION],
+            "options": ["--target", "--limit", "--token-budget", "--no-prompt"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "adjudicate",
+            "intent": "Classify target support into authority/evidence/advisory tiers and emit a deterministic verdict.",
+            "writes": ["optional adjudication JSON when --output is set"],
+            "output_schemas": [ADJUDICATE_SCHEMA_VERSION],
             "options": ["--target", "--limit", "--token-budget", "--no-prompt"],
             "authority_effect": "none",
             "no_apply": True,

@@ -64,6 +64,8 @@ from deep_context_federation.intake import markdown_agent_intake
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.memory_ledger import build_memory_ledger
 from deep_context_federation.memory_ledger import markdown_memory_ledger
+from deep_context_federation.model_entrypoint_selection import build_model_entrypoint_selection
+from deep_context_federation.model_entrypoint_selection import markdown_model_entrypoint_selection
 from deep_context_federation.native_integration import build_native_integration_plan
 from deep_context_federation.native_integration import markdown_native_integration_plan
 from deep_context_federation.operator_context import build_operator_context
@@ -145,6 +147,8 @@ COMMAND_ALIASES = {
     "verify-handoff": "verify-model-handoff",
     "agent-model-input": "release-model-input",
     "emit-model-input": "release-model-input",
+    "choose-model-input": "select-model-entrypoint",
+    "select-model-input": "select-model-entrypoint",
     "agent-profile": "validate-run-profile",
     "agent-profile-init": "init-run-profile",
     "agent-onboard": "onboard-runner",
@@ -632,6 +636,12 @@ def build_parser() -> argparse.ArgumentParser:
     agent_model_input.add_argument("--output", type=Path)
     agent_model_input.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
     agent_model_input.add_argument("--format", choices=["json", "markdown", "prompt"], default="json")
+    model_entrypoint = sub.add_parser("select-model-entrypoint", help="Select the final model input surface from a verified DCF artifact.")
+    model_entrypoint.add_argument("--input", type=Path, required=True)
+    model_entrypoint.add_argument("--output", type=Path)
+    model_entrypoint.add_argument("--prefer", choices=["prompt-file", "prompt-pack", "audit-json"], default="prompt-file")
+    model_entrypoint.add_argument("--allow-caution", action="store_true", help="Allow use_dcf_model_input_with_caution decisions to select a model input.")
+    model_entrypoint.add_argument("--format", choices=["json", "markdown"], default="json")
     agent_profile = sub.add_parser("validate-run-profile", help="Validate and normalize a model-input run profile for global wrappers.")
     agent_profile.add_argument("--profile", type=Path, required=True)
     agent_profile.add_argument("--output", type=Path)
@@ -1427,6 +1437,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(result.get("prompt_text") or "", end="" if str(result.get("prompt_text") or "").endswith("\n") else "\n")
         elif args.format == "markdown":
             print(markdown_agent_model_input(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "select-model-entrypoint":
+        payload = read_required_json(args.input)
+        result = build_model_entrypoint_selection(
+            payload,
+            input_path=args.input,
+            prefer=args.prefer,
+            allow_caution=args.allow_caution,
+        )
+        if args.output:
+            result["outputs"] = {"model_entrypoint_selection_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_model_entrypoint_selection(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

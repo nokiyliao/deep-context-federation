@@ -362,6 +362,8 @@ python -m deep_context_federation.cli release-model-input \
 
 `release-model-input` verifies the handoff first. It prints prompt text only when the handoff, generated artifacts, and token economics pass verification; otherwise it exits with code `2` and emits no prompt in `prompt` mode. In JSON mode it includes `prompt_pack`, `source_identity_policy`, `context_advantage_summary`, and `entrypoint_decision`, making the final model-input artifact both public-boundary auditable and self-explanatory about why DCF is the preferred read-first path.
 
+When a wrapper wants a machine-readable choice instead of immediate prompt output, use `select-model-entrypoint --input <artifact.json>`. It accepts `agent_handoff`, `agent_model_input`, `agent_ready`, or `agent_onboard` artifacts and returns `model_entrypoint_selection` with one selected mode: `prompt_file`, `prompt_pack`, `audit_json`, or `blocked`.
+
 Bootstrap can also merge curated manifests into the same graph:
 
 ```bash
@@ -678,6 +680,8 @@ For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEX
 Run `dcf verify-model-handoff --input <handoff.json>` before giving a copied or externally transferred `model_prompt_source` to a model. The verifier is read-only and emits `deep_context_federation_agent_handoff_verification_v1`; it checks safety boundaries, pass/fail semantics, artifact hashes, prompt/context token estimates, public-boundary audit status, and `token_economics` consistency. Fresh `dcf prepare-model-handoff` runs already include the same verification summary and verification artifact.
 
 For global wrappers, prefer `dcf release-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic. JSON output retains the compact `context_advantage_summary` and final `entrypoint_decision`, so wrappers can record the advantage proof and adopt/reject decision alongside the released prompt.
+
+Use `dcf select-model-entrypoint --input <artifact.json> --format json` when the wrapper should decide automatically between reading the prompt file, using embedded prompt text, opening audit JSON, or blocking model startup. The selector never emits prompt text by itself; it turns verified DCF artifacts into one final `selected_model_input` plus `recommended_reader`.
 
 Use `dcf decide-model-start --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `release-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
 

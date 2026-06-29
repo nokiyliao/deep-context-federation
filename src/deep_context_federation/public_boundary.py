@@ -24,6 +24,8 @@ PUBLIC_SECTION_KEYS = (
     "prompt_pack",
     "context_advantage_summary",
     "entrypoint_decision",
+    "selected_model_input",
+    "recommended_reader",
 )
 
 

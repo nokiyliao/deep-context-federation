@@ -41,6 +41,7 @@ from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_COMPARE_
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_VERSION
 from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_INPUT_SCHEMA
 from deep_context_federation.memory_ledger import MEMORY_LEDGER_SCHEMA_VERSION
+from deep_context_federation.model_entrypoint_selection import MODEL_ENTRYPOINT_SELECTION_SCHEMA_VERSION
 from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
 from deep_context_federation.operator_context import OPERATOR_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.public_boundary import PUBLIC_BOUNDARY_AUDIT_SCHEMA_VERSION
@@ -498,6 +499,28 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "entrypoint_decision",
                 "checks",
                 "errors",
+                "safety_boundaries",
+            ],
+            "source_identity_policy": {"public_identity": "deep_context_federation", "source_ids_exposed": False},
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "model_entrypoint_selection",
+            "schema_version": MODEL_ENTRYPOINT_SELECTION_SCHEMA_VERSION,
+            "producer": "select-model-entrypoint",
+            "consumer_commands": ["global_wrapper", "agent_runner", "ci", "model_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "input_ref",
+                "input_artifact_kind",
+                "entrypoint_decision",
+                "selected_model_input",
+                "recommended_reader",
                 "safety_boundaries",
             ],
             "source_identity_policy": {"public_identity": "deep_context_federation", "source_ids_exposed": False},
@@ -1195,6 +1218,21 @@ def _commands() -> list[dict[str, Any]]:
             "output_schemas": [AGENT_MODEL_INPUT_SCHEMA_VERSION],
             "input_schemas": [AGENT_HANDOFF_SCHEMA_VERSION],
             "options": ["--input", "--output", "--no-prompt", "--format"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "select-model-entrypoint",
+            "intent": "Select prompt-file, prompt-pack, audit-json, or blocked model input from a verified DCF artifact.",
+            "writes": ["optional model entrypoint selection JSON when --output is set"],
+            "output_schemas": [MODEL_ENTRYPOINT_SELECTION_SCHEMA_VERSION],
+            "input_schemas": [
+                AGENT_HANDOFF_SCHEMA_VERSION,
+                AGENT_MODEL_INPUT_SCHEMA_VERSION,
+                AGENT_READY_SCHEMA_VERSION,
+                AGENT_ONBOARD_SCHEMA_VERSION,
+            ],
+            "options": ["--input", "--output", "--prefer", "--allow-caution", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },

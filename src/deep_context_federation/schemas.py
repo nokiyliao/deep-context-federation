@@ -35,6 +35,7 @@ from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_VERSION
 from deep_context_federation.memory_ledger import MEMORY_LEDGER_SCHEMA_VERSION
+from deep_context_federation.model_entrypoint_selection import MODEL_ENTRYPOINT_SELECTION_SCHEMA_VERSION
 from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
 from deep_context_federation.operator_context import OPERATOR_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.public_boundary import PUBLIC_BOUNDARY_AUDIT_SCHEMA_VERSION
@@ -1116,6 +1117,40 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "discovered": object_type,
                 "recommended_next_command": {"type": "string"},
                 "diagnostics": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "model_entrypoint_selection": _schema(
+            MODEL_ENTRYPOINT_SELECTION_SCHEMA_VERSION,
+            "Deep Context Federation model entrypoint selection",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "input_ref",
+                "input_artifact_kind",
+                "entrypoint_decision",
+                "selected_model_input",
+                "recommended_reader",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_model_entrypoint_selection", "warn_model_entrypoint_selection", "fail_model_entrypoint_selection"]},
+                **_boundary_props(),
+                "input_ref": {"type": "string"},
+                "input_schema_version": {"type": "string"},
+                "input_artifact_kind": {"type": "string"},
+                "evaluated_artifact_summary": object_type,
+                "source_identity_policy": object_type,
+                "entrypoint_decision": object_type,
+                "selected_model_input": object_type,
+                "recommended_reader": object_type,
+                "checks": array_type,
+                "warnings": array_type,
+                "errors": array_type,
                 "safety_boundaries": object_type,
             },
         ),

@@ -33,6 +33,7 @@ from deep_context_federation.input_fingerprint import build_input_fingerprint
 from deep_context_federation.input_fingerprint import compare_input_fingerprint
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.memory_ledger import build_memory_ledger
+from deep_context_federation.model_entrypoint_selection import build_model_entrypoint_selection
 from deep_context_federation.native_integration import build_native_integration_plan
 from deep_context_federation.operator_context import build_operator_context
 from deep_context_federation.public_boundary import build_public_boundary_audit
@@ -73,6 +74,7 @@ __all__ = [
     "build_agent_profile_init",
     "build_agent_ready",
     "build_memory_ledger",
+    "build_model_entrypoint_selection",
     "build_native_integration_plan",
     "build_operator_context",
     "build_public_boundary_audit",

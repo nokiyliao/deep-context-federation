@@ -45,6 +45,7 @@ from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.memory_ledger import build_memory_ledger
+from deep_context_federation.model_entrypoint_selection import build_model_entrypoint_selection
 from deep_context_federation.native_integration import build_native_integration_plan
 from deep_context_federation.operator_context import build_operator_context
 from deep_context_federation.public_boundary import build_public_boundary_audit
@@ -243,7 +244,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.67.0"
+    assert payload["package"]["version"] == "0.68.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -260,6 +261,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "check-model-readiness",
         "prepare-model-handoff",
         "release-model-input",
+        "select-model-entrypoint",
         "onboard-runner",
         "validate-run-profile",
         "init-run-profile",
@@ -329,6 +331,9 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert "context_advantage_summary" in by_kind["agent_model_input"]["top_level_required"]
     assert "entrypoint_decision" in by_kind["agent_model_input"]["top_level_required"]
     assert by_kind["agent_model_input"]["source_identity_policy"]["source_ids_exposed"] is False
+    assert by_kind["model_entrypoint_selection"]["schema_version"] == "deep_context_federation_model_entrypoint_selection_v1"
+    assert "selected_model_input" in by_kind["model_entrypoint_selection"]["top_level_required"]
+    assert "recommended_reader" in by_kind["model_entrypoint_selection"]["top_level_required"]
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert "entrypoint_decision" in by_kind["agent_onboard"]["top_level_required"]
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
@@ -398,6 +403,9 @@ def test_schema_registry_and_contract_validation() -> None:
     assert "prompt_pack" in by_kind["agent_model_input"]["json_schema"]["required"]
     assert "context_advantage_summary" in by_kind["agent_model_input"]["json_schema"]["required"]
     assert "entrypoint_decision" in by_kind["agent_model_input"]["json_schema"]["required"]
+    assert by_kind["model_entrypoint_selection"]["schema_version"] == "deep_context_federation_model_entrypoint_selection_v1"
+    assert "selected_model_input" in by_kind["model_entrypoint_selection"]["json_schema"]["required"]
+    assert "recommended_reader" in by_kind["model_entrypoint_selection"]["json_schema"]["required"]
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert "entrypoint_decision" in by_kind["agent_onboard"]["json_schema"]["required"]
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
@@ -529,6 +537,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "prove-context-advantage" in top_help.stdout
     assert "decide-continuation" in top_help.stdout
     assert "prepare-model-input" in top_help.stdout
+    assert "select-model-entrypoint" in top_help.stdout
     assert "summarize-operator-context" in top_help.stdout
     assert "prove-public-boundary" in top_help.stdout
     assert "native-integration-plan" not in top_help.stdout
@@ -536,6 +545,8 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "plan-capability-ownership" not in top_help.stdout
     assert "map-repo" not in top_help.stdout
     assert "emit-model-input" not in top_help.stdout
+    assert "choose-model-input" not in top_help.stdout
+    assert "select-model-input" not in top_help.stdout
     assert "discover-model-readiness" not in top_help.stdout
     assert "route-model-readiness" not in top_help.stdout
     assert "validate-inputs" not in top_help.stdout
@@ -1722,6 +1733,15 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert validate_artifact_contract(model_input)["ok"] is True
     model_boundary = build_public_boundary_audit([("model_input", model_input)])
     assert model_boundary["status"] == "pass_public_boundary_audit"
+    selection = build_model_entrypoint_selection(result, input_path=Path(result["outputs"]["agent_handoff_json"]))
+    assert selection["status"] == "pass_model_entrypoint_selection"
+    assert selection["input_artifact_kind"] == "agent_handoff"
+    assert selection["selected_model_input"]["mode"] == "prompt_file"
+    assert selection["selected_model_input"]["model_input_ref"] == prompt_path.as_posix()
+    assert "release-model-input" in selection["recommended_reader"]["command"]
+    assert validate_artifact_contract(selection, artifact_kind="model_entrypoint_selection")["ok"] is True
+    selection_boundary = build_public_boundary_audit([("model_entrypoint_selection", selection)])
+    assert selection_boundary["status"] == "pass_public_boundary_audit"
 
     prompt_path.write_text(prompt_path.read_text(encoding="utf-8") + "\nmutated\n", encoding="utf-8")
     tampered = verify_agent_handoff(result, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
@@ -1737,6 +1757,9 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert tampered_model_input["entrypoint_decision"]["status"] == "fail_entrypoint_decision"
     assert tampered_model_input["entrypoint_decision"]["decision"] == "do_not_use_dcf_model_input"
     assert {row["id"] for row in tampered_model_input["errors"]} >= {"handoff_verification_ok"}
+    blocked_selection = build_model_entrypoint_selection(tampered_model_input, input_path=tmp_path / "tampered_model_input.json")
+    assert blocked_selection["status"] == "fail_model_entrypoint_selection"
+    assert blocked_selection["selected_model_input"]["mode"] == "blocked"
 
     strict_context_gate_policy = normalize_agent_context_gate_policy(
         {
@@ -2267,6 +2290,9 @@ def test_agent_ready_builds_or_blocks_model_input(tmp_path: Path) -> None:
     assert ready["context_advantage_summary"]["summary"]["read_first_savings_percent"] > 0
     assert ready["entrypoint_decision"]["status"] == "pass_entrypoint_decision"
     assert ready["entrypoint_decision"]["decision"] == "use_dcf_model_input"
+    ready_selection = build_model_entrypoint_selection(ready, input_path=manifest_root / ".dcf/deep_context_federation_agent_ready.json")
+    assert ready_selection["status"] == "pass_model_entrypoint_selection"
+    assert ready_selection["selected_model_input"]["mode"] == "prompt_file"
     assert validate_artifact_contract(ready)["ok"] is True
     ready_boundary = build_public_boundary_audit([("agent_ready", ready)])
     assert ready_boundary["status"] == "pass_public_boundary_audit"
@@ -2509,6 +2535,9 @@ def test_agent_onboard_builds_profile_and_ready(tmp_path: Path) -> None:
     assert result["model_input_ready"] is True
     assert result["entrypoint_decision"]["status"] == "pass_entrypoint_decision"
     assert result["entrypoint_decision"]["decision"] == "use_dcf_model_input"
+    onboard_selection = build_model_entrypoint_selection(result, input_path=profile_root / ".dcf/agent_onboard.json")
+    assert onboard_selection["status"] == "pass_model_entrypoint_selection"
+    assert onboard_selection["selected_model_input"]["mode"] == "prompt_file"
     assert result["prompt_estimated_tokens"] > 0
     assert Path(result["outputs"]["agent_profile_json"]).exists()
     assert Path(result["outputs"]["agent_handoff_json"]).exists()
@@ -2578,6 +2607,34 @@ def test_agent_onboard_cli_single_command(tmp_path: Path) -> None:
     assert profile_path.exists()
     assert onboard_path.exists()
     assert validate_artifact_contract(payload, artifact_kind="agent_onboard")["ok"] is True
+
+    selection_path = profile_root / ".dcf" / "model_entrypoint_selection.json"
+    selected = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "select-model-entrypoint",
+            "--input",
+            str(onboard_path),
+            "--output",
+            str(selection_path),
+            "--format",
+            "json",
+        ],
+        cwd=profile_root,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert selected.returncode == 0, selected.stderr + selected.stdout
+    selection_payload = json.loads(selected.stdout)
+    assert selection_payload["status"] == "pass_model_entrypoint_selection"
+    assert selection_payload["selected_model_input"]["mode"] == "prompt_file"
+    assert selection_payload["recommended_reader"]["action"] == "use_selected_model_input"
+    assert selection_path.exists()
+    assert validate_artifact_contract(selection_payload, artifact_kind="model_entrypoint_selection")["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

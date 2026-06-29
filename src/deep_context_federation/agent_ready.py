@@ -145,6 +145,7 @@ def _failure(
         "prompt_estimated_tokens": 0,
         "prompt_text": "",
         "prompt_pack": public_prompt_pack(),
+        "context_advantage_summary": {},
         "errors": [dict(row) for row in errors],
         "outputs": {},
         "safety_boundaries": {
@@ -377,6 +378,7 @@ def build_agent_ready(
     model_input = build_agent_model_input(handoff, handoff_path=handoff_ref, include_prompt=include_prompt)
     ok = model_input.get("ok") is True
     prompt_pack = model_input.get("prompt_pack") if isinstance(model_input.get("prompt_pack"), Mapping) else public_prompt_pack()
+    advantage_summary = model_input.get("context_advantage_summary") if isinstance(model_input.get("context_advantage_summary"), Mapping) else {}
     return {
         "schema_version": AGENT_READY_SCHEMA_VERSION,
         "ok": ok,
@@ -404,6 +406,7 @@ def build_agent_ready(
         "prompt_estimated_tokens": model_input.get("prompt_estimated_tokens") if ok else 0,
         "prompt_text": model_input.get("prompt_text") if ok else "",
         "prompt_pack": prompt_pack,
+        "context_advantage_summary": dict(advantage_summary),
         "token_economics": model_input.get("token_economics") if isinstance(model_input.get("token_economics"), Mapping) else {},
         "errors": list(model_input.get("errors") or []),
         "outputs": dict(handoff.get("outputs") if isinstance(handoff.get("outputs"), Mapping) else {}),
@@ -436,6 +439,7 @@ def markdown_agent_ready(result: Mapping[str, Any]) -> str:
         f"- Request binding: `{binding.get('status')}`",
         f"- Prompt source: `{result.get('prompt_source')}`",
         f"- Prompt tokens: `{result.get('prompt_estimated_tokens')}`",
+        f"- Context advantage: `{(result.get('context_advantage_summary') if isinstance(result.get('context_advantage_summary'), Mapping) else {}).get('status')}`",
         "",
         "## Errors",
         "",

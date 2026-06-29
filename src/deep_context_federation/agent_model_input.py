@@ -44,6 +44,16 @@ def _summary(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _context_advantage_summary(payload: Mapping[str, Any], model_handoff: Mapping[str, Any]) -> dict[str, Any]:
+    summary = model_handoff.get("context_advantage_summary")
+    if isinstance(summary, Mapping):
+        return dict(summary)
+    summary = payload.get("context_advantage_summary")
+    if isinstance(summary, Mapping):
+        return dict(summary)
+    return {}
+
+
 def build_agent_model_input(
     payload: Mapping[str, Any],
     *,
@@ -56,6 +66,7 @@ def build_agent_model_input(
     verification = verify_agent_handoff(payload, handoff_path=handoff_path)
     model_handoff = payload.get("model_handoff") if isinstance(payload.get("model_handoff"), Mapping) else {}
     economics = model_handoff.get("token_economics") if isinstance(model_handoff.get("token_economics"), Mapping) else {}
+    advantage_summary = _context_advantage_summary(payload, model_handoff)
     prompt_source = str(model_handoff.get("model_prompt_source") or "")
     prompt_path = _resolve(prompt_source, base_dir=base_dir) if prompt_source else None
 
@@ -122,6 +133,7 @@ def build_agent_model_input(
             "decision": payload.get("decision") if isinstance(payload.get("decision"), Mapping) else {},
         },
         "verification_summary": _summary(verification),
+        "context_advantage_summary": advantage_summary,
         "token_economics": dict(economics),
         "checks": checks,
         "errors": failed,
@@ -148,6 +160,7 @@ def markdown_agent_model_input(result: Mapping[str, Any]) -> str:
         f"- Input: `{result.get('input_ref')}`",
         f"- Prompt source: `{result.get('prompt_source')}`",
         f"- Prompt tokens: `{result.get('prompt_estimated_tokens')}`",
+        f"- Context advantage: `{(result.get('context_advantage_summary') if isinstance(result.get('context_advantage_summary'), Mapping) else {}).get('status')}`",
         "",
         "## Errors",
         "",

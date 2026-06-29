@@ -22,6 +22,7 @@ PUBLIC_SECTION_KEYS = (
     "artifact_read_plan",
     "read_first",
     "prompt_pack",
+    "context_advantage_summary",
 )
 
 

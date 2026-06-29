@@ -8,6 +8,7 @@ from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
+from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
@@ -27,6 +28,7 @@ __all__ = [
     "bootstrap_federation",
     "build_federation",
     "build_capabilities",
+    "build_agent_intake",
     "build_task_brief",
     "build_schema_registry",
     "compose_manifests",

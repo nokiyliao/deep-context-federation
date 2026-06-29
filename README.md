@@ -31,7 +31,7 @@ This tool is deliberately non-authoritative:
 - `authority_effect: none`
 - `no_apply: true`
 - no live/runtime/broker/promotion mutation
-- no task-ledger replacement
+- no task ledger replacement
 - no external model calls
 - no automatic installer or watcher for optional tools
 
@@ -51,6 +51,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - graph trace from any matching entity
 - manifest composition for merging self-scan output with curated evidence/context sources
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
+- one-command agent intake packet for bootstrap, quality gate, and task brief
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -103,6 +104,17 @@ Self-bootstrap a fresh repository into a verified federation:
 python -m deep_context_federation.cli bootstrap \
   --root . \
   --output-dir .dcf \
+  --format markdown
+```
+
+For a fresh agent or CI run, create the full intake packet in one step:
+
+```bash
+python -m deep_context_federation.cli intake \
+  --root . \
+  --output-dir .dcf \
+  --task "dashboard operator evidence authority" \
+  --token-budget 4000 \
   --format markdown
 ```
 
@@ -273,7 +285,9 @@ Every scan summary includes lightweight performance fields such as `duration_sec
 
 ## Bootstrap Pipeline
 
-`dcf bootstrap` is the highest-level local workflow:
+`dcf intake` is the highest-level agent workflow. It runs `bootstrap`, evaluates `quality-gate`, builds a `task_brief`, and writes one `deep_context_federation_agent_intake.json` packet with all generated output paths and next actions.
+
+`dcf bootstrap` is the lower-level federation workflow:
 
 1. run `dcf scan` into the output directory
 2. optionally compose the generated manifest with one or more curated manifests
@@ -282,7 +296,7 @@ Every scan summary includes lightweight performance fields such as `duration_sec
 5. run doctor diagnostics
 6. write `deep_context_federation_bootstrap.json` and `DEEP_CONTEXT_FEDERATION_BOOTSTRAP.md`
 
-This is the recommended entrypoint for coding agents and CI because it produces one compact status object with scan, compose, build, verify, and doctor sections while preserving `authority_effect: none` and `no_apply: true`.
+Use `bootstrap` when you only need the federation artifact. Use `intake` when a coding agent or CI job needs a single packet with repo state, quality gate, and task routed model context while preserving `authority_effect: none` and `no_apply: true`.
 
 ## Capabilities Manifest
 

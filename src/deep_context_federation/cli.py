@@ -23,6 +23,8 @@ from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.doctor import markdown_doctor
 from deep_context_federation.graph import markdown_trace
 from deep_context_federation.graph import trace_federation
+from deep_context_federation.intake import build_agent_intake
+from deep_context_federation.intake import markdown_agent_intake
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
@@ -96,6 +98,23 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap.add_argument("--include-codebase-memory", action="store_true")
     bootstrap.add_argument("--codebase-memory-cache-dir", type=Path)
     bootstrap.add_argument("--format", choices=["json", "markdown"], default="json")
+    intake = sub.add_parser("intake", help="Run bootstrap, quality gate, and task brief as one agent intake packet.")
+    intake.add_argument("--root", type=Path, default=Path.cwd())
+    intake.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+    intake.add_argument("--manifest", type=Path, action="append", default=[])
+    intake.add_argument("--task", required=True)
+    intake.add_argument("--policy", type=Path, help="Optional quality gate policy JSON.")
+    intake.add_argument("--max-files", type=int, default=5000)
+    intake.add_argument("--max-parse-bytes", type=int, default=1_000_000)
+    intake.add_argument("--hash-files", action="store_true")
+    intake.add_argument("--include-codebase-memory", action="store_true")
+    intake.add_argument("--codebase-memory-cache-dir", type=Path)
+    intake.add_argument("--token-budget", type=int, default=4000)
+    intake.add_argument("--query-limit", type=int, default=10)
+    intake.add_argument("--max-presets", type=int, default=3)
+    intake.add_argument("--max-rows", type=int, default=80)
+    intake.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text inside the embedded task brief.")
+    intake.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -276,6 +295,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if args.format == "markdown":
             print(markdown_bootstrap(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "intake":
+        policy = load_quality_gate_policy(args.policy) if args.policy else None
+        result = build_agent_intake(
+            root=args.root,
+            output_dir=args.output_dir,
+            manifests=args.manifest,
+            task=args.task,
+            quality_gate_policy=policy,
+            max_files=args.max_files,
+            max_parse_bytes=args.max_parse_bytes,
+            include_hashes=args.hash_files,
+            include_codebase_memory=args.include_codebase_memory,
+            codebase_memory_cache_dir=args.codebase_memory_cache_dir,
+            token_budget=args.token_budget,
+            query_limit=args.query_limit,
+            max_presets=args.max_presets,
+            max_rows=args.max_rows,
+            include_prompt=not args.no_prompt,
+            write=True,
+        )
+        if args.format == "markdown":
+            print(markdown_agent_intake(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

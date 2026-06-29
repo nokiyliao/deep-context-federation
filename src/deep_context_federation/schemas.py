@@ -12,6 +12,7 @@ from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.capabilities import CAPABILITIES_SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
 from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
+from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
@@ -299,6 +300,42 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "coverage": object_type,
                 "context_pack": object_type,
                 "recommended_commands": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "agent_intake": _schema(
+            AGENT_INTAKE_SCHEMA_VERSION,
+            "Deep Context Federation agent intake packet",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "task",
+                "bootstrap_summary",
+                "quality_gate_summary",
+                "task_brief_summary",
+                "quality_gate",
+                "task_brief",
+                "outputs",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_intake", "warn_agent_intake", "fail_agent_intake"]},
+                **_boundary_props(),
+                "task": {"type": "string"},
+                "root": {"type": "string"},
+                "output_dir": {"type": "string"},
+                "duration_seconds": {"type": "number"},
+                "bootstrap_summary": object_type,
+                "quality_gate_summary": object_type,
+                "task_brief_summary": object_type,
+                "quality_gate": object_type,
+                "task_brief": object_type,
+                "next_actions": array_type,
+                "outputs": object_type,
                 "safety_boundaries": object_type,
             },
         ),

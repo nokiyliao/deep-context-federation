@@ -17,6 +17,7 @@ from deep_context_federation.builder import QUERY_PRESETS
 from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
 from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
+from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_INPUT_SCHEMA
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
@@ -72,7 +73,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "bootstrap",
             "schema_version": BOOTSTRAP_SCHEMA_VERSION,
             "producer": "bootstrap",
-            "consumer_commands": ["quality-gate"],
+            "consumer_commands": ["quality-gate", "intake"],
             "top_level_required": ["schema_version", "scan", "build", "verify", "doctor", "outputs"],
             "authority_effect": "none",
             "no_apply": True,
@@ -144,6 +145,24 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "doctor_summary",
                 "context_pack",
                 "recommended_commands",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "agent_intake",
+            "schema_version": AGENT_INTAKE_SCHEMA_VERSION,
+            "producer": "intake",
+            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "task",
+                "bootstrap_summary",
+                "quality_gate_summary",
+                "task_brief_summary",
+                "outputs",
             ],
             "authority_effect": "none",
             "no_apply": True,
@@ -237,6 +256,15 @@ def _commands() -> list[dict[str, Any]]:
             "intent": "Run scan, optional compose, build, verify, and doctor as one local pipeline.",
             "writes": ["output_dir generated artifacts"],
             "output_schemas": [BOOTSTRAP_SCHEMA_VERSION, SCHEMA_VERSION, VERIFY_SCHEMA_VERSION],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "intake",
+            "intent": "Run bootstrap, quality gate, and task brief as one agent intake packet.",
+            "writes": ["output_dir generated artifacts"],
+            "output_schemas": [AGENT_INTAKE_SCHEMA_VERSION, BOOTSTRAP_SCHEMA_VERSION, QUALITY_GATE_SCHEMA_VERSION, TASK_BRIEF_SCHEMA_VERSION],
+            "options": ["--task", "--policy", "--token-budget", "--query-limit", "--max-presets", "--max-rows", "--no-prompt"],
             "authority_effect": "none",
             "no_apply": True,
         },

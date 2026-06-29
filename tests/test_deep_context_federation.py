@@ -18,6 +18,7 @@ from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
+from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
@@ -58,12 +59,13 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.15.0"
+    assert payload["package"]["version"] == "0.16.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
         "capabilities",
         "bootstrap",
+        "intake",
         "build",
         "scan",
         "schema",
@@ -101,6 +103,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["contract_validation"]["schema_version"] == "deep_context_federation_contract_validation_v1"
     assert by_kind["context_pack"]["schema_version"] == "deep_context_federation_context_pack_v1"
     assert by_kind["task_brief"]["schema_version"] == "deep_context_federation_task_brief_v1"
+    assert by_kind["agent_intake"]["schema_version"] == "deep_context_federation_agent_intake_v1"
 
     policy = json.loads(EXAMPLE_QUALITY_GATE_POLICY.read_text(encoding="utf-8"))
     valid = validate_artifact_contract(policy)
@@ -185,6 +188,43 @@ def test_task_brief_routes_agent_context(tmp_path: Path) -> None:
     assert any(row["purpose"] == "generate_bounded_model_context" for row in brief["recommended_commands"])
     assert brief["safety_boundaries"]["mutation_allowed"] is False
     assert validate_artifact_contract(brief)["ok"] is True
+
+
+def test_agent_intake_runs_full_agent_packet(tmp_path: Path) -> None:
+    policy = {
+        "schema_version": "deep_context_federation_quality_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "min_sources": 1,
+        "min_entities": 1,
+        "min_edges": 1,
+        "max_warnings": 20,
+        "require_query_presets": ["claim-lineage", "operator-projection"],
+    }
+    result = build_agent_intake(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "intake",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        quality_gate_policy=policy,
+        token_budget=900,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_agent_intake_v1"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["ok"] is True
+    assert result["status"] in {"pass_agent_intake", "warn_agent_intake"}
+    assert result["quality_gate"]["status"] == "pass_quality_gate"
+    assert result["task_brief"]["context_pack"]["estimated_tokens"] <= 900
+    assert result["task_brief"]["context_budget"]["estimated_token_savings"] > 0
+    assert Path(result["outputs"]["agent_intake_json"]).exists()
+    assert Path(result["outputs"]["quality_gate_json"]).exists()
+    assert Path(result["outputs"]["task_brief_json"]).exists()
+    assert validate_artifact_contract(result)["ok"] is True
 
 
 def test_build_verify_and_query_example(tmp_path: Path) -> None:

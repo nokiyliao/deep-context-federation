@@ -14,11 +14,14 @@ from deep_context_federation.agent_context import build_agent_context
 from deep_context_federation.agent_context import markdown_agent_context
 from deep_context_federation.agent_context_gate import evaluate_agent_context_gate
 from deep_context_federation.agent_context_gate import markdown_agent_context_gate
+from deep_context_federation.builder import read_json
 from deep_context_federation.builder import utc_now
 from deep_context_federation.builder import write_json
 from deep_context_federation.builder import write_markdown
 from deep_context_federation.context_pack import estimate_tokens
 from deep_context_federation.input_fingerprint import build_input_fingerprint
+from deep_context_federation.unified_index import build_unified_index
+from deep_context_federation.unified_index import markdown_unified_index
 
 AGENT_HANDOFF_SCHEMA_VERSION = "deep_context_federation_agent_handoff_v1"
 DEFAULT_AGENT_HANDOFF_JSON_NAME = "deep_context_federation_agent_handoff.json"
@@ -30,6 +33,8 @@ DEFAULT_AGENT_CONTEXT_GATE_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_CONTEXT_GATE
 DEFAULT_AGENT_MODEL_PROMPT_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md"
 DEFAULT_AGENT_HANDOFF_VERIFICATION_JSON_NAME = "deep_context_federation_agent_handoff_verification.json"
 DEFAULT_AGENT_HANDOFF_VERIFICATION_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_HANDOFF_VERIFICATION.md"
+DEFAULT_AGENT_UNIFIED_INDEX_JSON_NAME = "deep_context_federation_unified_index.json"
+DEFAULT_AGENT_UNIFIED_INDEX_MD_NAME = "DEEP_CONTEXT_FEDERATION_UNIFIED_INDEX.md"
 
 
 def _normalize_output_dir(root: Path, output_dir: Path) -> Path:
@@ -100,6 +105,40 @@ def _failed_check_ids(payload: Mapping[str, Any]) -> list[str]:
         if isinstance(row, Mapping):
             result.append(str(row.get("id") or "unknown_check"))
     return result
+
+
+def _workflow_intake_outputs(agent_ci: Mapping[str, Any]) -> dict[str, str]:
+    outputs = agent_ci.get("outputs") if isinstance(agent_ci.get("outputs"), Mapping) else {}
+    workflow_path = Path(str(outputs.get("workflow_run_json") or ""))
+    workflow = read_json(workflow_path)
+    workflow_outputs = workflow.get("outputs") if isinstance(workflow.get("outputs"), Mapping) else {}
+    intake_path = Path(str(workflow_outputs.get("agent_intake_json") or ""))
+    intake = read_json(intake_path)
+    intake_outputs = intake.get("outputs") if isinstance(intake.get("outputs"), Mapping) else {}
+    return {str(key): str(value) for key, value in intake_outputs.items() if value}
+
+
+def _build_unified_context_for_handoff(
+    *,
+    agent_ci: Mapping[str, Any],
+    out_dir: Path,
+    limit: int,
+    query: str,
+) -> tuple[dict[str, Any], Path, Path]:
+    intake_outputs = _workflow_intake_outputs(agent_ci)
+    federation_path = Path(str(intake_outputs.get("federation_json") or ""))
+    federation = read_json(federation_path)
+    unified_index_json = out_dir / DEFAULT_AGENT_UNIFIED_INDEX_JSON_NAME
+    unified_index_md = out_dir / DEFAULT_AGENT_UNIFIED_INDEX_MD_NAME
+    unified_index = build_unified_index(
+        federation=federation,
+        federation_path=federation_path.as_posix() if federation_path.as_posix() != "." else "",
+        limit=max(1, int(limit)),
+        query=query,
+    )
+    write_json(unified_index_json, unified_index)
+    write_markdown(unified_index_md, markdown_unified_index(unified_index).splitlines())
+    return unified_index, unified_index_json, unified_index_md
 
 
 def _handoff_decision(agent_ci: Mapping[str, Any], agent_context: Mapping[str, Any], agent_context_gate: Mapping[str, Any]) -> dict[str, Any]:
@@ -262,6 +301,13 @@ def build_agent_handoff(
     if include_prompt and prompt_text:
         write_markdown(agent_model_prompt_md, prompt_text.splitlines())
 
+    unified_index, unified_index_json, unified_index_md = _build_unified_context_for_handoff(
+        agent_ci=agent_ci,
+        out_dir=out_dir,
+        limit=max_rows,
+        query=task,
+    )
+
     agent_context_gate = evaluate_agent_context_gate(agent_context, policy=agent_context_gate_policy)
     agent_context_gate_json = out_dir / DEFAULT_AGENT_CONTEXT_GATE_JSON_NAME
     agent_context_gate_md = out_dir / DEFAULT_AGENT_CONTEXT_GATE_MD_NAME
@@ -291,22 +337,27 @@ def build_agent_handoff(
         "agent_context_json": agent_context_json.as_posix(),
         "agent_model_prompt_markdown": agent_model_prompt_md.as_posix() if include_prompt and prompt_text else "",
         "agent_context_gate_json": agent_context_gate_json.as_posix(),
+        "unified_index_json": unified_index_json.as_posix(),
+        "unified_index_markdown": unified_index_md.as_posix(),
     }
     model_prompt_source = agent_model_prompt_md.as_posix() if ok and include_prompt and prompt_text else ""
     prompt_fingerprint = _artifact_fingerprint(agent_model_prompt_md, role="model_prompt", default_model_input=bool(model_prompt_source))
     context_fingerprint = _artifact_fingerprint(agent_context_json, role="machine_context")
     gate_fingerprint = _artifact_fingerprint(agent_context_gate_json, role="context_gate")
+    unified_fingerprint = _artifact_fingerprint(unified_index_json, role="unified_context")
     read_first_artifacts = [
         gate_fingerprint,
+        unified_fingerprint,
         prompt_fingerprint,
     ]
     machine_context_tokens = int(context_fingerprint.get("estimated_tokens") or 0)
     model_prompt_tokens = int(prompt_fingerprint.get("estimated_tokens") or 0) if model_prompt_source else 0
+    unified_context_tokens = int(unified_fingerprint.get("estimated_tokens") or 0)
     measured_prompt_economics = bool(model_prompt_source)
     model_handoff = {
         "read_first": [
             item
-            for item in (handoff_json.as_posix(), agent_context_gate_json.as_posix(), model_prompt_source)
+            for item in (handoff_json.as_posix(), agent_context_gate_json.as_posix(), unified_index_json.as_posix(), model_prompt_source)
             if item
         ],
         "model_prompt_source": model_prompt_source,
@@ -314,6 +365,16 @@ def build_agent_handoff(
         "model_prompt_estimated_tokens": model_prompt_tokens,
         "machine_context_source": agent_context_json.as_posix(),
         "machine_context_estimated_tokens": machine_context_tokens,
+        "unified_context_source": unified_index_json.as_posix(),
+        "unified_context_markdown": unified_index_md.as_posix(),
+        "unified_context_estimated_tokens": unified_context_tokens,
+        "unified_context_summary": {
+            "schema_version": unified_index.get("schema_version"),
+            "status": unified_index.get("status"),
+            "ok": unified_index.get("ok"),
+            "row_count": unified_index.get("summary", {}).get("row_count") if isinstance(unified_index.get("summary"), Mapping) else 0,
+            "source_identity_policy": unified_index.get("source_identity_policy"),
+        },
         "read_first_artifacts": read_first_artifacts,
         "audit_artifacts": [context_fingerprint],
         "token_economics": {
@@ -321,6 +382,8 @@ def build_agent_handoff(
             "default_model_input": "model_prompt_source" if model_prompt_source else "",
             "model_prompt_estimated_tokens": model_prompt_tokens,
             "machine_context_estimated_tokens": machine_context_tokens,
+            "unified_context_estimated_tokens": unified_context_tokens,
+            "read_first_support_estimated_tokens": int(gate_fingerprint.get("estimated_tokens") or 0) + unified_context_tokens,
             "model_prompt_to_machine_context_ratio": _ratio(model_prompt_tokens, machine_context_tokens) if measured_prompt_economics else 0.0,
             "estimated_token_savings": max(0, machine_context_tokens - model_prompt_tokens) if measured_prompt_economics else 0,
             "estimated_token_savings_percent": _savings_percent(machine_context_tokens, model_prompt_tokens) if measured_prompt_economics else 0.0,
@@ -329,6 +392,7 @@ def build_agent_handoff(
             "full repository tree",
             "full federation artifact",
             "machine context JSON unless debugging or auditing",
+            "upstream source-specific context tools",
             "raw source files without target match",
             "ungated agent context",
         ],

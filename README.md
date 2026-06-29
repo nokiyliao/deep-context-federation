@@ -270,7 +270,7 @@ python -m deep_context_federation.cli prepare-model-handoff \
   --output .dcf/deep_context_federation_agent_handoff.json
 ```
 
-`prepare-model-handoff` writes the underlying `decide-continuation`, `pack-model-context`, `gate-model-context`, and `prepare-model-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `pack-model-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff also includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
+`prepare-model-handoff` writes the underlying `decide-continuation`, `pack-model-context`, `gate-model-context`, `unify-context`, and `prepare-model-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `pack-model-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff also records `model_handoff.unified_context_source`, a source-collapsed DCF working index that appears in `read_first` without exposing upstream source identities. The handoff includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
 
 Global wrappers can route from the current repo state before deciding what to run:
 
@@ -669,7 +669,7 @@ Use `examples/agent_context_gate_policy.example.json` as a starter policy. The d
 
 and emits `deep_context_federation_agent_handoff_v1` with a final `decision`, compact summaries, generated output paths, and `model_handoff.model_prompt_source`. This is the command to use when an external runner wants one deterministic pass/fail handoff instead of orchestrating DCF subcommands itself.
 
-For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md`, not the full machine JSON. The JSON context is still recorded as `model_handoff.machine_context_source`, so agents can default to the smaller prompt-only surface and open the heavier JSON only when auditing evidence, hashes, or skipped/truncated rows. `model_handoff.token_economics` records prompt/context estimated tokens, ratio, and estimated savings; `read_first_artifacts` and `audit_artifacts` record path, bytes, SHA-256, and default-model-input flags.
+For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md`, not the full machine JSON. The JSON context is still recorded as `model_handoff.machine_context_source`, so agents can default to the smaller prompt-only surface and open the heavier JSON only when auditing evidence, hashes, or skipped/truncated rows. `model_handoff.unified_context_source` points at `deep_context_federation_unified_index.json`, which is generated automatically from the workflow federation output and collapses upstream tool/source identities into DCF-owned facets. `model_handoff.token_economics` records prompt/context/unified-index estimated tokens, ratio, and estimated savings; `read_first_artifacts` and `audit_artifacts` record path, bytes, SHA-256, and default-model-input flags.
 
 Run `dcf verify-model-handoff --input <handoff.json>` before giving a copied or externally transferred `model_prompt_source` to a model. The verifier is read-only and emits `deep_context_federation_agent_handoff_verification_v1`; it checks safety boundaries, pass/fail semantics, artifact hashes, prompt/context token estimates, and `token_economics` consistency. Fresh `dcf prepare-model-handoff` runs already include the same verification summary and verification artifact.
 
@@ -752,7 +752,7 @@ The ledger is generated-output-only. It does not crawl the source tree by defaul
 - graph scores, memory reuse rows, functional commands, and native capability ownership in one sorted working set
 - optional `--query` filtering without reopening separate source-specific tools
 
-The original artifacts remain the audit location. The unified index is the public DCF working plane for model and runner consumption, with `authority_effect: none` and `no_apply: true`.
+The original artifacts remain the audit location. The unified index is the public DCF working plane for model and runner consumption, with `authority_effect: none` and `no_apply: true`. `dcf prepare-model-handoff` now builds this index automatically and places it in `model_handoff.unified_context_source`, so high-level runners do not need to manually call source-specific context commands before deciding what to read.
 
 ```bash
 dcf unify-context \

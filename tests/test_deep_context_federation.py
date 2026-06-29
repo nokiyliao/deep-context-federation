@@ -238,7 +238,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.45.0"
+    assert payload["package"]["version"] == "0.46.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -1012,9 +1012,13 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["model_handoff"]["model_prompt_source"] == result["outputs"]["agent_model_prompt_markdown"]
     assert result["model_handoff"]["model_prompt_format"] == "markdown"
     assert result["model_handoff"]["machine_context_source"] == result["outputs"]["agent_context_json"]
+    assert result["model_handoff"]["unified_context_source"] == result["outputs"]["unified_index_json"]
+    assert result["outputs"]["unified_index_json"] in result["model_handoff"]["read_first"]
     assert result["model_handoff"]["read_first"][-1] == result["outputs"]["agent_model_prompt_markdown"]
     assert result["model_handoff"]["model_prompt_estimated_tokens"] > 0
     assert result["model_handoff"]["machine_context_estimated_tokens"] > result["model_handoff"]["model_prompt_estimated_tokens"]
+    assert result["model_handoff"]["unified_context_estimated_tokens"] > 0
+    assert result["model_handoff"]["unified_context_summary"]["source_identity_policy"]["source_ids_exposed"] is False
     assert result["input_fingerprint_summary"]["status"] == "pass_input_fingerprint"
     assert len(result["input_fingerprint_summary"]["digest"]) == 64
     assert result["input_fingerprint"]["source_count"] > 0
@@ -1025,6 +1029,25 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert Path(result["outputs"]["agent_ci_json"]).exists()
     assert Path(result["outputs"]["agent_handoff_verification_json"]).exists()
     assert Path(result["outputs"]["agent_handoff_verification_markdown"]).exists()
+    assert Path(result["outputs"]["unified_index_json"]).exists()
+    assert Path(result["outputs"]["unified_index_markdown"]).exists()
+    unified_index = json.loads(Path(result["outputs"]["unified_index_json"]).read_text(encoding="utf-8"))
+    assert unified_index["schema_version"] == "deep_context_federation_unified_index_v1"
+    assert unified_index["source_identity_policy"]["public_identity"] == "deep_context_federation"
+    assert unified_index["source_identity_policy"]["source_ids_exposed"] is False
+    assert validate_artifact_contract(unified_index, artifact_kind="unified_index")["ok"] is True
+
+    def assert_no_source_identity(value: object) -> None:
+        if isinstance(value, dict):
+            forbidden = {"source_id", "source_ids", "sources", "input_sources", "related_sources"}
+            assert not (forbidden & set(value.keys()))
+            for child in value.values():
+                assert_no_source_identity(child)
+        elif isinstance(value, list):
+            for child in value:
+                assert_no_source_identity(child)
+
+    assert_no_source_identity(unified_index["rows"])
     discovery = discover_agent_context(root=tmp_path, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
     assert discovery["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert discovery["ok"] is True
@@ -1058,12 +1081,17 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert prompt_path.stat().st_size < context_path.stat().st_size
     prompt_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "model_prompt")
     gate_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "context_gate")
+    unified_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "unified_context")
     context_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "machine_context")
     assert prompt_artifact["path"] == prompt_path.as_posix()
     assert prompt_artifact["exists"] is True
     assert prompt_artifact["default_model_input"] is True
     assert len(prompt_artifact["sha256"]) == 64
     assert gate_artifact["exists"] is True
+    assert unified_artifact["path"] == result["outputs"]["unified_index_json"]
+    assert unified_artifact["exists"] is True
+    assert unified_artifact["default_model_input"] is False
+    assert unified_artifact["estimated_tokens"] == result["model_handoff"]["unified_context_estimated_tokens"]
     assert context_artifact["path"] == context_path.as_posix()
     assert context_artifact["estimated_tokens"] == result["model_handoff"]["machine_context_estimated_tokens"]
     economics = result["model_handoff"]["token_economics"]
@@ -1071,6 +1099,8 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert economics["default_model_input"] == "model_prompt_source"
     assert economics["model_prompt_estimated_tokens"] == result["model_handoff"]["model_prompt_estimated_tokens"]
     assert economics["machine_context_estimated_tokens"] == result["model_handoff"]["machine_context_estimated_tokens"]
+    assert economics["unified_context_estimated_tokens"] == result["model_handoff"]["unified_context_estimated_tokens"]
+    assert economics["read_first_support_estimated_tokens"] >= result["model_handoff"]["unified_context_estimated_tokens"]
     assert 0 < economics["model_prompt_to_machine_context_ratio"] < 1
     assert economics["estimated_token_savings"] > 0
     assert economics["estimated_token_savings_percent"] > 50
@@ -1139,10 +1169,12 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert failed["decision"]["stop_reasons"][0]["id"] == "agent_context_gate_failed"
     assert failed["model_handoff"]["model_prompt_source"] == ""
     assert failed["model_handoff"]["machine_context_source"] == failed["outputs"]["agent_context_json"]
+    assert failed["model_handoff"]["unified_context_source"] == failed["outputs"]["unified_index_json"]
     assert failed["model_handoff"]["token_economics"]["status"] == "not_applicable"
     assert failed["model_handoff"]["token_economics"]["default_model_input"] == ""
     assert failed["model_handoff"]["token_economics"]["model_prompt_estimated_tokens"] == 0
     assert failed["model_handoff"]["token_economics"]["estimated_token_savings"] == 0
+    assert Path(failed["outputs"]["unified_index_json"]).exists()
     assert failed["agent_handoff_verification_summary"]["status"] == "pass_agent_handoff_verification"
     assert validate_artifact_contract(failed)["ok"] is True
     blocked_verified = verify_agent_handoff(failed, handoff_path=Path(failed["outputs"]["agent_handoff_json"]))

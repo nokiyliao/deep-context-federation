@@ -1,6 +1,7 @@
 """Deep Context Federation public API."""
 
 from deep_context_federation.builder import build_federation
+from deep_context_federation.compose import compose_manifests
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
@@ -14,6 +15,7 @@ from deep_context_federation.verifier import verify_federation
 
 __all__ = [
     "build_federation",
+    "compose_manifests",
     "diff_federations",
     "doctor_federation",
     "query_federation",
@@ -26,4 +28,4 @@ __all__ = [
     "verify_federation",
 ]
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"

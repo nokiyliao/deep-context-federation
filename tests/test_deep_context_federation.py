@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.builder import build_federation, codebase_memory_source
 from deep_context_federation.cache import DEFAULT_CACHE_NAME
+from deep_context_federation.compose import compose_manifests
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
@@ -275,6 +276,8 @@ def test_repo_scan_bootstraps_buildable_federation(tmp_path: Path) -> None:
     assert result["summary"]["file_count"] == 6
     assert result["summary"]["symbol_count"] >= 4
     assert result["summary"]["dependency_edge_count"] >= 2
+    assert result["summary"]["duration_seconds"] >= 0
+    assert result["summary"]["files_per_second"] >= 0
     assert "output" in result["summary"]["skipped_dirs"]
 
     manifest_path = Path(result["outputs"]["manifest"])
@@ -315,3 +318,85 @@ def test_repo_scan_bootstraps_buildable_federation(tmp_path: Path) -> None:
     query = query_federation(payload, preset="code-to-authority", limit=20)
     values = {row["value"] for row in query["rows"]}
     assert "src/pkg/mod.py" in values
+
+
+def test_compose_manifests_rebases_and_renames_conflicting_sources(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    scan_dir = repo / ".dcf-scan"
+    curated_dir = repo / "curated"
+    composed_dir = repo / ".dcf-composed"
+    curated_dir.mkdir(parents=True)
+    (repo / "src").mkdir(parents=True)
+    (repo / "src/main.py").write_text("def main():\n    return 1\n", encoding="utf-8")
+    (curated_dir / "evidence.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "curated_evidence_v1",
+                "authority_effect": "none",
+                "no_apply": True,
+                "summary": {"status": "pass"},
+                "claims": [
+                    {
+                        "claim_id": "curated_claim",
+                        "label": "Curated evidence survives manifest composition.",
+                        "supporting_artifacts": ["evidence.json"],
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    curated_manifest = curated_dir / "deep_context_federation.json"
+    curated_manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "deep_context_federation_manifest_v1",
+                "authority_boundary": {"authority_effect": "none", "no_apply": True},
+                "sources": [
+                    {
+                        "source_id": "repo_file_inventory",
+                        "role": "curated_evidence",
+                        "required": True,
+                        "path": "evidence.json",
+                        "verifier": "unit-test",
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    scan = scan_repository(root=repo, output_dir=scan_dir, write=True, max_files=100)
+    result = compose_manifests(
+        [Path(scan["outputs"]["manifest"]), curated_manifest],
+        output_path=composed_dir / "combined.json",
+        write=True,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_manifest_compose_v1"
+    assert result["ok"] is True
+    assert result["summary"]["source_count"] == 5
+    assert result["summary"]["warning_count"] == 1
+    assert result["conflicts"][0]["conflict_type"] == "source_id_renamed"
+    assert (composed_dir / "combined.json").exists()
+
+    composed = json.loads((composed_dir / "combined.json").read_text(encoding="utf-8"))
+    source_ids = {row["source_id"] for row in composed["sources"]}
+    assert "repo_file_inventory" in source_ids
+    assert any(source_id.startswith("repo_file_inventory__from_deep_context_federation") for source_id in source_ids)
+    assert all(not Path(row["path"]).is_absolute() for row in composed["sources"])
+
+    payload = build_federation(
+        manifest_path=composed_dir / "combined.json",
+        root=repo,
+        output_dir=composed_dir,
+        write=True,
+    )
+    assert payload["ok"] is True
+    assert payload["summary"]["source_count"] == 6
+    assert payload["summary"]["error_count"] == 0
+
+    query = query_federation(payload, preset="claim-lineage", limit=20)
+    assert any(row.get("value") == "curated_claim" for row in query["rows"])

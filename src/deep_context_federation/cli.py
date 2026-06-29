@@ -9,6 +9,8 @@ from typing import Sequence
 
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.builder import DEFAULT_JSON_NAME, build_federation, read_json
+from deep_context_federation.compose import compose_manifests
+from deep_context_federation.compose import markdown_compose
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.diff import markdown_diff
 from deep_context_federation.doctor import doctor_federation
@@ -57,6 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
+    compose = sub.add_parser("compose-manifest", help="Compose multiple federation manifests into one manifest.")
+    compose.add_argument("--manifest", type=Path, action="append", required=True)
+    compose.add_argument("--output", type=Path, default=Path(".dcf") / "deep_context_federation.composed.json")
+    compose.add_argument("--write", action="store_true")
+    compose.add_argument("--format", choices=["json", "markdown"], default="json")
     verify = sub.add_parser("verify", help="Verify a federation artifact.")
     verify.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     verify.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
@@ -107,6 +114,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         else:
             print(f"{result['status']} errors={result['error_count']} sources={result['source_count']}")
+        return 0 if result["ok"] else 2
+    if args.command == "compose-manifest":
+        result = compose_manifests(args.manifest, output_path=args.output, write=args.write)
+        if args.format == "markdown":
+            print(markdown_compose(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
     if args.command == "build":
         payload = build_federation(

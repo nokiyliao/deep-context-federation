@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import os
 import re
+import time
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -638,6 +639,7 @@ def scan_repository(
     """
 
     root = root.expanduser().resolve()
+    started = time.perf_counter()
     resolved_output = output_dir.expanduser()
     if not resolved_output.is_absolute():
         resolved_output = root / resolved_output
@@ -690,6 +692,10 @@ def scan_repository(
         write_json(Path(output_paths["surfaces"]), surfaces)
         write_json(Path(output_paths["manifest"]), manifest)
 
+    duration_seconds = max(0.0, time.perf_counter() - started)
+    file_count = int(inventory["summary"]["file_count"])
+    symbol_count = int(symbols["summary"]["symbol_count"])
+    dependency_edge_count = int(dependency_graph["summary"]["edge_count"])
     return {
         "schema_version": SCAN_SCHEMA_VERSION,
         "ok": True,
@@ -702,11 +708,15 @@ def scan_repository(
         "write": bool(write),
         "git": git,
         "summary": {
-            "file_count": int(inventory["summary"]["file_count"]),
-            "symbol_count": int(symbols["summary"]["symbol_count"]),
-            "dependency_edge_count": int(dependency_graph["summary"]["edge_count"]),
+            "file_count": file_count,
+            "symbol_count": symbol_count,
+            "dependency_edge_count": dependency_edge_count,
             "surface_count": int(surfaces["summary"]["surface_count"]),
             "total_bytes": int(inventory["summary"]["total_bytes"]),
+            "duration_seconds": round(duration_seconds, 6),
+            "files_per_second": round(file_count / duration_seconds, 3) if duration_seconds else 0,
+            "symbols_per_second": round(symbol_count / duration_seconds, 3) if duration_seconds else 0,
+            "dependency_edges_per_second": round(dependency_edge_count / duration_seconds, 3) if duration_seconds else 0,
             "truncated": bool(walk_summary.get("truncated")),
             "skipped_dirs": walk_summary.get("skipped_dirs") or {},
             "by_surface": dict(sorted(by_surface.items())),
@@ -729,6 +739,7 @@ def markdown_scan(result: Mapping[str, Any]) -> str:
         f"- No apply: `{result.get('no_apply')}`",
         f"- Root: `{result.get('root')}`",
         f"- Files: `{summary.get('file_count')}` symbols=`{summary.get('symbol_count')}` dependencies=`{summary.get('dependency_edge_count')}` surfaces=`{summary.get('surface_count')}` truncated=`{summary.get('truncated')}`",
+        f"- Scan time: `{summary.get('duration_seconds')}`s files/sec=`{summary.get('files_per_second')}`",
         "",
         "## Outputs",
         "",

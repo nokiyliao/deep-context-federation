@@ -52,6 +52,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - manifest composition for merging self-scan output with curated evidence/context sources
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
+- JSON Schema registry and built-in artifact contract validation
 - machine-readable quality gate for CI and agent routing
 - entity/source ranking for prioritization
 - doctor-style diagnostics with recommended actions
@@ -79,6 +80,19 @@ Inspect the tool's machine-readable contract surface:
 python -m deep_context_federation.cli capabilities \
   --format json \
   --output .dcf/deep_context_federation_capabilities.json
+```
+
+Export the built-in JSON Schema registry and validate artifact shape before deeper gates:
+
+```bash
+python -m deep_context_federation.cli schema \
+  --format json \
+  --output .dcf/deep_context_federation_schema_registry.json
+
+python -m deep_context_federation.cli validate-artifact \
+  --input .dcf/deep_context_federation_bootstrap.json \
+  --artifact bootstrap \
+  --output .dcf/deep_context_federation_contract_validation.json
 ```
 
 Self-bootstrap a fresh repository into a verified federation:
@@ -266,6 +280,26 @@ dcf capabilities \
   --format json \
   --output .dcf/deep_context_federation_capabilities.json
 ```
+
+## Schema Registry And Contract Validation
+
+`dcf schema` emits built-in JSON Schema documents for DCF artifacts:
+
+```bash
+dcf schema --format json
+dcf schema --artifact federation --format json
+```
+
+`dcf validate-artifact` validates an artifact against the built-in top-level contract subset:
+
+```bash
+dcf validate-artifact \
+  --input .dcf/deep_context_federation_latest.json \
+  --artifact federation \
+  --format markdown
+```
+
+This is intentionally a contract-shape gate: it checks schema identity, required top-level fields, `authority_effect: none`, `no_apply: true`, and basic JSON types. Deeper project semantics still belong to `dcf verify`, `dcf doctor`, and `dcf quality-gate`.
 
 ## Quality Gate
 

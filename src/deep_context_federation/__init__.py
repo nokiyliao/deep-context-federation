@@ -15,6 +15,8 @@ from deep_context_federation.query import query_federation
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
 from deep_context_federation.scanner import scan_repository
+from deep_context_federation.schemas import build_schema_registry
+from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.version import __version__
@@ -23,6 +25,7 @@ __all__ = [
     "bootstrap_federation",
     "build_federation",
     "build_capabilities",
+    "build_schema_registry",
     "compose_manifests",
     "diff_federations",
     "doctor_federation",
@@ -35,6 +38,7 @@ __all__ = [
     "rank_sources",
     "scan_repository",
     "trace_federation",
+    "validate_artifact_contract",
     "validate_manifest",
     "verify_federation",
 ]

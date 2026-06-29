@@ -32,6 +32,13 @@ from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
 from deep_context_federation.scanner import markdown_scan
 from deep_context_federation.scanner import scan_repository
+from deep_context_federation.schemas import artifact_kinds
+from deep_context_federation.schemas import build_schema_registry
+from deep_context_federation.schemas import markdown_contract_validation
+from deep_context_federation.schemas import markdown_json_schema
+from deep_context_federation.schemas import markdown_schema_registry
+from deep_context_federation.schemas import schema_for_artifact
+from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import SQL_PRESETS
 from deep_context_federation.sqlite_query import markdown as sql_markdown
 from deep_context_federation.sqlite_query import query_sqlite
@@ -51,6 +58,15 @@ def build_parser() -> argparse.ArgumentParser:
     capabilities = sub.add_parser("capabilities", help="Describe DCF machine-readable contracts, commands, presets, and safety boundaries.")
     capabilities.add_argument("--output", type=Path)
     capabilities.add_argument("--format", choices=["json", "markdown"], default="json")
+    schema = sub.add_parser("schema", help="Emit the DCF JSON Schema registry or one artifact schema.")
+    schema.add_argument("--artifact", choices=artifact_kinds())
+    schema.add_argument("--output", type=Path)
+    schema.add_argument("--format", choices=["json", "markdown"], default="json")
+    validate_artifact = sub.add_parser("validate-artifact", help="Validate an artifact against DCF top-level JSON Schema contracts.")
+    validate_artifact.add_argument("--input", type=Path, required=True)
+    validate_artifact.add_argument("--artifact", choices=artifact_kinds())
+    validate_artifact.add_argument("--output", type=Path)
+    validate_artifact.add_argument("--format", choices=["json", "markdown"], default="json")
     build = sub.add_parser("build", help="Build a federation artifact from a manifest.")
     add_common_source_args(build)
     build.add_argument("--include-codebase-memory", action="store_true")
@@ -154,6 +170,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0
+    if args.command == "schema":
+        if args.artifact:
+            result = schema_for_artifact(args.artifact)
+            if args.output:
+                write_json(args.output, result)
+            if args.format == "markdown":
+                print(markdown_json_schema(result, artifact_kind=args.artifact))
+            else:
+                print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        else:
+            result = build_schema_registry()
+            if args.output:
+                result["outputs"] = {"schema_registry_json": args.output.expanduser().resolve().as_posix()}
+                write_json(args.output, result)
+            if args.format == "markdown":
+                print(markdown_schema_registry(result))
+            else:
+                print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "validate-artifact":
+        payload = read_required_json(args.input)
+        result = validate_artifact_contract(payload, artifact_kind=args.artifact)
+        if args.output:
+            result["outputs"] = {"contract_validation_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_contract_validation(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
     if args.command == "validate-manifest":
         manifest = read_json(args.manifest)
         result = validate_manifest(manifest, manifest_path=args.manifest)

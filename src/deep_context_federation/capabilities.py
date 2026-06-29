@@ -120,6 +120,24 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "authority_effect": "none",
             "no_apply": True,
         },
+        {
+            "artifact_kind": "schema_registry",
+            "schema_version": "deep_context_federation_schema_registry_v1",
+            "producer": "schema",
+            "consumer_commands": ["schema", "validate-artifact", "agent_router"],
+            "top_level_required": ["schema_version", "artifact_schemas", "summary"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "contract_validation",
+            "schema_version": "deep_context_federation_contract_validation_v1",
+            "producer": "validate-artifact",
+            "consumer_commands": ["ci", "agent_router"],
+            "top_level_required": ["schema_version", "ok", "status", "checks", "errors"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
     ]
 
 
@@ -159,6 +177,22 @@ def _commands() -> list[dict[str, Any]]:
             "intent": "Describe available machine-readable contracts, commands, presets, and safety boundaries.",
             "writes": ["optional --output JSON"],
             "output_schemas": [CAPABILITIES_SCHEMA_VERSION],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "schema",
+            "intent": "Emit the JSON Schema registry or one artifact schema.",
+            "writes": ["optional --output JSON"],
+            "output_schemas": ["deep_context_federation_schema_registry_v1", "json_schema"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "validate-artifact",
+            "intent": "Validate an artifact against the built-in top-level JSON Schema contract subset.",
+            "writes": ["optional --output JSON"],
+            "output_schemas": ["deep_context_federation_contract_validation_v1"],
             "authority_effect": "none",
             "no_apply": True,
         },

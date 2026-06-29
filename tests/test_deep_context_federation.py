@@ -25,6 +25,8 @@ from deep_context_federation.query import query_federation
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
 from deep_context_federation.scanner import scan_repository
+from deep_context_federation.schemas import build_schema_registry
+from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.verifier import verify_federation
 
@@ -54,7 +56,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.11.0"
+    assert payload["package"]["version"] == "0.12.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -62,6 +64,8 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "bootstrap",
         "build",
         "scan",
+        "schema",
+        "validate-artifact",
         "quality-gate",
         "query",
         "sql",
@@ -79,6 +83,31 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["quality_gate_policy"]["no_apply"] is True
     assert by_kind["federation"]["schema_version"] == "deep_context_federation_v1"
     assert payload["safety_boundaries"]["external_tool_install"] == "never"
+
+
+def test_schema_registry_and_contract_validation() -> None:
+    registry = build_schema_registry()
+
+    assert registry["schema_version"] == "deep_context_federation_schema_registry_v1"
+    assert registry["authority_effect"] == "none"
+    assert registry["no_apply"] is True
+    by_kind = {row["artifact_kind"]: row for row in registry["artifact_schemas"]}
+    assert by_kind["federation"]["schema_version"] == "deep_context_federation_v1"
+    assert by_kind["quality_gate_policy"]["schema_version"] == "deep_context_federation_quality_gate_policy_v1"
+    assert by_kind["contract_validation"]["schema_version"] == "deep_context_federation_contract_validation_v1"
+
+    policy = json.loads(EXAMPLE_QUALITY_GATE_POLICY.read_text(encoding="utf-8"))
+    valid = validate_artifact_contract(policy)
+    assert valid["schema_version"] == "deep_context_federation_contract_validation_v1"
+    assert valid["ok"] is True
+    assert valid["artifact_kind"] == "quality_gate_policy"
+
+    invalid = dict(policy)
+    invalid.pop("no_apply")
+    failed = validate_artifact_contract(invalid, artifact_kind="quality_gate_policy")
+    assert failed["ok"] is False
+    error_ids = {row["id"] for row in failed["errors"]}
+    assert "$.no_apply:required" in error_ids
 
 
 def test_build_verify_and_query_example(tmp_path: Path) -> None:

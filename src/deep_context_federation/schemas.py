@@ -11,6 +11,7 @@ from deep_context_federation.agent_context import AGENT_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
+from deep_context_federation.agent_discover import AGENT_DISCOVERY_SCHEMA_VERSION
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
@@ -810,6 +811,24 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "token_economics": object_type,
                 "checks": array_type,
                 "errors": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "agent_discovery": _schema(
+            AGENT_DISCOVERY_SCHEMA_VERSION,
+            "Deep Context Federation agent discovery",
+            ["schema_version", "ok", "status", "authority_effect", "no_apply", "root", "ready_for_model_input", "discovered", "recommended_next_command", "safety_boundaries"],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["ready_model_input", "blocked_model_input", "blocked_handoff_unreadable", "manifest_available", "federation_available", "not_configured"]},
+                **_boundary_props(),
+                "root": {"type": "string"},
+                "ready_for_model_input": {"type": "boolean"},
+                "selected_handoff": {"type": "string"},
+                "model_input_summary": object_type,
+                "discovered": object_type,
+                "recommended_next_command": {"type": "string"},
+                "diagnostics": array_type,
                 "safety_boundaries": object_type,
             },
         ),

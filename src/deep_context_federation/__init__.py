@@ -6,6 +6,7 @@ from deep_context_federation.agent_context_gate import evaluate_agent_context_ga
 from deep_context_federation.agent_context_gate import load_agent_context_gate_policy
 from deep_context_federation.agent_context_gate import normalize_agent_context_gate_policy
 from deep_context_federation.agent_ci import build_agent_ci
+from deep_context_federation.agent_discover import discover_agent_context
 from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
@@ -52,6 +53,7 @@ __all__ = [
     "build_agent_ci",
     "build_agent_handoff",
     "build_agent_model_input",
+    "discover_agent_context",
     "verify_agent_handoff",
     "build_workflow_plan",
     "build_workflow_run",

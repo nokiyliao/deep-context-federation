@@ -231,6 +231,15 @@ python -m deep_context_federation.cli agent-handoff \
 
 `agent-handoff` writes the underlying `agent-ci`, `agent-context`, `agent-context-gate`, and `agent-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `agent-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff also includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
 
+Global wrappers can discover the current repo state before deciding what to run:
+
+```bash
+python -m deep_context_federation.cli agent-discover \
+  --root .
+```
+
+`agent-discover` is read-only. It reports whether a repo already has a verified handoff ready for `agent-model-input`, only has a manifest, only has federation artifacts, or is not configured yet. The output includes `recommended_next_command` so Codex, Claude, AGY, GitHub runners, or shell wrappers can route without embedding DCF-specific logic.
+
 `agent-handoff` writes `deep_context_federation_agent_handoff_verification.json` automatically. Re-run verification explicitly when a handoff or generated prompt may have moved, been copied, or been modified:
 
 ```bash
@@ -565,6 +574,8 @@ For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEX
 Run `dcf verify-handoff --input <handoff.json>` before giving a copied or externally transferred `model_prompt_source` to a model. The verifier is read-only and emits `deep_context_federation_agent_handoff_verification_v1`; it checks safety boundaries, pass/fail semantics, artifact hashes, prompt/context token estimates, and `token_economics` consistency. Fresh `dcf agent-handoff` runs already include the same verification summary and verification artifact.
 
 For global wrappers, prefer `dcf agent-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic.
+
+Use `dcf agent-discover --root <repo>` as the first global step. If it returns `ready_model_input`, execute its `recommended_next_command`; if it returns `manifest_available`, run an `agent-handoff` for the current task; if it returns `not_configured`, bootstrap or scan the repo first.
 
 ## Capabilities Manifest
 

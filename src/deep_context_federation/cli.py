@@ -16,6 +16,8 @@ from deep_context_federation.agent_context_gate import load_agent_context_gate_p
 from deep_context_federation.agent_context_gate import markdown_agent_context_gate
 from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.agent_ci import markdown_agent_ci
+from deep_context_federation.agent_discover import discover_agent_context
+from deep_context_federation.agent_discover import markdown_agent_discovery
 from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff import markdown_agent_handoff
 from deep_context_federation.agent_handoff_verify import markdown_agent_handoff_verification
@@ -298,6 +300,11 @@ def build_parser() -> argparse.ArgumentParser:
     agent_model_input.add_argument("--output", type=Path)
     agent_model_input.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
     agent_model_input.add_argument("--format", choices=["json", "markdown", "prompt"], default="json")
+    agent_discover = sub.add_parser("agent-discover", help="Discover repo-local DCF handoff readiness for global wrappers.")
+    agent_discover.add_argument("--root", type=Path, default=Path.cwd())
+    agent_discover.add_argument("--handoff", type=Path)
+    agent_discover.add_argument("--output", type=Path)
+    agent_discover.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -833,6 +840,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
+    if args.command == "agent-discover":
+        result = discover_agent_context(root=args.root, handoff_path=args.handoff)
+        if args.output:
+            result["outputs"] = {"agent_discovery_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_agent_discovery(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
     if args.command == "scan":
         if args.build and not args.write:
             print("scan --build requires --write so the generated manifest exists", flush=True)

@@ -11,6 +11,7 @@ from deep_context_federation.agent_context import AGENT_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
+from deep_context_federation.agent_discover import AGENT_DISCOVERY_SCHEMA_VERSION
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
@@ -432,6 +433,26 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "agent_discovery",
+            "schema_version": AGENT_DISCOVERY_SCHEMA_VERSION,
+            "producer": "agent-discover",
+            "consumer_commands": ["agent_router", "global_wrapper", "ci", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "root",
+                "ready_for_model_input",
+                "discovered",
+                "recommended_next_command",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "schema_registry",
             "schema_version": "deep_context_federation_schema_registry_v1",
             "producer": "schema",
@@ -724,6 +745,16 @@ def _commands() -> list[dict[str, Any]]:
             "output_schemas": [AGENT_MODEL_INPUT_SCHEMA_VERSION],
             "input_schemas": [AGENT_HANDOFF_SCHEMA_VERSION],
             "options": ["--input", "--output", "--no-prompt", "--format"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "agent-discover",
+            "intent": "Discover repo-local DCF handoff readiness and recommend the next fail-closed agent command for global wrappers.",
+            "writes": ["optional discovery JSON when --output is set"],
+            "output_schemas": [AGENT_DISCOVERY_SCHEMA_VERSION],
+            "input_schemas": [],
+            "options": ["--root", "--handoff", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },

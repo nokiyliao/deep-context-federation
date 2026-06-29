@@ -14,6 +14,7 @@ from deep_context_federation.agent_context_gate import evaluate_agent_context_ga
 from deep_context_federation.agent_context_gate import load_agent_context_gate_policy
 from deep_context_federation.agent_context_gate import normalize_agent_context_gate_policy
 from deep_context_federation.agent_ci import build_agent_ci
+from deep_context_federation.agent_discover import discover_agent_context
 from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
@@ -111,7 +112,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.34.0"
+    assert payload["package"]["version"] == "0.35.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -124,6 +125,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "agent-ci",
         "agent-context",
         "agent-context-gate",
+        "agent-discover",
         "agent-handoff",
         "agent-model-input",
         "verify-handoff",
@@ -164,6 +166,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
+    assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
     assert payload["safety_boundaries"]["external_tool_install"] == "never"
@@ -197,6 +200,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
+    assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
 
@@ -693,6 +697,15 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert Path(result["outputs"]["agent_ci_json"]).exists()
     assert Path(result["outputs"]["agent_handoff_verification_json"]).exists()
     assert Path(result["outputs"]["agent_handoff_verification_markdown"]).exists()
+    discovery = discover_agent_context(root=tmp_path, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
+    assert discovery["schema_version"] == "deep_context_federation_agent_discovery_v1"
+    assert discovery["ok"] is True
+    assert discovery["status"] == "ready_model_input"
+    assert discovery["ready_for_model_input"] is True
+    assert discovery["selected_handoff"] == Path(result["outputs"]["agent_handoff_json"]).as_posix()
+    assert "agent-model-input" in discovery["recommended_next_command"]
+    assert discovery["model_input_summary"]["status"] == "pass_agent_model_input"
+    assert validate_artifact_contract(discovery)["ok"] is True
     assert context_path.exists()
     assert prompt_path.exists()
     assert prompt_path.read_text(encoding="utf-8").startswith("# Deep Context Federation Agent Context")
@@ -796,6 +809,31 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert blocked_model_input["prompt_text"] == ""
     assert {row["id"] for row in blocked_model_input["errors"]} >= {"handoff_ok", "model_prompt_source_present"}
     assert validate_artifact_contract(blocked_model_input)["ok"] is True
+
+
+def test_agent_discovery_reports_repo_readiness_states(tmp_path: Path) -> None:
+    empty = discover_agent_context(root=tmp_path)
+    assert empty["status"] == "not_configured"
+    assert empty["ready_for_model_input"] is False
+    assert "dcf scan" in empty["recommended_next_command"]
+    assert validate_artifact_contract(empty)["ok"] is True
+
+    missing_handoff = discover_agent_context(root=tmp_path, handoff_path=tmp_path / "missing_handoff.json")
+    assert missing_handoff["status"] == "blocked_handoff_unreadable"
+    assert missing_handoff["ready_for_model_input"] is False
+    assert "verify-handoff" in missing_handoff["recommended_next_command"]
+    assert validate_artifact_contract(missing_handoff)["ok"] is True
+
+    manifest_root = tmp_path / "manifest_only"
+    manifest_root.mkdir()
+    manifest_path = manifest_root / "deep_context_federation.json"
+    manifest_path.write_text(EXAMPLE_MANIFEST.read_text(encoding="utf-8"), encoding="utf-8")
+    manifest_only = discover_agent_context(root=manifest_root)
+    assert manifest_only["status"] == "manifest_available"
+    assert manifest_only["ready_for_model_input"] is False
+    assert manifest_only["discovered"]["manifests"] == [manifest_path.as_posix()]
+    assert "agent-handoff" in manifest_only["recommended_next_command"]
+    assert validate_artifact_contract(manifest_only)["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

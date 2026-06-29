@@ -99,7 +99,7 @@ def discover_agent_context(*, root: Path, handoff_path: Path | None = None) -> d
     elif manifests:
         recommended_next_command = f"dcf prepare-model-handoff --root {_quote(root.as_posix())} --manifest {_quote(manifests[0])} --task '<task>'"
     else:
-        recommended_next_command = f"dcf scan --root {_quote(root.as_posix())} --output-dir .dcf --write --build"
+        recommended_next_command = f"dcf map-repo --root {_quote(root.as_posix())} --output-dir .dcf --write --build"
 
     return {
         "schema_version": AGENT_DISCOVERY_SCHEMA_VERSION,

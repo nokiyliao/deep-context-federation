@@ -190,7 +190,7 @@ def build_workflow_plan(
             step_id="02_validate_intake_contract",
             purpose="Fail early if the intake packet does not match the machine-readable contract.",
             command=(
-                "dcf validate-artifact --input {input} --artifact agent_intake "
+                "dcf check-artifact --input {input} --artifact agent_intake "
                 "--output {output}"
             ).format(
                 input=_quote(agent_intake_json),
@@ -234,7 +234,7 @@ def build_workflow_plan(
                     command=" ".join(
                         [
                             "dcf",
-                            "review-gate",
+                            "gate-target-review",
                             "--input",
                             _quote(target_review_json),
                             *(["--policy", _quote(target_review_policy.expanduser())] if target_review_policy else []),
@@ -253,7 +253,7 @@ def build_workflow_plan(
                     step_id="05_inspect_priority_target",
                     purpose="Resolve only the highest priority target from the review result, not the whole federation.",
                     command=(
-                        "dcf resolve --input {input} --target '<target_from_priority_order>' "
+                        "dcf resolve-evidence --input {input} --target '<target_from_priority_order>' "
                         "--token-budget {budget} --output {output}"
                     ).format(
                         input=_quote(federation_json),
@@ -274,7 +274,7 @@ def build_workflow_plan(
             _step(
                 step_id="03_task_brief_only",
                 purpose="Use the generated task brief and bounded context pack because no target portfolio was supplied.",
-                command="dcf brief --input {input} --task {task} --token-budget {budget} --output {output}".format(
+                command="dcf brief-task --input {input} --task {task} --token-budget {budget} --output {output}".format(
                     input=_quote(federation_json),
                     task=_quote(task),
                     budget=token_budget,

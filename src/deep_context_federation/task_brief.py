@@ -113,12 +113,12 @@ def _recommended_commands(
     commands: list[dict[str, Any]] = [
         {
             "purpose": "refresh_health_before_action",
-            "command": f"dcf doctor --input {input_path} --format markdown",
+            "command": f"dcf diagnose-context --input {input_path} --format markdown",
         },
         {
             "purpose": "generate_bounded_model_context",
             "command": (
-                "dcf pack --input {input_path} --task {task_json} --token-budget {budget} "
+                "dcf pack-task-context --input {input_path} --task {task_json} --token-budget {budget} "
                 "--output .dcf/deep_context_federation_context_pack.json"
             ).format(input_path=input_path, task_json=json.dumps(task, ensure_ascii=True), budget=token_budget),
         },
@@ -127,7 +127,7 @@ def _recommended_commands(
         commands.append(
             {
                 "purpose": f"inspect_{preset.get('preset')}",
-                "command": "dcf query --input {input_path} --preset {preset} --limit {limit} --format markdown".format(
+                "command": "dcf query-context --input {input_path} --preset {preset} --limit {limit} --format markdown".format(
                     input_path=input_path,
                     preset=preset.get("preset"),
                     limit=query_limit,
@@ -159,17 +159,17 @@ def _query_plan(
     steps: list[dict[str, Any]] = [
         {
             "step_id": "00_health_gate",
-            "command": "doctor",
-            "argv": ["doctor", "--input", input_path, "--format", "json"],
+            "command": "diagnose-context",
+            "argv": ["diagnose-context", "--input", input_path, "--format", "json"],
             "read_role": "gate_first",
             "artifact_role": "health_gate",
             "stop_on_failure": True,
         },
         {
             "step_id": "01_pack_bounded_context",
-            "command": "pack",
+            "command": "pack-task-context",
             "argv": [
-                "pack",
+                "pack-task-context",
                 "--input",
                 input_path,
                 "--task",
@@ -192,8 +192,8 @@ def _query_plan(
         steps.append(
             {
                 "step_id": f"1{index}_query_json_{preset_name.replace('-', '_')}",
-                "command": "query",
-                "argv": ["query", "--input", input_path, "--preset", preset_name, "--limit", str(query_limit), "--format", "json"],
+                "command": "query-context",
+                "argv": ["query-context", "--input", input_path, "--preset", preset_name, "--limit", str(query_limit), "--format", "json"],
                 "read_role": "expand_if_needed",
                 "artifact_role": "json_artifact_query",
                 "preset": preset_name,
@@ -203,8 +203,8 @@ def _query_plan(
         steps.append(
             {
                 "step_id": f"2{index}_query_read_model_{preset_name.replace('-', '_')}",
-                "command": "query-read-model",
-                "argv": ["query-read-model", "--read-model", read_model_path, "--preset", preset_name, "--limit", str(query_limit), "--format", "json"],
+                "command": "query-context-store",
+                "argv": ["query-context-store", "--read-model", read_model_path, "--preset", preset_name, "--limit", str(query_limit), "--format", "json"],
                 "read_role": "expand_if_read_model_available",
                 "artifact_role": "read_model_query",
                 "preset": preset_name,

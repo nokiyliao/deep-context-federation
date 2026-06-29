@@ -77,7 +77,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "manifest",
             "schema_version": MANIFEST_SCHEMA,
             "producer": "human_or_tool",
-            "consumer_commands": ["build", "validate-manifest", "compose-manifest", "bootstrap"],
+            "consumer_commands": ["assemble-context", "validate-inputs", "combine-inputs", "bootstrap-context"],
             "top_level_required": ["schema_version", "authority_boundary", "sources"],
             "authority_effect": "none",
             "no_apply": True,
@@ -85,9 +85,21 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "federation",
             "schema_version": SCHEMA_VERSION,
-            "producer": "build",
+            "producer": "assemble-context",
             "default_outputs": [DEFAULT_JSON_NAME, DEFAULT_MD_NAME, DEFAULT_SQLITE_NAME],
-            "consumer_commands": ["verify", "query", "trace", "resolve", "adjudicate", "review-targets", "doctor", "rank", "diff", "quality-gate", "brief"],
+            "consumer_commands": [
+                "verify-context",
+                "query-context",
+                "trace-context",
+                "resolve-evidence",
+                "adjudicate-evidence",
+                "review-targets",
+                "diagnose-context",
+                "rank-context",
+                "diff-context",
+                "gate-quality",
+                "brief-task",
+            ],
             "top_level_required": ["schema_version", "sources", "entities", "edges", "conflicts", "query_presets"],
             "authority_effect": "none",
             "no_apply": True,
@@ -95,8 +107,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "repo_scan",
             "schema_version": SCAN_SCHEMA_VERSION,
-            "producer": "scan",
-            "consumer_commands": ["bootstrap"],
+            "producer": "map-repo",
+            "consumer_commands": ["bootstrap-context"],
             "top_level_required": ["schema_version", "outputs", "summary"],
             "authority_effect": "none",
             "no_apply": True,
@@ -104,8 +116,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "bootstrap",
             "schema_version": BOOTSTRAP_SCHEMA_VERSION,
-            "producer": "bootstrap",
-            "consumer_commands": ["quality-gate", "intake"],
+            "producer": "bootstrap-context",
+            "consumer_commands": ["gate-quality", "prepare-task-intake"],
             "top_level_required": ["schema_version", "scan", "build", "verify", "doctor", "outputs"],
             "authority_effect": "none",
             "no_apply": True,
@@ -114,7 +126,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "quality_gate_policy",
             "schema_version": QUALITY_GATE_POLICY_SCHEMA_VERSION,
             "producer": "human_or_ci",
-            "consumer_commands": ["quality-gate"],
+            "consumer_commands": ["gate-quality"],
             "top_level_required": ["schema_version", "authority_effect", "no_apply"],
             "authority_effect": "none",
             "no_apply": True,
@@ -122,7 +134,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "quality_gate",
             "schema_version": QUALITY_GATE_SCHEMA_VERSION,
-            "producer": "quality-gate",
+            "producer": "gate-quality",
             "consumer_commands": ["ci", "agent_router"],
             "top_level_required": ["schema_version", "ok", "status", "policy", "checks", "errors", "summary"],
             "authority_effect": "none",
@@ -131,8 +143,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "manifest_compose",
             "schema_version": COMPOSE_SCHEMA_VERSION,
-            "producer": "compose-manifest",
-            "consumer_commands": ["build", "bootstrap"],
+            "producer": "combine-inputs",
+            "consumer_commands": ["assemble-context", "bootstrap-context"],
             "top_level_required": ["schema_version", "ok", "status", "outputs", "summary"],
             "authority_effect": "none",
             "no_apply": True,
@@ -140,8 +152,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "verify",
             "schema_version": VERIFY_SCHEMA_VERSION,
-            "producer": "verify",
-            "consumer_commands": ["bootstrap", "ci"],
+            "producer": "verify-context",
+            "consumer_commands": ["bootstrap-context", "ci"],
             "top_level_required": ["schema_version", "ok", "status", "checks", "errors"],
             "authority_effect": "none",
             "no_apply": True,
@@ -149,7 +161,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "query",
             "schema_version": QUERY_SCHEMA_VERSION,
-            "producer": "query",
+            "producer": "query-context",
             "consumer_commands": ["agent_router", "operator_context"],
             "top_level_required": ["schema_version", "preset", "status", "rows"],
             "authority_effect": "none",
@@ -158,8 +170,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "resolve",
             "schema_version": RESOLVE_SCHEMA_VERSION,
-            "producer": "resolve",
-            "consumer_commands": ["adjudicate", "agent_router", "agent_prompt", "operator_context"],
+            "producer": "resolve-evidence",
+            "consumer_commands": ["adjudicate-evidence", "agent_router", "agent_prompt", "operator_context"],
             "top_level_required": ["schema_version", "status", "target", "summary", "matched_entities", "related_sources"],
             "authority_effect": "none",
             "no_apply": True,
@@ -167,7 +179,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "adjudication",
             "schema_version": ADJUDICATE_SCHEMA_VERSION,
-            "producer": "adjudicate",
+            "producer": "adjudicate-evidence",
             "consumer_commands": ["review-targets", "agent_router", "agent_prompt", "operator_context"],
             "top_level_required": ["schema_version", "status", "target", "verdict", "confidence_score", "support", "recommended_use"],
             "authority_effect": "none",
@@ -177,7 +189,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "target_review",
             "schema_version": TARGET_REVIEW_SCHEMA_VERSION,
             "producer": "review-targets",
-            "consumer_commands": ["review-gate", "agent_router", "ci", "operator_context"],
+            "consumer_commands": ["gate-target-review", "agent_router", "ci", "operator_context"],
             "top_level_required": ["schema_version", "status", "target_count", "summary", "rows", "priority_order"],
             "authority_effect": "none",
             "no_apply": True,
@@ -186,7 +198,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "target_review_gate_policy",
             "schema_version": TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION,
             "producer": "human_or_ci",
-            "consumer_commands": ["review-gate"],
+            "consumer_commands": ["gate-target-review"],
             "top_level_required": ["schema_version", "authority_effect", "no_apply"],
             "authority_effect": "none",
             "no_apply": True,
@@ -194,7 +206,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "target_review_gate",
             "schema_version": TARGET_REVIEW_GATE_SCHEMA_VERSION,
-            "producer": "review-gate",
+            "producer": "gate-target-review",
             "consumer_commands": ["agent_router", "ci"],
             "top_level_required": ["schema_version", "ok", "status", "policy", "checks", "errors", "summary"],
             "authority_effect": "none",
@@ -203,8 +215,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "context_pack",
             "schema_version": CONTEXT_PACK_SCHEMA_VERSION,
-            "producer": "pack",
-            "consumer_commands": ["brief", "agent_prompt", "model_context_router"],
+            "producer": "pack-task-context",
+            "consumer_commands": ["brief-task", "agent_prompt", "model_context_router"],
             "top_level_required": ["schema_version", "token_budget", "estimated_tokens", "prompt_text", "coverage", "rows", "summary"],
             "authority_effect": "none",
             "no_apply": True,
@@ -212,7 +224,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "task_brief",
             "schema_version": TASK_BRIEF_SCHEMA_VERSION,
-            "producer": "brief",
+            "producer": "brief-task",
             "consumer_commands": ["agent_router", "agent_prompt", "operator_context"],
             "top_level_required": [
                 "schema_version",
@@ -230,8 +242,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_intake",
             "schema_version": AGENT_INTAKE_SCHEMA_VERSION,
-            "producer": "intake",
-            "consumer_commands": ["workflow-plan", "agent_router", "ci", "operator_context"],
+            "producer": "prepare-task-intake",
+            "consumer_commands": ["plan-workflow", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -248,8 +260,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "workflow_plan",
             "schema_version": WORKFLOW_PLAN_SCHEMA_VERSION,
-            "producer": "workflow-plan",
-            "consumer_commands": ["workflow-run", "agent_router", "ci", "operator_context"],
+            "producer": "plan-workflow",
+            "consumer_commands": ["run-workflow", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "status",
@@ -265,8 +277,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "workflow_run",
             "schema_version": WORKFLOW_RUN_SCHEMA_VERSION,
-            "producer": "workflow-run",
-            "consumer_commands": ["efficiency-report", "agent_router", "ci", "operator_context"],
+            "producer": "run-workflow",
+            "consumer_commands": ["measure-token-efficiency", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -283,8 +295,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "efficiency_report",
             "schema_version": EFFICIENCY_REPORT_SCHEMA_VERSION,
-            "producer": "efficiency-report",
-            "consumer_commands": ["efficiency-gate", "agent_router", "ci", "operator_context"],
+            "producer": "measure-token-efficiency",
+            "consumer_commands": ["gate-token-efficiency", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -301,7 +313,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "efficiency_gate_policy",
             "schema_version": EFFICIENCY_GATE_POLICY_SCHEMA_VERSION,
             "producer": "human_or_ci",
-            "consumer_commands": ["efficiency-gate"],
+            "consumer_commands": ["gate-token-efficiency"],
             "top_level_required": ["schema_version", "authority_effect", "no_apply"],
             "authority_effect": "none",
             "no_apply": True,
@@ -309,7 +321,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "efficiency_gate",
             "schema_version": EFFICIENCY_GATE_SCHEMA_VERSION,
-            "producer": "efficiency-gate",
+            "producer": "gate-token-efficiency",
             "consumer_commands": ["agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
@@ -402,6 +414,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "agent_ci_summary",
                 "agent_context_summary",
                 "agent_context_gate_summary",
+                "unified_plane_audit_summary",
+                "context_advantage_summary",
                 "agent_handoff_verification_summary",
                 "input_fingerprint_summary",
                 "model_handoff",
@@ -526,7 +540,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "native_integration_plan",
             "schema_version": NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION,
             "producer": "plan-capability-ownership",
-            "consumer_commands": ["capabilities", "agent_router", "ci", "operator_context"],
+            "consumer_commands": ["describe-abilities", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -545,7 +559,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "memory_ledger",
             "schema_version": MEMORY_LEDGER_SCHEMA_VERSION,
-            "producer": "build-reuse-index",
+            "producer": "reuse-context",
             "consumer_commands": ["prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
             "top_level_required": [
                 "schema_version",
@@ -564,8 +578,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "unified_index",
             "schema_version": UNIFIED_INDEX_SCHEMA_VERSION,
-            "producer": "build-context-index",
-            "consumer_commands": ["pack-working-set", "prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
+            "producer": "unify-context",
+            "consumer_commands": ["select-context", "prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -583,7 +597,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "unified_plane_audit",
             "schema_version": UNIFIED_PLANE_AUDIT_SCHEMA_VERSION,
-            "producer": "audit-unified-plane",
+            "producer": "prove-unified-context",
             "consumer_commands": ["ci", "agent_router", "operator_context"],
             "top_level_required": ["schema_version", "ok", "status", "summary", "checks", "errors", "warnings", "safety_boundaries"],
             "authority_effect": "none",
@@ -601,7 +615,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "unified_working_set",
             "schema_version": UNIFIED_WORKING_SET_SCHEMA_VERSION,
-            "producer": "pack-working-set",
+            "producer": "select-context",
             "consumer_commands": ["prepare-model-handoff", "prepare-model-input", "route-model-readiness", "ci", "operator_context", "model_runner"],
             "top_level_required": [
                 "schema_version",
@@ -742,8 +756,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "schema_registry",
             "schema_version": "deep_context_federation_schema_registry_v1",
-            "producer": "schema",
-            "consumer_commands": ["schema", "validate-artifact", "agent_router"],
+            "producer": "describe-contracts",
+            "consumer_commands": ["describe-contracts", "check-artifact", "agent_router"],
             "top_level_required": ["schema_version", "artifact_schemas", "summary"],
             "authority_effect": "none",
             "no_apply": True,
@@ -751,7 +765,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "contract_validation",
             "schema_version": "deep_context_federation_contract_validation_v1",
-            "producer": "validate-artifact",
+            "producer": "check-artifact",
             "consumer_commands": ["ci", "agent_router"],
             "top_level_required": ["schema_version", "ok", "status", "checks", "errors"],
             "authority_effect": "none",
@@ -766,25 +780,25 @@ def _generated_source_contracts() -> list[dict[str, Any]]:
             "source_id": "repo_file_inventory",
             "schema_version": FILE_INVENTORY_SCHEMA_VERSION,
             "role": "evidence_index",
-            "producer": "scan",
+            "producer": "map-repo",
         },
         {
             "source_id": "repo_code_symbols",
             "schema_version": SYMBOL_MAP_SCHEMA_VERSION,
             "role": "advisory_source_symbol_graph",
-            "producer": "scan",
+            "producer": "map-repo",
         },
         {
             "source_id": "repo_dependency_graph",
             "schema_version": DEPENDENCY_GRAPH_SCHEMA_VERSION,
             "role": "advisory_dependency_graph",
-            "producer": "scan",
+            "producer": "map-repo",
         },
         {
             "source_id": "repo_surface_map",
             "schema_version": SURFACE_MAP_SCHEMA_VERSION,
             "role": "project_surface",
-            "producer": "scan",
+            "producer": "map-repo",
         },
     ]
 
@@ -792,7 +806,7 @@ def _generated_source_contracts() -> list[dict[str, Any]]:
 def _commands() -> list[dict[str, Any]]:
     return [
         {
-            "command": "capabilities",
+            "command": "describe-abilities",
             "intent": "Describe available machine-readable contracts, commands, presets, and safety boundaries.",
             "writes": ["optional --output JSON"],
             "output_schemas": [CAPABILITIES_SCHEMA_VERSION],
@@ -800,7 +814,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "schema",
+            "command": "describe-contracts",
             "intent": "Emit the JSON Schema registry or one artifact schema.",
             "writes": ["optional --output JSON"],
             "output_schemas": ["deep_context_federation_schema_registry_v1", "json_schema"],
@@ -808,7 +822,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "validate-artifact",
+            "command": "check-artifact",
             "intent": "Validate an artifact against the built-in top-level JSON Schema contract subset.",
             "writes": ["optional --output JSON"],
             "output_schemas": ["deep_context_federation_contract_validation_v1"],
@@ -825,7 +839,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "build-reuse-index",
+            "command": "reuse-context",
             "intent": "Materialize generated DCF handoff, ready, onboard, workflow, and fingerprint artifacts into one reusable context index.",
             "writes": ["optional memory ledger JSON when --output is set"],
             "output_schemas": [MEMORY_LEDGER_SCHEMA_VERSION],
@@ -834,7 +848,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "build-context-index",
+            "command": "unify-context",
             "intent": "Collapse federation graph, reusable context, command, and capability artifacts into one DCF function-facet index without exposing source identities.",
             "writes": ["optional unified index JSON when --output is set"],
             "output_schemas": [UNIFIED_INDEX_SCHEMA_VERSION],
@@ -844,7 +858,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "audit-unified-plane",
+            "command": "prove-unified-context",
             "intent": "Audit whether DCF commands, ownership, context index, and working set are actually collapsed into one function-named read-only plane.",
             "writes": ["optional unified plane audit JSON when --output is set"],
             "output_schemas": [UNIFIED_PLANE_AUDIT_SCHEMA_VERSION],
@@ -854,7 +868,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "pack-working-set",
+            "command": "select-context",
             "intent": "Pack a compact task-scoped machine working set from the context index for default model read-first use.",
             "writes": ["optional selected context JSON when --output is set"],
             "output_schemas": [UNIFIED_WORKING_SET_SCHEMA_VERSION],
@@ -864,7 +878,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "scan",
+            "command": "map-repo",
             "intent": "Read-only repository scan into starter source artifacts and manifest.",
             "writes": ["output_dir generated artifacts only when --write is set"],
             "output_schemas": [SCAN_SCHEMA_VERSION, MANIFEST_SCHEMA],
@@ -872,16 +886,16 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "bootstrap",
-            "intent": "Run scan, optional compose, build, verify, and doctor as one local pipeline.",
+            "command": "bootstrap-context",
+            "intent": "Run map-repo, optional combine-inputs, assemble-context, verify-context, and diagnose-context as one local pipeline.",
             "writes": ["output_dir generated artifacts"],
             "output_schemas": [BOOTSTRAP_SCHEMA_VERSION, SCHEMA_VERSION, VERIFY_SCHEMA_VERSION],
             "authority_effect": "none",
             "no_apply": True,
         },
         {
-            "command": "intake",
-            "intent": "Run bootstrap, quality gate, and task brief as one agent intake packet.",
+            "command": "prepare-task-intake",
+            "intent": "Run bootstrap-context, gate-quality, and brief-task as one agent intake packet.",
             "writes": ["output_dir generated artifacts"],
             "output_schemas": [AGENT_INTAKE_SCHEMA_VERSION, BOOTSTRAP_SCHEMA_VERSION, QUALITY_GATE_SCHEMA_VERSION, TASK_BRIEF_SCHEMA_VERSION],
             "options": ["--task", "--policy", "--token-budget", "--query-limit", "--max-presets", "--max-rows", "--no-prompt"],
@@ -889,7 +903,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "workflow-plan",
+            "command": "plan-workflow",
             "intent": "Emit a read-only execution plan that sequences intake, validation, target review, gates, and bounded context reads.",
             "writes": ["optional workflow plan JSON when --output is set"],
             "output_schemas": [WORKFLOW_PLAN_SCHEMA_VERSION],
@@ -909,7 +923,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "workflow-run",
+            "command": "run-workflow",
             "intent": "Execute the DCF read-only workflow and emit one compact run capsule for agents.",
             "writes": ["output_dir generated artifacts", "optional workflow run JSON when --output is set"],
             "output_schemas": [WORKFLOW_RUN_SCHEMA_VERSION],
@@ -936,8 +950,8 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "efficiency-report",
-            "intent": "Measure workflow-run token savings against full-federation and generated-output baselines.",
+            "command": "measure-token-efficiency",
+            "intent": "Measure run-workflow token savings against full-federation and generated-output baselines.",
             "writes": ["optional efficiency report JSON when --output is set"],
             "output_schemas": [EFFICIENCY_REPORT_SCHEMA_VERSION],
             "input_schemas": [WORKFLOW_RUN_SCHEMA_VERSION],
@@ -946,7 +960,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "efficiency-gate",
+            "command": "gate-token-efficiency",
             "intent": "Evaluate an efficiency report against policy thresholds for agent or CI continuation.",
             "writes": ["optional efficiency gate JSON when --output is set"],
             "output_schemas": [EFFICIENCY_GATE_SCHEMA_VERSION],
@@ -977,7 +991,7 @@ def _commands() -> list[dict[str, Any]]:
                 "--min-read-first-savings-percent",
                 "--max-read-first-ratio",
                 "--allow-warn-unified-plane",
-                "--require-efficiency-gate",
+                "--require-gate-token-efficiency",
                 "--output",
                 "--format",
             ],
@@ -986,7 +1000,7 @@ def _commands() -> list[dict[str, Any]]:
         },
         {
             "command": "decide-continuation",
-            "intent": "Run workflow-run, efficiency-report, and efficiency-gate into one machine-readable continuation decision.",
+            "intent": "Run run-workflow, measure-token-efficiency, and gate-token-efficiency into one machine-readable continuation decision.",
             "writes": ["output_dir generated artifacts", "optional continuation decision JSON when --output is set"],
             "output_schemas": [AGENT_CI_SCHEMA_VERSION, WORKFLOW_RUN_SCHEMA_VERSION, EFFICIENCY_REPORT_SCHEMA_VERSION, EFFICIENCY_GATE_SCHEMA_VERSION],
             "input_schemas": [
@@ -1217,7 +1231,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "build",
+            "command": "assemble-context",
             "intent": "Build federation JSON, Markdown, SQLite, and cache from a manifest.",
             "writes": ["output_dir generated artifacts when --write is set"],
             "output_schemas": [SCHEMA_VERSION],
@@ -1225,7 +1239,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "validate-manifest",
+            "command": "validate-inputs",
             "intent": "Validate manifest shape before reading sources.",
             "writes": [],
             "output_schemas": ["deep_context_federation_manifest_verify_v1"],
@@ -1233,7 +1247,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "compose-manifest",
+            "command": "combine-inputs",
             "intent": "Merge multiple manifests into one buildable manifest.",
             "writes": ["optional composed manifest when --write is set"],
             "output_schemas": [COMPOSE_SCHEMA_VERSION, MANIFEST_VERIFY_INPUT_SCHEMA],
@@ -1241,7 +1255,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "verify",
+            "command": "verify-context",
             "intent": "Verify a federation artifact and boundary invariants.",
             "writes": [],
             "output_schemas": [VERIFY_SCHEMA_VERSION],
@@ -1249,7 +1263,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "quality-gate",
+            "command": "gate-quality",
             "intent": "Evaluate a bootstrap or federation artifact against thresholds or a JSON policy.",
             "writes": ["optional quality gate JSON when --output is set"],
             "output_schemas": [QUALITY_GATE_SCHEMA_VERSION],
@@ -1258,7 +1272,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "query",
+            "command": "query-context",
             "intent": "Run named JSON artifact query presets.",
             "writes": [],
             "output_schemas": [QUERY_SCHEMA_VERSION],
@@ -1267,7 +1281,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "resolve",
+            "command": "resolve-evidence",
             "intent": "Resolve a claim, path, surface, or symbol target into an evidence card.",
             "writes": ["optional resolve JSON when --output is set"],
             "output_schemas": [RESOLVE_SCHEMA_VERSION],
@@ -1276,7 +1290,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "adjudicate",
+            "command": "adjudicate-evidence",
             "intent": "Classify target support into authority/evidence/advisory tiers and emit a deterministic verdict.",
             "writes": ["optional adjudication JSON when --output is set"],
             "output_schemas": [ADJUDICATE_SCHEMA_VERSION],
@@ -1294,7 +1308,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "review-gate",
+            "command": "gate-target-review",
             "intent": "Evaluate target review against CI/agent policy thresholds.",
             "writes": ["optional target review gate JSON when --output is set"],
             "output_schemas": [TARGET_REVIEW_GATE_SCHEMA_VERSION],
@@ -1314,7 +1328,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "pack",
+            "command": "pack-task-context",
             "intent": "Build a token-aware bounded context pack and prompt_text for a task.",
             "writes": ["optional context pack JSON when --output is set"],
             "output_schemas": [CONTEXT_PACK_SCHEMA_VERSION],
@@ -1323,7 +1337,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "brief",
+            "command": "brief-task",
             "intent": "Build a task routing brief with selected query presets, doctor summary, executable query plan, and prompt pack.",
             "writes": ["optional task brief JSON when --output is set"],
             "output_schemas": [TASK_BRIEF_SCHEMA_VERSION],
@@ -1332,7 +1346,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "query-read-model",
+            "command": "query-context-store",
             "intent": "Run named read-only generated read-model query presets.",
             "writes": [],
             "output_schemas": ["deep_context_federation_sql_query_v1"],
@@ -1341,7 +1355,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "trace",
+            "command": "trace-context",
             "intent": "Trace neighboring federation entities by text match.",
             "writes": [],
             "output_schemas": ["deep_context_federation_trace_v1"],
@@ -1349,7 +1363,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "doctor",
+            "command": "diagnose-context",
             "intent": "Diagnose federation health and next actions.",
             "writes": [],
             "output_schemas": ["deep_context_federation_doctor_v1"],
@@ -1357,7 +1371,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "rank",
+            "command": "rank-context",
             "intent": "Rank important entities or risky sources.",
             "writes": [],
             "output_schemas": ["deep_context_federation_entity_rank_v1", "deep_context_federation_source_rank_v1"],
@@ -1365,7 +1379,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "diff",
+            "command": "diff-context",
             "intent": "Diff two federation artifacts.",
             "writes": [],
             "output_schemas": ["deep_context_federation_diff_v1"],
@@ -1373,7 +1387,7 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
-            "command": "bench",
+            "command": "benchmark-context-build",
             "intent": "Benchmark in-memory federation build time.",
             "writes": [],
             "output_schemas": ["deep_context_federation_benchmark_v1"],

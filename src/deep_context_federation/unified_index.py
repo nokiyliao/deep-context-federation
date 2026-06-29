@@ -244,7 +244,7 @@ def _command_rows(capabilities: Mapping[str, Any], *, limit: int) -> list[dict[s
                 "facet": "command",
                 "label": command,
                 "value": str(row.get("intent") or ""),
-                "score": 120 if command in {"build-context-index", "pack-working-set", "prepare-model-input", "decide-continuation"} else 85,
+                "score": 120 if command in {"unify-context", "select-context", "prepare-model-input", "decide-continuation"} else 85,
                 "command": command,
                 "intent": str(row.get("intent") or ""),
                 "writes": _strings(row.get("writes")),
@@ -527,7 +527,7 @@ def build_unified_working_set(
         if not command_when:
             command_when.append("deeper_context_needed")
         recommended_argv = [
-            "pack-working-set",
+            "select-context",
             "--input",
             unified_index_path,
             "--query",
@@ -586,7 +586,7 @@ def build_unified_working_set(
             "recommended_commands": [
                 {
                     "id": "expand_working_set_budget",
-                    "command": "pack-working-set",
+                    "command": "select-context",
                     "argv": recommended_argv,
                     "when": command_when,
                 }

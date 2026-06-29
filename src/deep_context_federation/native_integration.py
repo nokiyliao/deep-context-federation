@@ -24,7 +24,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Symbol and call graph intelligence",
         "absorbed_function_classes": ["symbol_indexing", "call_graph_navigation", "impact_navigation"],
         "dcf_native_owner": "repo_scan_symbol_dependency_graph",
-        "dcf_commands": ["scan", "bootstrap", "build", "trace", "resolve", "rank", "query-read-model"],
+        "dcf_commands": ["map-repo", "bootstrap-context", "assemble-context", "trace-context", "resolve-evidence", "rank-context", "query-context-store"],
         "native_surfaces": [
             "repo_code_symbols",
             "repo_dependency_graph",
@@ -38,7 +38,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns the unified symbol/entity graph and query plane. Upstream observations are collapsed into DCF graph semantics.",
         "remaining_gap": "Deep language-specific call resolution can still be improved, but DCF already owns the symbol graph projection and query contract.",
         "exit_criteria": [
-            "agent workflows call DCF trace/resolve/rank/query-read-model first",
+            "agent workflows call DCF trace-context/resolve-evidence/rank-context/query-context-store first",
             "symbol graph inputs are normalized into DCF entities and edges",
             "no wrapper reads a private symbol graph without DCF contract validation",
         ],
@@ -48,7 +48,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Project surface and split detection",
         "absorbed_function_classes": ["surface_mapping", "split_detection", "ownership_gap_detection"],
         "dcf_native_owner": "repo_scan_surface_map",
-        "dcf_commands": ["scan", "bootstrap", "query", "doctor", "quality-gate"],
+        "dcf_commands": ["map-repo", "bootstrap-context", "query-context", "diagnose-context", "gate-quality"],
         "native_surfaces": [
             "repo_surface_map",
             "query_presets.surface-splits",
@@ -61,7 +61,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns the canonical machine-readable surface map projection. Surface observations are collapsed into one DCF-facing truth plane.",
         "remaining_gap": "Project-specific owners can be made stricter by feeding repo-local policy files into DCF quality gates.",
         "exit_criteria": [
-            "surface-split reviews use DCF query/doctor output",
+            "surface-split reviews use DCF query-context/diagnose-context output",
             "surface-map inputs are imported only as normalized DCF rows",
             "surface ownership gaps are reported by DCF conflicts",
         ],
@@ -71,7 +71,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Long-term context memory and reuse",
         "absorbed_function_classes": ["long_term_context_recall", "session_memory", "context_reuse"],
         "dcf_native_owner": "memory_ledger_fingerprint_agent_handoff",
-        "dcf_commands": ["build-reuse-index", "build", "diff", "prepare-model-handoff", "prepare-model-input", "onboard-runner", "efficiency-report"],
+        "dcf_commands": ["reuse-context", "assemble-context", "diff-context", "prepare-model-handoff", "prepare-model-input", "onboard-runner", "measure-token-efficiency"],
         "native_surfaces": [
             "memory_ledger",
             "reuse_index",
@@ -87,7 +87,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns the memory retrieval contract, reuse index, and freshness gates. Existing memory databases can be one-time import material, not a separate identity, live watcher, or authority.",
         "remaining_gap": "Retention and compaction policy can be tuned, but DCF now owns the native memory ledger contract.",
         "exit_criteria": [
-            "accepted handoffs and fingerprints materialize into build-reuse-index rows",
+            "accepted handoffs and fingerprints materialize into reuse-context rows",
             "fresh agents read DCF handoff/profile/onboard artifacts before private memory stores",
             "memory recall is bounded by DCF freshness and request-binding checks",
             "memory imports are one-shot, watcher-free, and collapsed into DCF-native records",
@@ -98,7 +98,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Evidence lineage and claim adjudication",
         "absorbed_function_classes": ["evidence_receipts", "current_truth_snapshot", "claim_lineage"],
         "dcf_native_owner": "resolve_adjudicate_review_gate",
-        "dcf_commands": ["resolve", "adjudicate", "review-targets", "review-gate", "schema", "validate-artifact"],
+        "dcf_commands": ["resolve-evidence", "adjudicate-evidence", "review-targets", "gate-target-review", "describe-contracts", "check-artifact"],
         "native_surfaces": [
             "entities.claim_id",
             "entities.artifact_id",
@@ -113,7 +113,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns cross-artifact lineage queries and deterministic adjudication. Original evidence artifacts remain immutable audit inputs but are not exposed as competing DCF identities.",
         "remaining_gap": "More project-specific claim extractors can raise coverage, but DCF already owns the lineage query and gate semantics.",
         "exit_criteria": [
-            "claim-lineage questions use DCF resolve/adjudicate",
+            "claim-lineage questions use DCF resolve-evidence/adjudicate-evidence",
             "all imported evidence artifacts pass DCF contract validation",
             "authority/advisory conflicts are surfaced as DCF conflicts",
         ],
@@ -123,7 +123,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "capability_name": "Operator projection and current truth cockpit",
         "absorbed_function_classes": ["governance_projection", "current_truth_projection", "blocker_cockpit"],
         "dcf_native_owner": "agent_ready_capabilities_query_gate",
-        "dcf_commands": ["capabilities", "query", "doctor", "prepare-model-input", "onboard-runner", "quality-gate"],
+        "dcf_commands": ["describe-abilities", "query-context", "diagnose-context", "prepare-model-input", "onboard-runner", "gate-quality"],
         "native_surfaces": [
             "capabilities manifest",
             "query_presets.operator-projection",
@@ -137,7 +137,7 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "source_of_record_boundary": "DCF owns the agent/operator read model and gating view. Project dashboards may render DCF output but should not maintain a divergent projection contract or identity.",
         "remaining_gap": "Add first-class DCF cockpit summary rows for active blockers, dirty lanes, and current truth drift.",
         "exit_criteria": [
-            "operators and agents start from DCF capabilities/prepare-model-input output",
+            "operators and agents start from DCF describe-abilities/prepare-model-input output",
             "dashboard claims are checked against DCF query and quality gates",
             "current truth snapshots are normalized into DCF rows instead of queried separately by agents",
         ],
@@ -264,7 +264,7 @@ def build_native_integration_plan(*, capabilities: Iterable[str] | None = None) 
                 "step": "surface_and_symbol_unification",
                 "goal": "Surface and symbol questions resolve through DCF query/trace/resolve, not private tool outputs.",
                 "owner_capability": "surface_map + symbol_call_graph",
-                "exit_gate": "scan/bootstrap/build/verify pass with repo_surface_map and repo_code_symbols present",
+                "exit_gate": "map-repo/bootstrap-context/assemble-context/verify-context pass with repo_surface_map and repo_code_symbols present",
             },
             {
                 "step": "claim_evidence_lineage",
@@ -276,7 +276,7 @@ def build_native_integration_plan(*, capabilities: Iterable[str] | None = None) 
                 "step": "native_memory_ledger",
                 "goal": "Accepted handoffs and context fingerprints become DCF-native reusable memory.",
                 "owner_capability": "long_term_context_memory",
-                "exit_gate": "build-reuse-index emits reusable rows with fingerprint-bound prompt sources",
+                "exit_gate": "reuse-context emits reusable rows with fingerprint-bound prompt sources",
             },
             {
                 "step": "operator_projection_convergence",

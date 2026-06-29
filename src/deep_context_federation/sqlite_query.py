@@ -118,7 +118,7 @@ def query_sqlite(sqlite_path: Path, *, preset: str, limit: int = 50, search: str
         missing = sorted(required - tables)
         if missing:
             raise RuntimeError(
-                f"SQLite projection is missing tables {missing}; rebuild with `dcf build --write`."
+                f"SQLite projection is missing tables {missing}; rebuild with `dcf assemble-context --write`."
             )
         cursor = conn.execute(spec["sql"], params)
         rows = rows_from_cursor(cursor)

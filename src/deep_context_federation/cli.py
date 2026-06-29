@@ -110,13 +110,25 @@ from deep_context_federation.workflow_run import markdown_workflow_run
 
 
 COMMAND_ALIASES = {
+    "capabilities": "describe-abilities",
+    "schema": "describe-contracts",
+    "validate-artifact": "check-artifact",
     "native-integration-plan": "plan-capability-ownership",
     "plan-native-ownership": "plan-capability-ownership",
-    "memory-ledger": "build-reuse-index",
-    "index-context-memory": "build-reuse-index",
-    "unify-context": "build-context-index",
-    "select-context": "pack-working-set",
-    "sql": "query-read-model",
+    "memory-ledger": "reuse-context",
+    "index-context-memory": "reuse-context",
+    "build-reuse-index": "reuse-context",
+    "build-context-index": "unify-context",
+    "audit-unified-plane": "prove-unified-context",
+    "pack-working-set": "select-context",
+    "build": "assemble-context",
+    "scan": "map-repo",
+    "bootstrap": "bootstrap-context",
+    "intake": "prepare-task-intake",
+    "workflow-plan": "plan-workflow",
+    "workflow-run": "run-workflow",
+    "efficiency-report": "measure-token-efficiency",
+    "efficiency-gate": "gate-token-efficiency",
     "agent-ci": "decide-continuation",
     "agent-context": "pack-model-context",
     "agent-context-gate": "gate-model-context",
@@ -129,6 +141,23 @@ COMMAND_ALIASES = {
     "agent-discover": "discover-model-readiness",
     "agent-route": "route-model-readiness",
     "agent-ready": "prepare-model-input",
+    "validate-manifest": "validate-inputs",
+    "compose-manifest": "combine-inputs",
+    "verify": "verify-context",
+    "query": "query-context",
+    "pack": "pack-task-context",
+    "brief": "brief-task",
+    "trace": "trace-context",
+    "resolve": "resolve-evidence",
+    "adjudicate": "adjudicate-evidence",
+    "review-gate": "gate-target-review",
+    "doctor": "diagnose-context",
+    "quality-gate": "gate-quality",
+    "rank": "rank-context",
+    "diff": "diff-context",
+    "query-read-model": "query-context-store",
+    "sql": "query-context-store",
+    "bench": "benchmark-context-build",
 }
 
 
@@ -319,14 +348,17 @@ def _resolve_agent_ready_args(args: argparse.Namespace, normalized: Mapping[str,
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dcf", description="Read-only deep context federation CLI.")
     sub = parser.add_subparsers(dest="command", required=True)
-    capabilities = sub.add_parser("capabilities", help="Describe DCF machine-readable contracts, commands, presets, and safety boundaries.")
+    capabilities = sub.add_parser("describe-abilities", help="Describe DCF machine-readable contracts, commands, presets, and safety boundaries.")
+    capabilities.set_defaults(command="capabilities")
     capabilities.add_argument("--output", type=Path)
     capabilities.add_argument("--format", choices=["json", "markdown"], default="json")
-    schema = sub.add_parser("schema", help="Emit the DCF JSON Schema registry or one artifact schema.")
+    schema = sub.add_parser("describe-contracts", help="Emit the DCF JSON Schema registry or one artifact schema.")
+    schema.set_defaults(command="schema")
     schema.add_argument("--artifact", choices=artifact_kinds())
     schema.add_argument("--output", type=Path)
     schema.add_argument("--format", choices=["json", "markdown"], default="json")
-    validate_artifact = sub.add_parser("validate-artifact", help="Validate an artifact against DCF top-level JSON Schema contracts.")
+    validate_artifact = sub.add_parser("check-artifact", help="Validate an artifact against DCF top-level JSON Schema contracts.")
+    validate_artifact.set_defaults(command="validate-artifact")
     validate_artifact.add_argument("--input", type=Path, required=True)
     validate_artifact.add_argument("--artifact", choices=artifact_kinds())
     validate_artifact.add_argument("--output", type=Path)
@@ -337,14 +369,16 @@ def build_parser() -> argparse.ArgumentParser:
     native_integration.add_argument("--capability", dest="capability", action="append", help=argparse.SUPPRESS)
     native_integration.add_argument("--output", type=Path)
     native_integration.add_argument("--format", choices=["json", "markdown"], default="json")
-    memory_ledger = sub.add_parser("build-reuse-index", help="Materialize generated DCF artifacts into a reusable context index.")
+    memory_ledger = sub.add_parser("reuse-context", help="Materialize generated DCF artifacts into a reusable context index.")
+    memory_ledger.set_defaults(command="build-reuse-index")
     memory_ledger.add_argument("--root", type=Path, default=Path.cwd())
     memory_ledger.add_argument("--input-dir", type=Path, action="append", default=[])
     memory_ledger.add_argument("--input-file", type=Path, action="append", default=[])
     memory_ledger.add_argument("--max-files", type=int, default=500)
     memory_ledger.add_argument("--output", type=Path)
     memory_ledger.add_argument("--format", choices=["json", "markdown"], default="json")
-    unified_index = sub.add_parser("build-context-index", help="Build a source-collapsed DCF context index.")
+    unified_index = sub.add_parser("unify-context", help="Build a source-collapsed DCF context index.")
+    unified_index.set_defaults(command="build-context-index")
     unified_index.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME, help="Federation JSON artifact.")
     unified_index.add_argument("--reuse-index", dest="memory_ledger", metavar="REUSE_INDEX", type=Path)
     unified_index.add_argument("--ability-registry", dest="capabilities", metavar="ABILITY_REGISTRY", type=Path)
@@ -356,7 +390,8 @@ def build_parser() -> argparse.ArgumentParser:
     unified_index.add_argument("--limit", type=int, default=200)
     unified_index.add_argument("--output", type=Path)
     unified_index.add_argument("--format", choices=["json", "markdown"], default="json")
-    unified_audit = sub.add_parser("audit-unified-plane", help="Audit whether DCF capabilities are collapsed into one function-named plane.")
+    unified_audit = sub.add_parser("prove-unified-context", help="Audit whether DCF capabilities are collapsed into one function-named plane.")
+    unified_audit.set_defaults(command="audit-unified-plane")
     unified_audit.add_argument("--ability-registry", dest="capabilities", metavar="ABILITY_REGISTRY", type=Path)
     unified_audit.add_argument("--ownership-plan", type=Path)
     unified_audit.add_argument("--context-index", type=Path)
@@ -365,7 +400,8 @@ def build_parser() -> argparse.ArgumentParser:
     unified_audit.add_argument("--min-facets", type=int, default=4)
     unified_audit.add_argument("--output", type=Path)
     unified_audit.add_argument("--format", choices=["json", "markdown"], default="json")
-    selected_context = sub.add_parser("pack-working-set", help="Pack a compact task-scoped DCF working set from a context index.")
+    selected_context = sub.add_parser("select-context", help="Pack a compact task-scoped DCF working set from a context index.")
+    selected_context.set_defaults(command="pack-working-set")
     selected_context.add_argument("--input", type=Path, default=Path(".dcf") / "deep_context_federation_unified_index.json", help="Unified context index JSON artifact.")
     selected_context.add_argument("--query", default="")
     selected_context.add_argument("--limit", type=int, default=24)
@@ -376,12 +412,14 @@ def build_parser() -> argparse.ArgumentParser:
     selected_context.add_argument("--min-facets", type=int, default=4)
     selected_context.add_argument("--output", type=Path)
     selected_context.add_argument("--format", choices=["json", "markdown"], default="json")
-    build = sub.add_parser("build", help="Build a federation artifact from a manifest.")
+    build = sub.add_parser("assemble-context", help="Build a federation artifact from a manifest.")
+    build.set_defaults(command="build")
     add_common_source_args(build)
     add_memory_import_args(build)
     build.add_argument("--write", action="store_true")
     build.add_argument("--json", action="store_true")
-    scan = sub.add_parser("scan", help="Read-only scan of a repo into starter federation sources.")
+    scan = sub.add_parser("map-repo", help="Read-only scan of a repo into starter federation sources.")
+    scan.set_defaults(command="scan")
     scan.add_argument("--root", type=Path, default=Path.cwd())
     scan.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     scan.add_argument("--write", action="store_true")
@@ -390,7 +428,8 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     scan.add_argument("--hash-files", action="store_true")
     scan.add_argument("--format", choices=["json", "markdown"], default="json")
-    bootstrap = sub.add_parser("bootstrap", help="Run scan, optional compose, build, verify, and doctor in one pipeline.")
+    bootstrap = sub.add_parser("bootstrap-context", help="Run scan, optional compose, build, verify, and doctor in one pipeline.")
+    bootstrap.set_defaults(command="bootstrap")
     bootstrap.add_argument("--root", type=Path, default=Path.cwd())
     bootstrap.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     bootstrap.add_argument("--manifest", type=Path, action="append", default=[])
@@ -399,7 +438,8 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap.add_argument("--hash-files", action="store_true")
     add_memory_import_args(bootstrap)
     bootstrap.add_argument("--format", choices=["json", "markdown"], default="json")
-    intake = sub.add_parser("intake", help="Run bootstrap, quality gate, and task brief as one agent intake packet.")
+    intake = sub.add_parser("prepare-task-intake", help="Run bootstrap, quality gate, and task brief as one agent intake packet.")
+    intake.set_defaults(command="intake")
     intake.add_argument("--root", type=Path, default=Path.cwd())
     intake.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     intake.add_argument("--manifest", type=Path, action="append", default=[])
@@ -415,7 +455,8 @@ def build_parser() -> argparse.ArgumentParser:
     intake.add_argument("--max-rows", type=int, default=80)
     intake.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text inside the embedded task brief.")
     intake.add_argument("--format", choices=["json", "markdown"], default="json")
-    workflow_plan = sub.add_parser("workflow-plan", help="Emit a read-only run plan that orders DCF commands, gates, and bounded context reads.")
+    workflow_plan = sub.add_parser("plan-workflow", help="Emit a read-only run plan that orders DCF commands, gates, and bounded context reads.")
+    workflow_plan.set_defaults(command="workflow-plan")
     workflow_plan.add_argument("--root", type=Path, default=Path.cwd())
     workflow_plan.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     workflow_plan.add_argument("--task", required=True)
@@ -434,7 +475,8 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_plan.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     workflow_plan.add_argument("--output", type=Path)
     workflow_plan.add_argument("--format", choices=["json", "markdown"], default="json")
-    workflow_run = sub.add_parser("workflow-run", help="Execute the read-only DCF workflow into one compact run capsule.")
+    workflow_run = sub.add_parser("run-workflow", help="Execute the read-only DCF workflow into one compact run capsule.")
+    workflow_run.set_defaults(command="workflow-run")
     workflow_run.add_argument("--root", type=Path, default=Path.cwd())
     workflow_run.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     workflow_run.add_argument("--manifest", type=Path, action="append", default=[])
@@ -455,12 +497,14 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_run.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     workflow_run.add_argument("--output", type=Path)
     workflow_run.add_argument("--format", choices=["json", "markdown"], default="json")
-    efficiency = sub.add_parser("efficiency-report", help="Measure workflow-run token savings against available context baselines.")
+    efficiency = sub.add_parser("measure-token-efficiency", help="Measure workflow-run token savings against available context baselines.")
+    efficiency.set_defaults(command="efficiency-report")
     efficiency.add_argument("--input", type=Path, required=True)
     efficiency.add_argument("--baseline", type=Path, action="append", default=[])
     efficiency.add_argument("--output", type=Path)
     efficiency.add_argument("--format", choices=["json", "markdown"], default="json")
-    efficiency_gate = sub.add_parser("efficiency-gate", help="Evaluate an efficiency report against token-budget policy thresholds.")
+    efficiency_gate = sub.add_parser("gate-token-efficiency", help="Evaluate an efficiency report against token-budget policy thresholds.")
+    efficiency_gate.set_defaults(command="efficiency-gate")
     efficiency_gate.add_argument("--input", type=Path, required=True)
     efficiency_gate.add_argument("--policy", type=Path)
     efficiency_gate.add_argument("--max-read-first-tokens", type=int)
@@ -672,25 +716,30 @@ def build_parser() -> argparse.ArgumentParser:
     agent_ready.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
     agent_ready.add_argument("--output", type=Path)
     agent_ready.add_argument("--format", choices=["json", "markdown", "prompt"], default="json")
-    validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
+    validate = sub.add_parser("validate-inputs", help="Validate manifest shape before reading sources.")
+    validate.set_defaults(command="validate-manifest")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
-    compose = sub.add_parser("compose-manifest", help="Compose multiple federation manifests into one manifest.")
+    compose = sub.add_parser("combine-inputs", help="Compose multiple federation manifests into one manifest.")
+    compose.set_defaults(command="compose-manifest")
     compose.add_argument("--manifest", type=Path, action="append", required=True)
     compose.add_argument("--output", type=Path, default=Path(".dcf") / "deep_context_federation.composed.json")
     compose.add_argument("--write", action="store_true")
     compose.add_argument("--format", choices=["json", "markdown"], default="json")
-    verify = sub.add_parser("verify", help="Verify a federation artifact.")
+    verify = sub.add_parser("verify-context", help="Verify a federation artifact.")
+    verify.set_defaults(command="verify")
     verify.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     verify.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     verify.add_argument("--root", type=Path, default=Path.cwd())
     verify.add_argument("--json", action="store_true")
-    query = sub.add_parser("query", help="Query a federation artifact with a named preset.")
+    query = sub.add_parser("query-context", help="Query a federation artifact with a named preset.")
+    query.set_defaults(command="query")
     query.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     query.add_argument("--preset", required=True)
     query.add_argument("--limit", type=int, default=50)
     query.add_argument("--format", choices=["json", "markdown"], default="json")
-    pack = sub.add_parser("pack", help="Build a token-aware bounded context pack for a task.")
+    pack = sub.add_parser("pack-task-context", help="Build a token-aware bounded context pack for a task.")
+    pack.set_defaults(command="pack")
     pack.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     pack.add_argument("--task", required=True)
     pack.add_argument("--token-budget", type=int, default=4000)
@@ -699,7 +748,8 @@ def build_parser() -> argparse.ArgumentParser:
     pack.add_argument("--no-prompt", action="store_true", help="Emit scored JSON rows without the rendered prompt_text field.")
     pack.add_argument("--output", type=Path)
     pack.add_argument("--format", choices=["json", "markdown"], default="json")
-    brief = sub.add_parser("brief", help="Build a one-shot task routing brief with queries, doctor summary, and prompt pack.")
+    brief = sub.add_parser("brief-task", help="Build a one-shot task routing brief with queries, doctor summary, and prompt pack.")
+    brief.set_defaults(command="brief")
     brief.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     brief.add_argument("--read-model", type=Path)
     brief.add_argument("--task", required=True)
@@ -710,13 +760,15 @@ def build_parser() -> argparse.ArgumentParser:
     brief.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text inside the embedded context_pack.")
     brief.add_argument("--output", type=Path)
     brief.add_argument("--format", choices=["json", "markdown"], default="json")
-    trace = sub.add_parser("trace", help="Trace neighboring federation entities by text match.")
+    trace = sub.add_parser("trace-context", help="Trace neighboring federation entities by text match.")
+    trace.set_defaults(command="trace")
     trace.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     trace.add_argument("--match", required=True)
     trace.add_argument("--depth", type=int, default=2)
     trace.add_argument("--limit", type=int, default=50)
     trace.add_argument("--format", choices=["json", "markdown"], default="json")
-    resolve = sub.add_parser("resolve", help="Resolve a claim/path/surface/symbol target into an evidence card.")
+    resolve = sub.add_parser("resolve-evidence", help="Resolve a claim/path/surface/symbol target into an evidence card.")
+    resolve.set_defaults(command="resolve")
     resolve.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     resolve.add_argument("--target", required=True)
     resolve.add_argument("--limit", type=int, default=20)
@@ -724,7 +776,8 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text and embedded context prompt.")
     resolve.add_argument("--output", type=Path)
     resolve.add_argument("--format", choices=["json", "markdown"], default="json")
-    adjudicate = sub.add_parser("adjudicate", help="Adjudicate a target into authority/evidence/advisory support and a deterministic verdict.")
+    adjudicate = sub.add_parser("adjudicate-evidence", help="Adjudicate a target into authority/evidence/advisory support and a deterministic verdict.")
+    adjudicate.set_defaults(command="adjudicate")
     adjudicate.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     adjudicate.add_argument("--target", required=True)
     adjudicate.add_argument("--limit", type=int, default=20)
@@ -742,7 +795,8 @@ def build_parser() -> argparse.ArgumentParser:
     review_targets_parser.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     review_targets_parser.add_argument("--output", type=Path)
     review_targets_parser.add_argument("--format", choices=["json", "markdown"], default="json")
-    review_gate = sub.add_parser("review-gate", help="Evaluate a target review artifact against CI/agent policy.")
+    review_gate = sub.add_parser("gate-target-review", help="Evaluate a target review artifact against CI/agent policy.")
+    review_gate.set_defaults(command="review-gate")
     review_gate.add_argument("--input", type=Path, required=True)
     review_gate.add_argument("--policy", type=Path)
     review_gate.add_argument("--max-blocked", type=int)
@@ -755,10 +809,12 @@ def build_parser() -> argparse.ArgumentParser:
     review_gate.add_argument("--require-target", action="append")
     review_gate.add_argument("--output", type=Path)
     review_gate.add_argument("--format", choices=["json", "markdown"], default="json")
-    doctor = sub.add_parser("doctor", help="Diagnose federation health and recommend next actions.")
+    doctor = sub.add_parser("diagnose-context", help="Diagnose federation health and recommend next actions.")
+    doctor.set_defaults(command="doctor")
     doctor.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     doctor.add_argument("--format", choices=["json", "markdown"], default="json")
-    gate = sub.add_parser("quality-gate", help="Evaluate CI/agent quality gates on a bootstrap or federation artifact.")
+    gate = sub.add_parser("gate-quality", help="Evaluate CI/agent quality gates on a bootstrap or federation artifact.")
+    gate.set_defaults(command="quality-gate")
     gate.add_argument("--input", type=Path, default=Path(".dcf") / "deep_context_federation_bootstrap.json")
     gate.add_argument("--federation-input", type=Path)
     gate.add_argument("--policy", type=Path, help="JSON policy-as-code file for repeatable quality gates.")
@@ -775,23 +831,27 @@ def build_parser() -> argparse.ArgumentParser:
     gate.add_argument("--no-bootstrap-step-check", action="store_true")
     gate.add_argument("--output", type=Path)
     gate.add_argument("--format", choices=["json", "markdown"], default="json")
-    rank = sub.add_parser("rank", help="Rank important entities or risky sources.")
+    rank = sub.add_parser("rank-context", help="Rank important entities or risky sources.")
+    rank.set_defaults(command="rank")
     rank.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     rank.add_argument("--kind", choices=["entities", "sources"], default="entities")
     rank.add_argument("--limit", type=int, default=20)
     rank.add_argument("--format", choices=["json", "markdown"], default="json")
-    diff = sub.add_parser("diff", help="Diff two federation artifacts.")
+    diff = sub.add_parser("diff-context", help="Diff two federation artifacts.")
+    diff.set_defaults(command="diff")
     diff.add_argument("--before", type=Path, required=True)
     diff.add_argument("--after", type=Path, required=True)
     diff.add_argument("--format", choices=["json", "markdown"], default="json")
-    sql = sub.add_parser("query-read-model", help="Query the generated read model.")
+    sql = sub.add_parser("query-context-store", help="Query the generated read model.")
+    sql.set_defaults(command="query-read-model")
     sql.add_argument("--read-model", dest="sqlite", metavar="READ_MODEL", type=Path, default=Path(".dcf") / "deep_context_federation_latest.sqlite")
     sql.add_argument("--sqlite", dest="sqlite", type=Path, help=argparse.SUPPRESS)
     sql.add_argument("--preset", choices=sorted(SQL_PRESETS), required=True)
     sql.add_argument("--limit", type=int, default=50)
     sql.add_argument("--search", default="")
     sql.add_argument("--format", choices=["json", "markdown"], default="json")
-    bench = sub.add_parser("bench", help="Benchmark in-memory federation build time.")
+    bench = sub.add_parser("benchmark-context-build", help="Benchmark in-memory federation build time.")
+    bench.set_defaults(command="bench")
     add_common_source_args(bench)
     bench.add_argument("--iterations", type=int, default=5)
     bench.add_argument("--json", action="store_true")

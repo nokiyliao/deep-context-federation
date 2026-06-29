@@ -137,7 +137,7 @@ def route_agent_context(
             )
     else:
         action = "scan_and_build"
-        selected_command = f"dcf scan --root {_quote(root.as_posix())} --output-dir {_quote(output_arg)} --write --build"
+        selected_command = f"dcf map-repo --root {_quote(root.as_posix())} --output-dir {_quote(output_arg)} --write --build"
         route_steps.append(
             _step(
                 "00_scan_and_build",

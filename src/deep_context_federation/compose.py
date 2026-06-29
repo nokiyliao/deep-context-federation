@@ -146,7 +146,7 @@ def compose_manifests(
         "schema_version": MANIFEST_SCHEMA,
         "authority_boundary": {"authority_effect": "none", "no_apply": True},
         "metadata": {
-            "generated_by": "dcf compose-manifest",
+            "generated_by": "dcf combine-inputs",
             "generated_at": utc_now(),
             "source_manifest_count": len(paths),
         },

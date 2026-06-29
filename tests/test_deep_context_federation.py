@@ -241,16 +241,16 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.54.0"
+    assert payload["package"]["version"] == "0.55.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
-        "capabilities",
-        "bootstrap",
-        "workflow-plan",
-        "workflow-run",
-        "efficiency-report",
-        "efficiency-gate",
+        "describe-abilities",
+        "bootstrap-context",
+        "plan-workflow",
+        "run-workflow",
+        "measure-token-efficiency",
+        "gate-token-efficiency",
         "prove-context-advantage",
         "decide-continuation",
         "pack-model-context",
@@ -264,33 +264,33 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "prepare-model-input",
         "route-model-readiness",
         "verify-model-handoff",
-        "intake",
-        "build",
-        "scan",
-        "schema",
-        "validate-artifact",
+        "prepare-task-intake",
+        "assemble-context",
+        "map-repo",
+        "describe-contracts",
+        "check-artifact",
         "plan-capability-ownership",
-        "build-reuse-index",
-        "build-context-index",
-        "audit-unified-plane",
-        "pack-working-set",
-        "adjudicate",
-        "brief",
-        "pack",
-        "quality-gate",
-        "query",
-        "resolve",
+        "reuse-context",
+        "unify-context",
+        "prove-unified-context",
+        "select-context",
+        "adjudicate-evidence",
+        "brief-task",
+        "pack-task-context",
+        "gate-quality",
+        "query-context",
+        "resolve-evidence",
         "review-targets",
-        "review-gate",
-        "query-read-model",
-        "doctor",
+        "gate-target-review",
+        "query-context-store",
+        "diagnose-context",
     } <= command_names
     query_presets = {row["preset"] for row in payload["query_presets"]}
     assert {"surface-splits", "claim-lineage", "code-to-authority", "operator-projection"} <= query_presets
     sql_presets = {row["preset"] for row in payload["sql_presets"]}
     assert {"source-health", "search", "code-to-authority"} <= sql_presets
     by_command = {row["command"]: row for row in payload["commands"]}
-    assert "--read-model" in by_command["brief"]["options"]
+    assert "--read-model" in by_command["brief-task"]["options"]
 
     contracts = payload["contracts"]["artifact_contracts"]
     by_kind = {row["artifact_kind"]: row for row in contracts}
@@ -307,6 +307,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
+    assert "context_advantage_summary" in by_kind["agent_handoff"]["top_level_required"]
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
@@ -359,6 +360,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
+    assert "context_advantage_summary" in by_kind["agent_handoff"]["json_schema"]["required"]
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
@@ -479,11 +481,11 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     )
     assert top_help.returncode == 0
     assert "plan-capability-ownership" in top_help.stdout
-    assert "build-reuse-index" in top_help.stdout
-    assert "build-context-index" in top_help.stdout
-    assert "audit-unified-plane" in top_help.stdout
-    assert "pack-working-set" in top_help.stdout
-    assert "query-read-model" in top_help.stdout
+    assert "reuse-context" in top_help.stdout
+    assert "unify-context" in top_help.stdout
+    assert "prove-unified-context" in top_help.stdout
+    assert "select-context" in top_help.stdout
+    assert "query-context-store" in top_help.stdout
     assert "prove-context-advantage" in top_help.stdout
     assert "decide-continuation" in top_help.stdout
     assert "prepare-model-input" in top_help.stdout
@@ -491,8 +493,8 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "plan-native-ownership" not in top_help.stdout
     assert "memory-ledger" not in top_help.stdout
     assert "index-context-memory" not in top_help.stdout
-    assert "unify-context" not in top_help.stdout
-    assert "select-context" not in top_help.stdout
+    assert "build-context-index" not in top_help.stdout
+    assert "pack-working-set" not in top_help.stdout
     assert " sql" not in top_help.stdout
     assert "agent-ci" not in top_help.stdout
     assert "agent-ready" not in top_help.stdout
@@ -502,7 +504,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "build",
+            "assemble-context",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -541,7 +543,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "audit-unified-plane",
+            "prove-unified-context",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -578,7 +580,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "brief",
+            "brief-task",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -595,7 +597,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "query-read-model",
+            "query-context-store",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -1261,6 +1263,9 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["decision"]["handoff_allowed"] is True
     assert result["agent_ci_summary"]["status"] == "pass_agent_ci"
     assert result["agent_context_gate_summary"]["status"] == "pass_agent_context_gate"
+    assert result["unified_plane_audit_summary"]["status"] == "pass_unified_plane_audit"
+    assert result["context_advantage_summary"]["status"] == "pass_context_advantage"
+    assert result["context_advantage_summary"]["ok"] is True
     prompt_path = Path(result["outputs"]["agent_model_prompt_markdown"])
     context_path = Path(result["outputs"]["agent_context_json"])
     assert result["model_handoff"]["model_prompt_source"] == result["outputs"]["agent_model_prompt_markdown"]
@@ -1268,7 +1273,12 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["model_handoff"]["machine_context_source"] == result["outputs"]["agent_context_json"]
     assert result["model_handoff"]["unified_context_source"] == result["outputs"]["unified_index_json"]
     assert result["model_handoff"]["selected_context_source"] == result["outputs"]["selected_context_json"]
+    assert result["model_handoff"]["unified_plane_audit_source"] == result["outputs"]["unified_plane_audit_json"]
+    assert result["model_handoff"]["context_advantage_source"] == result["outputs"]["context_advantage_json"]
+    assert result["model_handoff"]["unified_plane_audit_summary"]["status"] == "pass_unified_plane_audit"
+    assert result["model_handoff"]["context_advantage_summary"]["status"] == "pass_context_advantage"
     assert result["outputs"]["selected_context_json"] in result["model_handoff"]["read_first"]
+    assert result["outputs"]["context_advantage_json"] in result["model_handoff"]["read_first"]
     assert result["outputs"]["unified_index_json"] not in result["model_handoff"]["read_first"]
     assert result["model_handoff"]["read_first"][-1] == result["outputs"]["agent_model_prompt_markdown"]
     assert result["model_handoff"]["model_prompt_estimated_tokens"] > 0
@@ -1292,8 +1302,14 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert Path(result["outputs"]["unified_index_markdown"]).exists()
     assert Path(result["outputs"]["selected_context_json"]).exists()
     assert Path(result["outputs"]["selected_context_markdown"]).exists()
+    assert Path(result["outputs"]["unified_plane_audit_json"]).exists()
+    assert Path(result["outputs"]["unified_plane_audit_markdown"]).exists()
+    assert Path(result["outputs"]["context_advantage_json"]).exists()
+    assert Path(result["outputs"]["context_advantage_markdown"]).exists()
     unified_index = json.loads(Path(result["outputs"]["unified_index_json"]).read_text(encoding="utf-8"))
     selected_context = json.loads(Path(result["outputs"]["selected_context_json"]).read_text(encoding="utf-8"))
+    unified_plane_audit = json.loads(Path(result["outputs"]["unified_plane_audit_json"]).read_text(encoding="utf-8"))
+    context_advantage = json.loads(Path(result["outputs"]["context_advantage_json"]).read_text(encoding="utf-8"))
     assert unified_index["schema_version"] == "deep_context_federation_unified_index_v1"
     assert unified_index["source_identity_policy"]["public_identity"] == "deep_context_federation"
     assert unified_index["source_identity_policy"]["source_ids_exposed"] is False
@@ -1306,9 +1322,14 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert selected_context["summary"]["max_tokens"] == 500
     assert selected_context["summary"]["selected_row_count"] <= 24
     assert selected_context["expansion_plan"]["read_full_index_ref"] == result["outputs"]["unified_index_json"]
-    assert selected_context["expansion_plan"]["recommended_commands"][0]["command"] == "pack-working-set"
+    assert selected_context["expansion_plan"]["recommended_commands"][0]["command"] == "select-context"
     assert "--max-tokens" in selected_context["expansion_plan"]["recommended_commands"][0]["argv"]
     assert validate_artifact_contract(selected_context, artifact_kind="unified_working_set")["ok"] is True
+    assert unified_plane_audit["status"] == "pass_unified_plane_audit"
+    assert validate_artifact_contract(unified_plane_audit, artifact_kind="unified_plane_audit")["ok"] is True
+    assert context_advantage["status"] == "pass_context_advantage"
+    assert context_advantage["ok"] is True
+    assert validate_artifact_contract(context_advantage, artifact_kind="context_advantage")["ok"] is True
 
     def assert_no_source_identity(value: object) -> None:
         if isinstance(value, dict):
@@ -1357,7 +1378,9 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     prompt_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "model_prompt")
     gate_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "context_gate")
     selected_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "selected_context")
+    advantage_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "context_advantage")
     unified_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "unified_context_audit")
+    unified_plane_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "unified_plane_audit")
     context_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "machine_context")
     assert prompt_artifact["path"] == prompt_path.as_posix()
     assert prompt_artifact["exists"] is True
@@ -1368,9 +1391,14 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert selected_artifact["exists"] is True
     assert selected_artifact["default_model_input"] is False
     assert selected_artifact["estimated_tokens"] == result["model_handoff"]["selected_context_estimated_tokens"]
+    assert advantage_artifact["path"] == result["outputs"]["context_advantage_json"]
+    assert advantage_artifact["exists"] is True
+    assert advantage_artifact["estimated_tokens"] == result["model_handoff"]["context_advantage_estimated_tokens"]
     assert unified_artifact["path"] == result["outputs"]["unified_index_json"]
     assert unified_artifact["exists"] is True
     assert unified_artifact["estimated_tokens"] == result["model_handoff"]["unified_context_estimated_tokens"]
+    assert unified_plane_artifact["path"] == result["outputs"]["unified_plane_audit_json"]
+    assert unified_plane_artifact["exists"] is True
     assert context_artifact["path"] == context_path.as_posix()
     assert context_artifact["estimated_tokens"] == result["model_handoff"]["machine_context_estimated_tokens"]
     economics = result["model_handoff"]["token_economics"]
@@ -1380,6 +1408,8 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert economics["machine_context_estimated_tokens"] == result["model_handoff"]["machine_context_estimated_tokens"]
     assert economics["unified_context_estimated_tokens"] == result["model_handoff"]["unified_context_estimated_tokens"]
     assert economics["selected_context_estimated_tokens"] == result["model_handoff"]["selected_context_estimated_tokens"]
+    assert economics["context_advantage_estimated_tokens"] == result["model_handoff"]["context_advantage_estimated_tokens"]
+    assert economics["context_advantage_estimated_tokens"] > 0
     assert 0 < economics["selected_context_to_unified_context_ratio"] < 1
     assert economics["read_first_support_estimated_tokens"] >= result["model_handoff"]["selected_context_estimated_tokens"]
     assert economics["read_first_support_estimated_tokens"] < result["model_handoff"]["unified_context_estimated_tokens"]
@@ -1449,16 +1479,25 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert failed["status"] == "fail_agent_handoff"
     assert failed["decision"]["action"] == "stop"
     assert failed["decision"]["stop_reasons"][0]["id"] == "agent_context_gate_failed"
+    assert failed["unified_plane_audit_summary"]["status"] == "pass_unified_plane_audit"
+    assert failed["context_advantage_summary"]["status"] == "pass_context_advantage"
     assert failed["model_handoff"]["model_prompt_source"] == ""
     assert failed["model_handoff"]["machine_context_source"] == failed["outputs"]["agent_context_json"]
     assert failed["model_handoff"]["unified_context_source"] == failed["outputs"]["unified_index_json"]
     assert failed["model_handoff"]["selected_context_source"] == failed["outputs"]["selected_context_json"]
+    assert failed["model_handoff"]["unified_plane_audit_source"] == failed["outputs"]["unified_plane_audit_json"]
+    assert failed["model_handoff"]["context_advantage_source"] == failed["outputs"]["context_advantage_json"]
+    assert failed["outputs"]["context_advantage_json"] in failed["model_handoff"]["read_first"]
     assert failed["model_handoff"]["token_economics"]["status"] == "not_applicable"
     assert failed["model_handoff"]["token_economics"]["default_model_input"] == ""
     assert failed["model_handoff"]["token_economics"]["model_prompt_estimated_tokens"] == 0
     assert failed["model_handoff"]["token_economics"]["estimated_token_savings"] == 0
     assert Path(failed["outputs"]["unified_index_json"]).exists()
     assert Path(failed["outputs"]["selected_context_json"]).exists()
+    assert Path(failed["outputs"]["unified_plane_audit_json"]).exists()
+    assert Path(failed["outputs"]["context_advantage_json"]).exists()
+    assert any(row["role"] == "context_advantage" for row in failed["model_handoff"]["read_first_artifacts"])
+    assert any(row["role"] == "unified_plane_audit" for row in failed["model_handoff"]["audit_artifacts"])
     assert failed["agent_handoff_verification_summary"]["status"] == "pass_agent_handoff_verification"
     assert validate_artifact_contract(failed)["ok"] is True
     blocked_verified = verify_agent_handoff(failed, handoff_path=Path(failed["outputs"]["agent_handoff_json"]))
@@ -1552,7 +1591,7 @@ def test_memory_ledger_cli_writes_valid_artifact(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "build-reuse-index",
+            "reuse-context",
             "--root",
             str(tmp_path),
             "--input-dir",
@@ -1631,8 +1670,8 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     facets = {row["facet"] for row in unified["rows"]}
     assert {"surface", "symbol", "path", "memory", "command", "capability"} <= facets
     assert any(row["facet"] == "memory" and row["model_prompt_source"] == handoff["model_handoff"]["model_prompt_source"] for row in unified["rows"])
-    assert any(row["facet"] == "command" and row["command"] == "build-context-index" for row in unified["rows"])
-    assert not any(row["facet"] == "command" and row["command"] in {"unify-context", "select-context"} for row in unified["rows"])
+    assert any(row["facet"] == "command" and row["command"] == "unify-context" for row in unified["rows"])
+    assert not any(row["facet"] == "command" and row["command"] in {"build-context-index", "pack-working-set"} for row in unified["rows"])
 
     def assert_no_source_identity(value: object) -> None:
         if isinstance(value, Mapping):
@@ -1671,8 +1710,8 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     assert expansion["read_full_index_ref"] == (tmp_path / "unified_index.json").as_posix()
     assert expansion["selected_facets"] == selected["summary"]["facet_counts"]
     assert expansion["coverage"]["facet_coverage_met"] is True
-    assert expansion["recommended_commands"][0]["command"] == "pack-working-set"
-    assert expansion["recommended_commands"][0]["argv"][0] == "pack-working-set"
+    assert expansion["recommended_commands"][0]["command"] == "select-context"
+    assert expansion["recommended_commands"][0]["argv"][0] == "select-context"
     assert "--max-tokens" in expansion["recommended_commands"][0]["argv"]
     assert_no_source_identity(selected["rows"])
     assert_no_source_identity(selected["expansion_plan"])
@@ -1741,7 +1780,7 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "build-context-index",
+            "unify-context",
             "--input",
             str(federation["outputs"]["json"]),
             "--ability-registry",
@@ -1776,7 +1815,7 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "deep_context_federation.cli",
-            "pack-working-set",
+            "select-context",
             "--input",
             str(output_path),
             "--query",
@@ -1812,9 +1851,9 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
         row["id"] == "selected_context_minimum_exceeds_token_budget" for row in selected_payload["warnings"]
     )
     cli_expansion = selected_payload["expansion_plan"]
-    assert cli_expansion["recommended_commands"][0]["command"] == "pack-working-set"
+    assert cli_expansion["recommended_commands"][0]["command"] == "select-context"
     assert "--max-tokens" in cli_expansion["recommended_commands"][0]["argv"]
-    assert "select-context" not in json.dumps(cli_expansion, sort_keys=True)
+    assert "pack-working-set" not in json.dumps(cli_expansion, sort_keys=True)
     assert cli_expansion["coverage"]["selected_row_count"] == selected_payload["summary"]["selected_row_count"]
     assert selected_path.exists()
     assert validate_artifact_contract(selected_payload, artifact_kind="unified_working_set")["ok"] is True
@@ -1824,7 +1863,7 @@ def test_agent_discovery_reports_repo_readiness_states(tmp_path: Path) -> None:
     empty = discover_agent_context(root=tmp_path)
     assert empty["status"] == "not_configured"
     assert empty["ready_for_model_input"] is False
-    assert "dcf scan" in empty["recommended_next_command"]
+    assert "dcf map-repo" in empty["recommended_next_command"]
     assert validate_artifact_contract(empty)["ok"] is True
 
     missing_handoff = discover_agent_context(root=tmp_path, handoff_path=tmp_path / "missing_handoff.json")
@@ -1850,7 +1889,7 @@ def test_agent_route_normalizes_discovery_for_global_wrappers(tmp_path: Path) ->
     assert empty["status"] == "needs_bootstrap_agent_route"
     assert empty["action"] == "scan_and_build"
     assert empty["route_ready"] is True
-    assert "dcf scan" in empty["recommended_next_command"]
+    assert "dcf map-repo" in empty["recommended_next_command"]
     assert validate_artifact_contract(empty)["ok"] is True
 
     missing_handoff = route_agent_context(root=tmp_path, handoff_path=tmp_path / "missing_handoff.json")
@@ -2310,10 +2349,10 @@ def test_task_brief_routes_agent_context(tmp_path: Path) -> None:
     assert query_plan["input_ref"] == ".dcf/deep_context_federation_latest.json"
     assert query_plan["read_model_ref"] == ".dcf/deep_context_federation_latest.sqlite"
     plan_commands = {row["command"] for row in query_plan["steps"]}
-    assert {"doctor", "pack", "query", "query-read-model"} <= plan_commands
+    assert {"diagnose-context", "pack-task-context", "query-context", "query-context-store"} <= plan_commands
     assert query_plan["steps"][0]["read_role"] == "gate_first"
     assert query_plan["steps"][0]["stop_on_failure"] is True
-    read_model_steps = [row for row in query_plan["steps"] if row["command"] == "query-read-model"]
+    read_model_steps = [row for row in query_plan["steps"] if row["command"] == "query-context-store"]
     assert read_model_steps
     assert all(row["optional"] is True for row in read_model_steps)
     assert all("--read-model" in row["argv"] for row in read_model_steps)

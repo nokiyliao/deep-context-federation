@@ -338,8 +338,8 @@ def resolve_target(
         "related_conflicts": related_conflicts,
         "context_pack": context_pack,
         "recommended_commands": [
-            {"purpose": "trace_target_neighborhood", "command": f"dcf trace --match {json.dumps(target, ensure_ascii=True)} --format markdown"},
-            {"purpose": "build_target_context_pack", "command": f"dcf pack --task {json.dumps('resolve target ' + target, ensure_ascii=True)} --token-budget {token_budget}"},
+            {"purpose": "trace_target_neighborhood", "command": f"dcf trace-context --match {json.dumps(target, ensure_ascii=True)} --format markdown"},
+            {"purpose": "build_target_context_pack", "command": f"dcf pack-task-context --task {json.dumps('resolve target ' + target, ensure_ascii=True)} --token-budget {token_budget}"},
         ],
     }
     prompt_text, prompt_tokens, rendered_counts = _bounded_prompt_text(result, token_budget) if include_prompt else ("", 0, {})

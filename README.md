@@ -103,7 +103,7 @@ python -m pip install -e ".[dev]"
 Inspect the tool's machine-readable contract surface:
 
 ```bash
-python -m deep_context_federation.cli capabilities \
+python -m deep_context_federation.cli describe-abilities \
   --format json \
   --output .dcf/deep_context_federation_capabilities.json
 ```
@@ -111,11 +111,11 @@ python -m deep_context_federation.cli capabilities \
 Export the built-in JSON Schema registry and validate artifact shape before deeper gates:
 
 ```bash
-python -m deep_context_federation.cli schema \
+python -m deep_context_federation.cli describe-contracts \
   --format json \
   --output .dcf/deep_context_federation_schema_registry.json
 
-python -m deep_context_federation.cli validate-artifact \
+python -m deep_context_federation.cli check-artifact \
   --input .dcf/deep_context_federation_bootstrap.json \
   --artifact bootstrap \
   --output .dcf/deep_context_federation_contract_validation.json
@@ -135,7 +135,7 @@ python -m deep_context_federation.cli plan-capability-ownership \
 Build the reusable context index from generated DCF artifacts:
 
 ```bash
-python -m deep_context_federation.cli build-reuse-index \
+python -m deep_context_federation.cli reuse-context \
   --input-dir .dcf \
   --format json \
   --output .dcf/deep_context_federation_memory_ledger.json
@@ -144,7 +144,7 @@ python -m deep_context_federation.cli build-reuse-index \
 Collapse graph, reusable context, commands, and capability ownership into one DCF function-facet index:
 
 ```bash
-python -m deep_context_federation.cli build-context-index \
+python -m deep_context_federation.cli unify-context \
   --input .dcf/deep_context_federation_latest.json \
   --reuse-index .dcf/deep_context_federation_memory_ledger.json \
   --ability-registry .dcf/deep_context_federation_capabilities.json \
@@ -156,7 +156,7 @@ python -m deep_context_federation.cli build-context-index \
 Self-bootstrap a fresh repository into a verified federation:
 
 ```bash
-python -m deep_context_federation.cli bootstrap \
+python -m deep_context_federation.cli bootstrap-context \
   --root . \
   --output-dir .dcf \
   --format markdown
@@ -165,7 +165,7 @@ python -m deep_context_federation.cli bootstrap \
 For a fresh agent or CI run, create the full intake packet in one step:
 
 ```bash
-python -m deep_context_federation.cli intake \
+python -m deep_context_federation.cli prepare-task-intake \
   --root . \
   --output-dir .dcf \
   --task "dashboard operator evidence authority" \
@@ -176,7 +176,7 @@ python -m deep_context_federation.cli intake \
 Plan a run before any agent reads broad context:
 
 ```bash
-python -m deep_context_federation.cli workflow-plan \
+python -m deep_context_federation.cli plan-workflow \
   --root . \
   --output-dir .dcf \
   --task "dashboard operator evidence authority" \
@@ -190,7 +190,7 @@ The plan does not execute commands. It emits the intended run order, stop gates,
 Execute that read-only DCF chain into a single compact run capsule:
 
 ```bash
-python -m deep_context_federation.cli workflow-run \
+python -m deep_context_federation.cli run-workflow \
   --root . \
   --output-dir .dcf \
   --task "dashboard operator evidence authority" \
@@ -199,12 +199,12 @@ python -m deep_context_federation.cli workflow-run \
   --output .dcf/deep_context_federation_workflow_run.json
 ```
 
-`workflow-run` writes generated DCF artifacts only. It runs intake, contract validation, optional target review, review gate, and priority target resolution, then emits a compact `model_handoff` that tells an agent what to read first and what to skip by default.
+`run-workflow` writes generated DCF artifacts only. It runs intake, contract validation, optional target review, review gate, and priority target resolution, then emits a compact `model_handoff` that tells an agent what to read first and what to skip by default.
 
 Measure the token savings from that run:
 
 ```bash
-python -m deep_context_federation.cli efficiency-report \
+python -m deep_context_federation.cli measure-token-efficiency \
   --input .dcf/deep_context_federation_workflow_run.json \
   --output .dcf/deep_context_federation_efficiency_report.json
 ```
@@ -214,7 +214,7 @@ The report compares the `read_first` and gate-pass artifact sets against availab
 Enforce token-efficiency thresholds before an agent continues:
 
 ```bash
-python -m deep_context_federation.cli efficiency-gate \
+python -m deep_context_federation.cli gate-token-efficiency \
   --input .dcf/deep_context_federation_efficiency_report.json \
   --min-read-first-savings-percent 50 \
   --max-read-first-ratio 0.5 \
@@ -238,7 +238,7 @@ python -m deep_context_federation.cli decide-continuation \
 Materialize that read plan into one bounded model context:
 
 ```bash
-python -m deep_context_federation.cli pack-model-context \
+python -m deep_context_federation.cli pack-task-context-model-context \
   --input .dcf/deep_context_federation_agent_ci.json \
   --mode read-first \
   --token-budget 4000 \
@@ -272,7 +272,7 @@ python -m deep_context_federation.cli prepare-model-handoff \
   --output .dcf/deep_context_federation_agent_handoff.json
 ```
 
-`prepare-model-handoff` writes the underlying `decide-continuation`, `pack-model-context`, `gate-model-context`, `build-context-index`, `pack-working-set`, and `prepare-model-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `pack-model-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff records `model_handoff.selected_context_source`, a compact task-scoped DCF working set that appears in `read_first` without exposing upstream source identities. The full `model_handoff.unified_context_source` remains available as an audit artifact. The handoff includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
+`prepare-model-handoff` writes the underlying `decide-continuation`, `pack-model-context`, `gate-model-context`, `unify-context`, `select-context`, and `prepare-model-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `pack-model-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff records `model_handoff.selected_context_source`, a compact task-scoped DCF working set that appears in `read_first` without exposing upstream source identities. The full `model_handoff.unified_context_source` remains available as an audit artifact. The handoff includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
 
 Global wrappers can route from the current repo state before deciding what to run:
 
@@ -364,7 +364,7 @@ python -m deep_context_federation.cli emit-model-input \
 Bootstrap can also merge curated manifests into the same graph:
 
 ```bash
-python -m deep_context_federation.cli bootstrap \
+python -m deep_context_federation.cli bootstrap-context \
   --root . \
   --output-dir .dcf \
   --manifest team_evidence/deep_context_federation.json \
@@ -374,7 +374,7 @@ python -m deep_context_federation.cli bootstrap \
 Then enforce a machine-readable quality policy:
 
 ```bash
-python -m deep_context_federation.cli quality-gate \
+python -m deep_context_federation.cli gate-quality \
   --input .dcf/deep_context_federation_bootstrap.json \
   --policy .dcf/quality_gate_policy.json \
   --output .dcf/deep_context_federation_quality_gate.json
@@ -383,7 +383,7 @@ python -m deep_context_federation.cli quality-gate \
 Pack only the relevant context for a model or agent task:
 
 ```bash
-python -m deep_context_federation.cli pack \
+python -m deep_context_federation.cli pack-task-context \
   --input .dcf/deep_context_federation_latest.json \
   --task "dashboard operator evidence authority" \
   --token-budget 4000 \
@@ -393,7 +393,7 @@ python -m deep_context_federation.cli pack \
 Or generate a full task routing brief before handing work to an agent:
 
 ```bash
-python -m deep_context_federation.cli brief \
+python -m deep_context_federation.cli brief-task \
   --input .dcf/deep_context_federation_latest.json \
   --read-model .dcf/deep_context_federation_latest.sqlite \
   --task "dashboard operator evidence authority" \
@@ -404,14 +404,14 @@ python -m deep_context_federation.cli brief \
 Run only the repository scan when you want starter source snapshots without the full pipeline:
 
 ```bash
-python -m deep_context_federation.cli scan \
+python -m deep_context_federation.cli map-repo \
   --root . \
   --output-dir .dcf \
   --write \
   --build \
   --format markdown
 
-python -m deep_context_federation.cli query \
+python -m deep_context_federation.cli query-context \
   --input .dcf/deep_context_federation_latest.json \
   --preset code-to-authority \
   --format markdown
@@ -420,14 +420,14 @@ python -m deep_context_federation.cli query \
 Compose self-scan output with another manifest before building:
 
 ```bash
-python -m deep_context_federation.cli compose-manifest \
+python -m deep_context_federation.cli combine-inputs \
   --manifest .dcf/deep_context_federation.generated.json \
   --manifest examples/deep_context_federation.example.json \
   --output .dcf/deep_context_federation.composed.json \
   --write \
   --format markdown
 
-python -m deep_context_federation.cli build \
+python -m deep_context_federation.cli assemble-context \
   --manifest .dcf/deep_context_federation.composed.json \
   --root . \
   --output-dir .dcf \
@@ -437,37 +437,37 @@ python -m deep_context_federation.cli build \
 Run the bundled example after installation:
 
 ```bash
-python -m deep_context_federation.cli validate-manifest \
+python -m deep_context_federation.cli validate-inputs \
   --manifest examples/deep_context_federation.example.json
 
-python -m deep_context_federation.cli build \
+python -m deep_context_federation.cli assemble-context \
   --manifest examples/deep_context_federation.example.json \
   --root examples \
   --output-dir .dcf \
   --write
 
-python -m deep_context_federation.cli verify \
+python -m deep_context_federation.cli verify-context \
   --manifest examples/deep_context_federation.example.json \
   --root examples \
   --input .dcf/deep_context_federation_latest.json
 
-python -m deep_context_federation.cli query \
+python -m deep_context_federation.cli query-context \
   --input .dcf/deep_context_federation_latest.json \
   --preset claim-lineage \
   --format markdown
 
-python -m deep_context_federation.cli trace \
+python -m deep_context_federation.cli trace-context \
   --input .dcf/deep_context_federation_latest.json \
   --match dashboard \
   --depth 2 \
   --format markdown
 
-python -m deep_context_federation.cli resolve \
+python -m deep_context_federation.cli resolve-evidence \
   --input .dcf/deep_context_federation_latest.json \
   --target dashboard_readiness_projection \
   --format markdown
 
-python -m deep_context_federation.cli adjudicate \
+python -m deep_context_federation.cli adjudicate-evidence \
   --input .dcf/deep_context_federation_latest.json \
   --target dashboard_readiness_projection \
   --format markdown
@@ -478,28 +478,28 @@ python -m deep_context_federation.cli review-targets \
   --target ui/dashboard/app.py \
   --output .dcf/deep_context_federation_target_review.json
 
-python -m deep_context_federation.cli review-gate \
+python -m deep_context_federation.cli gate-target-review \
   --input .dcf/deep_context_federation_target_review.json \
   --max-no-match 0 \
   --max-priority-score 99 \
   --format markdown
 
-python -m deep_context_federation.cli doctor \
+python -m deep_context_federation.cli diagnose-context \
   --input .dcf/deep_context_federation_latest.json \
   --format markdown
 
-python -m deep_context_federation.cli rank \
+python -m deep_context_federation.cli rank-context \
   --input .dcf/deep_context_federation_latest.json \
   --kind entities \
   --format markdown
 
-python -m deep_context_federation.cli query-read-model \
+python -m deep_context_federation.cli query-context-store \
   --read-model .dcf/deep_context_federation_latest.sqlite \
   --preset search \
   --search dashboard \
   --format markdown
 
-python -m deep_context_federation.cli bench \
+python -m deep_context_federation.cli benchmark-context-build \
   --manifest examples/deep_context_federation.example.json \
   --root examples \
   --iterations 5
@@ -508,19 +508,19 @@ python -m deep_context_federation.cli bench \
 If installed as a package, use `dcf`:
 
 ```bash
-dcf build --manifest examples/deep_context_federation.example.json --root examples --output-dir .dcf --write
-dcf verify --manifest examples/deep_context_federation.example.json --root examples --input .dcf/deep_context_federation_latest.json
-dcf query --input .dcf/deep_context_federation_latest.json --preset surface-splits --format markdown
-dcf trace --input .dcf/deep_context_federation_latest.json --match dashboard --depth 2 --format markdown
-dcf doctor --input .dcf/deep_context_federation_latest.json --format markdown
-dcf rank --input .dcf/deep_context_federation_latest.json --kind sources --format markdown
-dcf query-read-model --read-model .dcf/deep_context_federation_latest.sqlite --preset source-health
+dcf assemble-context --manifest examples/deep_context_federation.example.json --root examples --output-dir .dcf --write
+dcf verify-context --manifest examples/deep_context_federation.example.json --root examples --input .dcf/deep_context_federation_latest.json
+dcf query-context --input .dcf/deep_context_federation_latest.json --preset surface-splits --format markdown
+dcf trace-context --input .dcf/deep_context_federation_latest.json --match dashboard --depth 2 --format markdown
+dcf diagnose-context --input .dcf/deep_context_federation_latest.json --format markdown
+dcf rank-context --input .dcf/deep_context_federation_latest.json --kind sources --format markdown
+dcf query-context-store --read-model .dcf/deep_context_federation_latest.sqlite --preset source-health
 ```
 
 From a fresh source checkout without installing first, prefix commands with `PYTHONPATH=src`:
 
 ```bash
-PYTHONPATH=src python -m deep_context_federation.cli build \
+PYTHONPATH=src python -m deep_context_federation.cli assemble-context \
   --manifest examples/deep_context_federation.example.json \
   --root examples \
   --output-dir .dcf \
@@ -529,18 +529,18 @@ PYTHONPATH=src python -m deep_context_federation.cli build \
 
 ## Repo Scan Bootstrap
 
-`dcf scan` gives the tool a self-starting path on unfamiliar codebases. It walks the repository with safe default excludes (`.git`, `.venv`, `node_modules`, `output`, `data`, `.codebase-memory`, and generated `.dcf*` folders), then writes:
+`dcf map-repo` gives the tool a self-starting path on unfamiliar codebases. It walks the repository with safe default excludes (`.git`, `.venv`, `node_modules`, `output`, `data`, `.codebase-memory`, and generated `.dcf*` folders), then writes:
 
 - `repo_file_inventory.json`: file/path/artifact inventory with surface hints
 - `repo_code_symbols.json`: Python AST plus conservative JS/TS symbol map with path and surface links
 - `repo_dependency_graph.json`: Python import plus JS/TS import/require dependency graph
 - `repo_surface_map.json`: starter surface map with owner placeholders
-- `deep_context_federation.generated.json`: manifest that can be fed into `dcf build`
+- `deep_context_federation.generated.json`: manifest that can be fed into `dcf assemble-context`
 
 One command can scan and build:
 
 ```bash
-dcf scan --root . --output-dir .dcf --write --build
+dcf map-repo --root . --output-dir .dcf --write --build
 ```
 
 For backward compatibility, the scanner also writes `repo_python_symbols.json` as an alias of the code-symbol snapshot during the early alpha period.
@@ -551,22 +551,22 @@ Every scan summary includes lightweight performance fields such as `duration_sec
 
 ## Bootstrap Pipeline
 
-`dcf intake` is the highest-level agent workflow. It runs `bootstrap`, evaluates `quality-gate`, builds a `task_brief`, and writes one `deep_context_federation_agent_intake.json` packet with all generated output paths and next actions.
+`dcf prepare-task-intake` is the highest-level agent workflow. It runs `bootstrap-context`, evaluates `gate-quality`, builds a `task_brief`, and writes one `deep_context_federation_agent_intake.json` packet with all generated output paths and next actions.
 
-`dcf bootstrap` is the lower-level federation workflow:
+`dcf bootstrap-context` is the lower-level federation workflow:
 
-1. run `dcf scan` into the output directory
+1. run `dcf map-repo` into the output directory
 2. optionally compose the generated manifest with one or more curated manifests
 3. build the federation JSON, Markdown, and SQLite read model
 4. run the verifier
 5. run doctor diagnostics
 6. write `deep_context_federation_bootstrap.json` and `DEEP_CONTEXT_FEDERATION_BOOTSTRAP.md`
 
-Use `bootstrap` when you only need the federation artifact. Use `intake` when a coding agent or CI job needs a single packet with repo state, quality gate, and task routed model context while preserving `authority_effect: none` and `no_apply: true`.
+Use `bootstrap-context` when you only need the federation artifact. Use `prepare-task-intake` when a coding agent or CI job needs a single packet with repo state, quality gate, and task routed model context while preserving `authority_effect: none` and `no_apply: true`.
 
 ## Workflow Plan
 
-`dcf workflow-plan` is a planning layer for agent orchestration. It returns `deep_context_federation_workflow_plan_v1`, a small JSON artifact that lists:
+`dcf plan-workflow` is a planning layer for agent orchestration. It returns `deep_context_federation_workflow_plan_v1`, a small JSON artifact that lists:
 
 - ordered DCF commands and their expected output schemas
 - deterministic stop gates before wider context expansion
@@ -578,7 +578,7 @@ This is the preferred first artifact for token-sensitive agents. It lets Codex, 
 
 ## Workflow Run
 
-`dcf workflow-run` is the executable read-only companion to `workflow-plan`. It creates:
+`dcf run-workflow` is the executable read-only companion to `plan-workflow`. It creates:
 
 - `deep_context_federation_workflow_plan.json`
 - `deep_context_federation_agent_intake.json`
@@ -592,7 +592,7 @@ The run capsule summarizes each step, records pass/fail gates, and gives a compa
 
 ## Efficiency Report
 
-`dcf efficiency-report` reads a `workflow_run` artifact and computes:
+`dcf measure-token-efficiency` reads a `workflow_run` artifact and computes:
 
 - token estimates for `read_first`
 - token estimates for `read_next_if_gate_passes`
@@ -605,7 +605,7 @@ Use it when you need to prove that DCF is reducing model input cost. It is also 
 
 ## Efficiency Gate
 
-`dcf efficiency-gate` turns that report into a deterministic pass/fail result. The default policy requires:
+`dcf gate-token-efficiency` turns that report into a deterministic pass/fail result. The default policy requires:
 
 - report status is OK
 - no missing required artifacts
@@ -623,9 +623,9 @@ A starter policy is available at `examples/efficiency_gate_policy.example.json`.
 
 `dcf decide-continuation` is the highest-level machine entrypoint for token-sensitive continuation. It runs:
 
-1. `workflow-run`
-2. `efficiency-report`
-3. `efficiency-gate`
+1. `run-workflow`
+2. `measure-token-efficiency`
+3. `gate-token-efficiency`
 
 and emits `deep_context_federation_agent_ci_v1` with:
 
@@ -641,7 +641,7 @@ This is the preferred artifact for external orchestrators. It reduces model inpu
 
 ## Model Context Pack
 
-`dcf pack-model-context` is the second-stage context materializer. It reads a completed `agent_ci` artifact and selects artifacts from `artifact_read_plan` by mode:
+`dcf pack-task-context-model-context` is the second-stage context materializer. It reads a completed `agent_ci` artifact and selects artifacts from `artifact_read_plan` by mode:
 
 - `read-first`: only the mandatory first-read set
 - `decision-allowed`: first-read plus decision-allowed follow-up artifacts
@@ -692,7 +692,7 @@ Reused handoffs are also request-bound. If a wrapper supplies a task or targets 
 
 ## Capabilities Manifest
 
-`dcf capabilities` is the self-describing entrypoint for agent orchestration. It returns a stable JSON object with:
+`dcf describe-abilities` is the self-describing entrypoint for agent orchestration. It returns a stable JSON object with:
 
 - command names, intents, output schemas, and write boundaries
 - artifact contracts and generated source contracts
@@ -704,10 +704,12 @@ Reused handoffs are also request-bound. If a wrapper supplies a task or targets 
 Use it before dispatching DCF from CI, AGY, Codex, Claude, GitHub Actions, or another runner:
 
 ```bash
-dcf capabilities \
+dcf describe-abilities \
   --format json \
   --output .dcf/deep_context_federation_capabilities.json
 ```
+
+The public CLI is intentionally named by the function a runner wants to accomplish: `map-repo`, `assemble-context`, `query-context`, `prove-unified-context`, `select-context`, and `prepare-model-handoff`. Legacy source-shaped or implementation-shaped names remain hidden compatibility aliases only; new machine guidance should use the function names emitted by `describe-abilities`.
 
 ## Native Unified Integration
 
@@ -723,14 +725,14 @@ This lets DCF absorb symbol graphs, surface maps, long-term memory, evidence lin
 
 ```bash
 dcf plan-capability-ownership --format markdown
-dcf validate-artifact \
+dcf check-artifact \
   --input .dcf/deep_context_federation_native_integration_plan.json \
   --artifact native_integration_plan
 ```
 
 ## Reusable Context Index
 
-`dcf build-reuse-index` is the DCF function for scattered long-term context recall. It reads generated DCF artifacts such as `prepare-model-handoff`, `prepare-model-input`, `onboard-runner`, `workflow-run`, and `input-fingerprint`, then emits one reusable context index:
+`dcf reuse-context` is the DCF function for scattered long-term context recall. It reads generated DCF artifacts such as `prepare-model-handoff`, `prepare-model-input`, `onboard-runner`, `run-workflow`, and `input-fingerprint`, then emits one reusable context index:
 
 - `rows`: normalized memory records for generated DCF artifacts
 - `reuse_index`: prompt/context entries that are safe to reuse
@@ -738,8 +740,8 @@ dcf validate-artifact \
 - `safety_boundaries`: confirms no source, authority, external model, watcher, or tool identity mutation
 
 ```bash
-dcf build-reuse-index --input-dir .dcf --format markdown
-dcf validate-artifact \
+dcf reuse-context --input-dir .dcf --format markdown
+dcf check-artifact \
   --input .dcf/deep_context_federation_memory_ledger.json \
   --artifact memory_ledger
 ```
@@ -748,7 +750,7 @@ The ledger is generated-output-only. It does not crawl the source tree by defaul
 
 ## Unified Context Index
 
-`dcf build-context-index` is the DCF function for making agents stop jumping across graph rows, reuse rows, command manifests, and capability ownership plans. It emits one source-collapsed function-facet index:
+`dcf unify-context` is the DCF function for making agents stop jumping across graph rows, reuse rows, command manifests, and capability ownership plans. It emits one source-collapsed function-facet index:
 
 - `surface`, `symbol`, `claim`, `path`, `artifact`, `memory`, `command`, `capability`, and `conflict` rows
 - `source_identity_policy` proving `source_ids_exposed: false` and `source_table_exposed: false`
@@ -758,7 +760,7 @@ The ledger is generated-output-only. It does not crawl the source tree by defaul
 The original artifacts remain the audit location. The unified index is the public DCF audit plane, with `authority_effect: none` and `no_apply: true`. `dcf prepare-model-handoff` builds this index automatically and records it in `model_handoff.unified_context_source`.
 
 ```bash
-dcf build-context-index \
+dcf unify-context \
   --input .dcf/deep_context_federation_latest.json \
   --reuse-index .dcf/deep_context_federation_memory_ledger.json \
   --ability-registry .dcf/deep_context_federation_capabilities.json \
@@ -769,7 +771,7 @@ dcf build-context-index \
 
 ## Unified Plane Audit
 
-`dcf audit-unified-plane` is the machine gate that checks whether DCF is really acting like one integrated tool:
+`dcf prove-unified-context` is the machine gate that checks whether DCF is really acting like one integrated tool:
 
 - public command manifest uses function names, not legacy/source names
 - ownership plan collapses upstream identity into `deep_context_federation`
@@ -780,7 +782,7 @@ dcf build-context-index \
 By default, `native_partial` capabilities are warnings. Add `--require-all-owned` when using the audit as a stricter CI or final-acceptance gate.
 
 ```bash
-dcf audit-unified-plane \
+dcf prove-unified-context \
   --ability-registry .dcf/deep_context_federation_capabilities.json \
   --ownership-plan .dcf/deep_context_federation_native_integration_plan.json \
   --context-index .dcf/deep_context_federation_unified_index.json \
@@ -794,9 +796,9 @@ dcf audit-unified-plane \
 
 It consumes existing artifacts only:
 
-- `audit-unified-plane`: proves DCF is one function-named, source-collapsed read plane
-- `efficiency-report`: measures read-first tokens against full-federation/generated-output baselines
-- optional `efficiency-gate`: enforces policy thresholds before accepting the proof
+- `prove-unified-context`: proves DCF is one function-named, source-collapsed read plane
+- `measure-token-efficiency`: measures read-first tokens against full-federation/generated-output baselines
+- optional `gate-token-efficiency`: enforces policy thresholds before accepting the proof
 
 The proof requires baseline evidence, read-first context smaller than baseline, a configurable savings threshold, and a passing unified-plane audit. It remains `authority_effect: none` / `no_apply: true`; it does not run tools, mutate files, or call external models.
 
@@ -812,20 +814,20 @@ dcf prove-context-advantage \
 
 ## Selected Context
 
-`dcf pack-working-set` is the optimized model read-first layer on top of `build-context-index`. It selects a compact task-scoped working set from the full unified index:
+`dcf select-context` is the optimized model read-first layer on top of `unify-context`. It selects a compact task-scoped working set from the full unified index:
 
 - keeps `source_identity_policy.source_ids_exposed: false`
 - truncates long labels/values for predictable token use
 - supports `--max-tokens` so the selected JSON is packed to a model budget instead of a fixed row count
 - uses balanced facet selection by default, so surfaces, claims, conflicts, symbols, paths, commands, and capabilities do not silently collapse into one high-score row type
 - records `optimization_policy.full_index_role: audit_only`
-- records `expansion_plan` with `read_full_index_ref`, selected/omitted facet counts, recommended `pack-working-set` argv, and next actions for controlled expansion
+- records `expansion_plan` with `read_full_index_ref`, selected/omitted facet counts, recommended `select-context` argv, and next actions for controlled expansion
 - preserves row ids, facets, scores, conflict attention, and command/capability hints
 
 `dcf prepare-model-handoff` runs this automatically and places the result in `model_handoff.selected_context_source`. The full unified index remains in `audit_artifacts`.
 
 ```bash
-dcf pack-working-set \
+dcf select-context \
   --input .dcf/deep_context_federation_unified_index.json \
   --query "dashboard operator" \
   --limit 24 \
@@ -839,30 +841,30 @@ Use `--facet-mode ranked` when strict score order is more important than broad s
 
 ## Schema Registry And Contract Validation
 
-`dcf schema` emits built-in JSON Schema documents for DCF artifacts:
+`dcf describe-contracts` emits built-in JSON Schema documents for DCF artifacts:
 
 ```bash
-dcf schema --format json
-dcf schema --artifact federation --format json
+dcf describe-contracts --format json
+dcf describe-contracts --artifact federation --format json
 ```
 
-`dcf validate-artifact` validates an artifact against the built-in top-level contract subset:
+`dcf check-artifact` validates an artifact against the built-in top-level contract subset:
 
 ```bash
-dcf validate-artifact \
+dcf check-artifact \
   --input .dcf/deep_context_federation_latest.json \
   --artifact federation \
   --format markdown
 ```
 
-This is intentionally a contract-shape gate: it checks schema identity, required top-level fields, `authority_effect: none`, `no_apply: true`, and basic JSON types. Deeper project semantics still belong to `dcf verify`, `dcf doctor`, and `dcf quality-gate`.
+This is intentionally a contract-shape gate: it checks schema identity, required top-level fields, `authority_effect: none`, `no_apply: true`, and basic JSON types. Deeper project semantics still belong to `dcf verify-context`, `dcf diagnose-context`, and `dcf gate-quality`.
 
 ## Token-Aware Context Packing
 
-`dcf pack` is the model-efficiency layer. It takes a full federation artifact plus a task string, scores sources/entities/edges/conflicts locally, and emits a bounded context bundle:
+`dcf pack-task-context` is the model-efficiency layer. It takes a full federation artifact plus a task string, scores sources/entities/edges/conflicts locally, and emits a bounded context bundle:
 
 ```bash
-dcf pack \
+dcf pack-task-context \
   --input .dcf/deep_context_federation_latest.json \
   --task "claim lineage for dashboard readiness" \
   --token-budget 8000 \
@@ -883,7 +885,7 @@ This is the intended way to reduce model input tokens: run local federation quer
 
 ## Task Brief
 
-`dcf brief` is the agent start surface. It consumes a federation artifact plus a task string and emits:
+`dcf brief-task` is the agent start surface. It consumes a federation artifact plus a task string and emits:
 
 - selected query presets with the terms that triggered them
 - compact routed query samples
@@ -892,11 +894,11 @@ This is the intended way to reduce model input tokens: run local federation quer
 - embedded `context_pack.prompt_text`
 - token budget, compression, coverage, and recommended follow-up commands
 
-Use it when an agent should not decide from scratch whether to run `query`, `doctor`, `trace`, `pack`, or `query-read-model`. The brief remains `authority_effect: none` / `no_apply: true`; it routes context and diagnostics only. `query_plan` is execution guidance, not an executor: DCF records the intended `argv`, read role, and expansion policy, while the runner remains responsible for actually running those commands and honoring gates.
+Use it when an agent should not decide from scratch whether to run `query-context`, `diagnose-context`, `trace-context`, `pack-task-context`, or `query-context-store`. The brief remains `authority_effect: none` / `no_apply: true`; it routes context and diagnostics only. `query_plan` is execution guidance, not an executor: DCF records the intended `argv`, read role, and expansion policy, while the runner remains responsible for actually running those commands and honoring gates.
 
 ## Target Resolve
 
-`dcf resolve` is the target-level evidence explorer. It takes a specific claim id, path, surface id, symbol, or keyword and emits a compact evidence card:
+`dcf resolve-evidence` is the target-level evidence explorer. It takes a specific claim id, path, surface id, symbol, or keyword and emits a compact evidence card:
 
 - matched entities
 - neighboring graph edges
@@ -905,11 +907,11 @@ Use it when an agent should not decide from scratch whether to run `query`, `doc
 - target-specific prompt text and embedded context pack
 - recommended follow-up commands
 
-Use it after `brief` when the agent needs to inspect one concrete assertion, file, or surface instead of browsing every preset result. Like the rest of DCF, it is read-only and `authority_effect: none`.
+Use it after `brief-task` when the agent needs to inspect one concrete assertion, file, or surface instead of browsing every preset result. Like the rest of DCF, it is read-only and `authority_effect: none`.
 
 ## Target Adjudication
 
-`dcf adjudicate` builds on `resolve` and emits a deterministic verdict for one target:
+`dcf adjudicate-evidence` builds on `resolve-evidence` and emits a deterministic verdict for one target:
 
 - `supported`: enough authority/evidence support and no risk flags
 - `warn`: usable as model context, but with caveats
@@ -931,7 +933,7 @@ It classifies related sources into authority, evidence, advisory, context, and u
 
 Targets can be passed repeatedly with `--target` or loaded from `--targets-file` as either a JSON list or newline-delimited text. This is the batch surface for large projects where an agent needs to decide which claims, paths, or surfaces deserve attention first.
 
-`dcf review-gate` turns that portfolio into a CI/agent routing gate. It checks policy thresholds such as:
+`dcf gate-target-review` turns that portfolio into a CI/agent routing gate. It checks policy thresholds such as:
 
 - `max_blocked`
 - `max_no_match`
@@ -942,11 +944,11 @@ Targets can be passed repeatedly with `--target` or loaded from `--targets-file`
 - disallowed risk flags
 - required reviewed targets
 
-Use `quality-gate` to verify federation health; use `review-gate` to decide whether a target portfolio is safe enough for agent continuation.
+Use `gate-quality` to verify federation health; use `gate-target-review` to decide whether a target portfolio is safe enough for agent continuation.
 
 ## Quality Gate
 
-`dcf quality-gate` turns a bootstrap or federation artifact into a strict machine-readable pass/fail report. It checks:
+`dcf gate-quality` turns a bootstrap or federation artifact into a strict machine-readable pass/fail report. It checks:
 
 - `authority_effect: none` and `no_apply: true`
 - quality policy schema, unknown keys, validation errors, and policy authority boundary
@@ -981,7 +983,7 @@ The preferred CI shape is policy-as-code. Store the threshold policy in JSON, co
 A starter copy is available at `examples/quality_gate_policy.example.json`.
 
 ```bash
-dcf quality-gate \
+dcf gate-quality \
   --input .dcf/deep_context_federation_bootstrap.json \
   --policy .dcf/quality_gate_policy.json \
   --output .dcf/deep_context_federation_quality_gate.json
@@ -990,7 +992,7 @@ dcf quality-gate \
 The command exits `0` on pass and `2` on failure. Use `--output` to write stable JSON for CI, GitHub Actions, or another agent. Individual CLI threshold flags can still override policy fields for ad hoc local checks:
 
 ```bash
-dcf quality-gate \
+dcf gate-quality \
   --input .dcf/deep_context_federation_bootstrap.json \
   --policy .dcf/quality_gate_policy.json \
   --require-source repo_file_inventory \
@@ -1003,17 +1005,17 @@ dcf quality-gate \
 
 ## Manifest Composition
 
-`dcf compose-manifest` merges multiple federation manifests into one buildable manifest:
+`dcf combine-inputs` merges multiple federation manifests into one buildable manifest:
 
 ```bash
-dcf compose-manifest \
+dcf combine-inputs \
   --manifest .dcf/deep_context_federation.generated.json \
   --manifest team_evidence/deep_context_federation.json \
   --output .dcf/deep_context_federation.composed.json \
   --write
 ```
 
-Identical duplicate `source_id` entries are collapsed. Conflicting duplicate `source_id` entries are kept by deterministically renaming the later source and reporting a warning conflict. Relative source paths are rebased to the composed manifest output directory so the result can be passed directly to `dcf build`.
+Identical duplicate `source_id` entries are collapsed. Conflicting duplicate `source_id` entries are kept by deterministically renaming the later source and reporting a warning conflict. Relative source paths are rebased to the composed manifest output directory so the result can be passed directly to `dcf assemble-context`.
 
 ## Manifest
 
@@ -1068,7 +1070,7 @@ Read-model presets:
 Example:
 
 ```bash
-dcf query-read-model --read-model .dcf/deep_context_federation_latest.sqlite --preset search --search governance
+dcf query-context-store --read-model .dcf/deep_context_federation_latest.sqlite --preset search --search governance
 ```
 
 ## Source Quality
@@ -1087,29 +1089,29 @@ This is the layer that lets DCF absorb symbol maps, surface maps, evidence/claim
 
 ## Graph Trace
 
-Use `trace` to start from any matching entity and expand through federation edges:
+Use `trace-context` to start from any matching entity and expand through federation edges:
 
 ```bash
-dcf trace --input .dcf/deep_context_federation_latest.json --match dashboard --depth 2 --format markdown
+dcf trace-context --input .dcf/deep_context_federation_latest.json --match dashboard --depth 2 --format markdown
 ```
 
 The output is useful for "code-to-authority" and "claim-to-evidence" exploration because it traverses the unified entity graph rather than one source's private graph.
 
 ## Ranking And Doctor
 
-`rank` turns the federation into a prioritization surface:
+`rank-context` turns the federation into a prioritization surface:
 
 ```bash
-dcf rank --input .dcf/deep_context_federation_latest.json --kind entities --limit 20
-dcf rank --input .dcf/deep_context_federation_latest.json --kind sources --limit 20
+dcf rank-context --input .dcf/deep_context_federation_latest.json --kind entities --limit 20
+dcf rank-context --input .dcf/deep_context_federation_latest.json --kind sources --limit 20
 ```
 
 Entity ranking combines graph degree, semantic edge weights, source quality, and entity type. Source ranking highlights risky sources by combining quality score, required status, and conflict counts.
 
-`doctor` gives a compact health verdict:
+`diagnose-context` gives a compact health verdict:
 
 ```bash
-dcf doctor --input .dcf/deep_context_federation_latest.json --format markdown
+dcf diagnose-context --input .dcf/deep_context_federation_latest.json --format markdown
 ```
 
 It checks hard conflicts, missing required sources, stale sources, low-quality sources, graph connectivity, and unresolved warnings. The output includes recommended actions for automation or human review.
@@ -1119,21 +1121,21 @@ It checks hard conflicts, missing required sources, stale sources, low-quality s
 Compare two builds:
 
 ```bash
-dcf diff --before old.json --after new.json --format markdown
+dcf diff-context --before old.json --after new.json --format markdown
 ```
 
 The diff reports source changes, entity/edge additions and removals, conflict changes, and summary deltas. This helps track whether governance work is reducing fragmentation or simply moving it around.
 
 ## Incremental Cache
 
-`dcf build --write` writes `.dcf/source_fingerprints.json`. The next run reports changed, unchanged, new, and removed sources under `incremental_cache`. This does not change authority semantics; it gives automation a cheap signal for whether an expensive context refresh is actually needed.
+`dcf assemble-context --write` writes `.dcf/source_fingerprints.json`. The next run reports changed, unchanged, new, and removed sources under `incremental_cache`. This does not change authority semantics; it gives automation a cheap signal for whether an expensive context refresh is actually needed.
 
 ## Benchmarking
 
-Use `bench` to track local build performance:
+Use `benchmark-context-build` to track local build performance:
 
 ```bash
-dcf bench --manifest examples/deep_context_federation.example.json --root examples --iterations 20 --json
+dcf benchmark-context-build --manifest examples/deep_context_federation.example.json --root examples --iterations 20 --json
 ```
 
 ## Optional Memory Import
@@ -1149,7 +1151,7 @@ Safe mode requires:
 
 ## Output
 
-`dcf build --write` emits:
+`dcf assemble-context --write` emits:
 
 - `.dcf/deep_context_federation_latest.json`
 - `.dcf/DEEP_CONTEXT_FEDERATION_LATEST.md`

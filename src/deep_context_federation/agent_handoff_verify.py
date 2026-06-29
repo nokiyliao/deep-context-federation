@@ -125,11 +125,21 @@ def verify_agent_handoff(payload: Mapping[str, Any], *, handoff_path: Path | Non
 
     prompt_source = str(model_handoff.get("model_prompt_source") or "")
     machine_context_source = str(model_handoff.get("machine_context_source") or "")
+    context_advantage_source = str(model_handoff.get("context_advantage_source") or "")
     prompt_row = next((row for row in read_first_artifacts if row.get("role") == "model_prompt"), {})
     context_row = next((row for row in audit_artifacts if row.get("role") == "machine_context"), {})
     gate_row = next((row for row in read_first_artifacts if row.get("role") == "context_gate"), {})
+    advantage_row = next((row for row in read_first_artifacts if row.get("role") == "context_advantage"), {})
 
     add("context_gate_artifact_listed", bool(gate_row), None)
+    add("context_advantage_artifact_listed", bool(advantage_row), None)
+    add("context_advantage_source_present", bool(context_advantage_source), None)
+    add(
+        "context_advantage_source_matches_read_first_artifact",
+        context_advantage_source == str(advantage_row.get("path") or ""),
+        {"source": context_advantage_source, "artifact": advantage_row.get("path")},
+    )
+    add("context_advantage_source_in_read_first", context_advantage_source in read_first, {"source": context_advantage_source, "read_first": read_first})
     add("machine_context_artifact_listed", bool(context_row), None)
     add("machine_context_source_matches_audit_artifact", machine_context_source == str(context_row.get("path") or ""), {"source": machine_context_source, "artifact": context_row.get("path")})
     if payload.get("ok") is True:

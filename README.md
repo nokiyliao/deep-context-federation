@@ -63,6 +63,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - agent CI continuation decision that chains workflow run, efficiency report, and efficiency gate into one read-first artifact
 - agent context bundle that materializes selected `agent-ci` read-plan artifacts into one bounded prompt/context payload
 - agent context gate that enforces token, missing-artifact, truncation, and schema thresholds before model handoff
+- agent handoff command that runs the CI decision, bounded context bundle, and context gate in one pipeline
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -214,6 +215,21 @@ python -m deep_context_federation.cli agent-context-gate \
 ```
 
 The gate exits with code `2` when required context invariants fail, such as missing artifacts, prompt budget overflow, contract failure, or required schema versions not appearing in the selected context bundle.
+
+Or run the full gated handoff in one command:
+
+```bash
+python -m deep_context_federation.cli agent-handoff \
+  --root . \
+  --output-dir .dcf \
+  --task "dashboard operator evidence authority" \
+  --target dashboard_readiness_projection \
+  --efficiency-policy examples/efficiency_gate_policy.example.json \
+  --context-gate-policy examples/agent_context_gate_policy.example.json \
+  --output .dcf/deep_context_federation_agent_handoff.json
+```
+
+`agent-handoff` writes the underlying `agent-ci`, `agent-context`, and `agent-context-gate` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -514,6 +530,16 @@ It emits `deep_context_federation_agent_context_v1` with selected sections, skip
 - required schema versions inside the selected sections
 
 Use `examples/agent_context_gate_policy.example.json` as a starter policy. The default gate is permissive about truncation and skipped rows, but strict about missing artifacts, read-only boundaries, source contract validity, and token budget overflow.
+
+## Agent Handoff
+
+`dcf agent-handoff` is the highest-level runner entrypoint. It executes:
+
+1. `agent-ci`
+2. `agent-context`
+3. `agent-context-gate`
+
+and emits `deep_context_federation_agent_handoff_v1` with a final `decision`, compact summaries, generated output paths, and `model_handoff.model_prompt_source`. This is the command to use when an external runner wants one deterministic pass/fail handoff instead of orchestrating DCF subcommands itself.
 
 ## Capabilities Manifest
 

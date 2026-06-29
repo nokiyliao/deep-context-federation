@@ -11,6 +11,7 @@ from deep_context_federation.agent_context import AGENT_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
+from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import DEFAULT_JSON_NAME
 from deep_context_federation.builder import DEFAULT_MD_NAME
@@ -369,6 +370,28 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "agent_handoff",
+            "schema_version": AGENT_HANDOFF_SCHEMA_VERSION,
+            "producer": "agent-handoff",
+            "consumer_commands": ["agent_router", "ci", "operator_context", "github_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "decision",
+                "agent_ci_summary",
+                "agent_context_summary",
+                "agent_context_gate_summary",
+                "model_handoff",
+                "outputs",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "schema_registry",
             "schema_version": "deep_context_federation_schema_registry_v1",
             "producer": "schema",
@@ -599,6 +622,35 @@ def _commands() -> list[dict[str, Any]]:
                 "--max-prompt-tokens",
                 "--require-schema-version",
                 "--output",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "agent-handoff",
+            "intent": "Run agent-ci, agent-context, and agent-context-gate into one gated model handoff artifact.",
+            "writes": ["output_dir generated artifacts", "optional agent handoff JSON when --output is set"],
+            "output_schemas": [AGENT_HANDOFF_SCHEMA_VERSION, AGENT_CI_SCHEMA_VERSION, AGENT_CONTEXT_SCHEMA_VERSION, AGENT_CONTEXT_GATE_SCHEMA_VERSION],
+            "input_schemas": [
+                QUALITY_GATE_POLICY_SCHEMA_VERSION,
+                TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION,
+                EFFICIENCY_GATE_POLICY_SCHEMA_VERSION,
+                AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION,
+            ],
+            "options": [
+                "--task",
+                "--target",
+                "--targets-file",
+                "--quality-policy",
+                "--target-review-policy",
+                "--efficiency-policy",
+                "--context-gate-policy",
+                "--workflow-token-budget",
+                "--context-token-budget",
+                "--context-mode",
+                "--max-artifact-tokens",
+                "--no-content",
+                "--no-prompt",
             ],
             "authority_effect": "none",
             "no_apply": True,

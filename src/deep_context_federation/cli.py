@@ -16,6 +16,8 @@ from deep_context_federation.agent_context_gate import load_agent_context_gate_p
 from deep_context_federation.agent_context_gate import markdown_agent_context_gate
 from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.agent_ci import markdown_agent_ci
+from deep_context_federation.agent_handoff import build_agent_handoff
+from deep_context_federation.agent_handoff import markdown_agent_handoff
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.bootstrap import markdown_bootstrap
@@ -254,6 +256,35 @@ def build_parser() -> argparse.ArgumentParser:
     agent_context_gate.add_argument("--require-schema-version", action="append")
     agent_context_gate.add_argument("--output", type=Path)
     agent_context_gate.add_argument("--format", choices=["json", "markdown"], default="json")
+    agent_handoff = sub.add_parser("agent-handoff", help="Run agent-ci, agent-context, and agent-context-gate into one gated model handoff.")
+    agent_handoff.add_argument("--root", type=Path, default=Path.cwd())
+    agent_handoff.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+    agent_handoff.add_argument("--manifest", type=Path, action="append", default=[])
+    agent_handoff.add_argument("--task", required=True)
+    agent_handoff.add_argument("--target", action="append", default=[])
+    agent_handoff.add_argument("--targets-file", type=Path)
+    agent_handoff.add_argument("--quality-policy", type=Path)
+    agent_handoff.add_argument("--target-review-policy", type=Path)
+    agent_handoff.add_argument("--efficiency-policy", type=Path)
+    agent_handoff.add_argument("--context-gate-policy", type=Path)
+    agent_handoff.add_argument("--baseline", type=Path, action="append", default=[])
+    agent_handoff.add_argument("--workflow-token-budget", type=int, default=4000)
+    agent_handoff.add_argument("--context-token-budget", type=int, default=4000)
+    agent_handoff.add_argument("--context-mode", choices=["read-first", "decision-allowed", "all"], default="read-first")
+    agent_handoff.add_argument("--max-artifact-tokens", type=int, default=1200)
+    agent_handoff.add_argument("--query-limit", type=int, default=10)
+    agent_handoff.add_argument("--max-presets", type=int, default=3)
+    agent_handoff.add_argument("--max-rows", type=int, default=80)
+    agent_handoff.add_argument("--max-files", type=int, default=5000)
+    agent_handoff.add_argument("--max-parse-bytes", type=int, default=1_000_000)
+    agent_handoff.add_argument("--hash-files", action="store_true")
+    agent_handoff.add_argument("--include-codebase-memory", action="store_true")
+    agent_handoff.add_argument("--codebase-memory-cache-dir", type=Path)
+    agent_handoff.add_argument("--include-details", action="store_true", help="Include full target adjudication details inside target review.")
+    agent_handoff.add_argument("--no-content", action="store_true", help="Emit metadata-only context sections.")
+    agent_handoff.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text fields.")
+    agent_handoff.add_argument("--output", type=Path)
+    agent_handoff.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -697,6 +728,56 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_context_gate(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "agent-handoff":
+        targets = list(args.target or [])
+        if args.targets_file:
+            targets.extend(read_targets_file(args.targets_file))
+        quality_policy = load_quality_gate_policy(args.quality_policy) if args.quality_policy else None
+        target_policy = load_target_review_gate_policy(args.target_review_policy) if args.target_review_policy else None
+        efficiency_policy = load_efficiency_gate_policy(args.efficiency_policy) if args.efficiency_policy else None
+        context_gate_policy = load_agent_context_gate_policy(args.context_gate_policy) if args.context_gate_policy else None
+        result = build_agent_handoff(
+            root=args.root,
+            output_dir=args.output_dir,
+            manifests=args.manifest,
+            task=args.task,
+            targets=targets,
+            quality_gate_policy=quality_policy,
+            target_review_gate_policy=target_policy,
+            efficiency_gate_policy=efficiency_policy,
+            agent_context_gate_policy=context_gate_policy,
+            quality_policy_path=args.quality_policy,
+            target_review_policy_path=args.target_review_policy,
+            workflow_token_budget=args.workflow_token_budget,
+            context_token_budget=args.context_token_budget,
+            context_mode=args.context_mode,
+            max_artifact_tokens=args.max_artifact_tokens,
+            query_limit=args.query_limit,
+            max_presets=args.max_presets,
+            max_rows=args.max_rows,
+            max_files=args.max_files,
+            max_parse_bytes=args.max_parse_bytes,
+            include_hashes=args.hash_files,
+            include_codebase_memory=args.include_codebase_memory,
+            codebase_memory_cache_dir=args.codebase_memory_cache_dir,
+            include_content=not args.no_content,
+            include_prompt=not args.no_prompt,
+            include_details=args.include_details,
+            extra_baselines=args.baseline,
+        )
+        if args.output:
+            original_output = str(result["outputs"].get("agent_handoff_json") or "")
+            resolved_output = args.output.expanduser().resolve().as_posix()
+            result["outputs"]["agent_handoff_json"] = resolved_output
+            model_handoff = result.get("model_handoff") if isinstance(result.get("model_handoff"), dict) else {}
+            if isinstance(model_handoff.get("read_first"), list):
+                model_handoff["read_first"] = [resolved_output if item == original_output else item for item in model_handoff["read_first"]]
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_agent_handoff(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

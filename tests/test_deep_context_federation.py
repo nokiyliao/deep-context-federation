@@ -14,6 +14,7 @@ from deep_context_federation.agent_context_gate import evaluate_agent_context_ga
 from deep_context_federation.agent_context_gate import load_agent_context_gate_policy
 from deep_context_federation.agent_context_gate import normalize_agent_context_gate_policy
 from deep_context_federation.agent_ci import build_agent_ci
+from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation, codebase_memory_source
@@ -108,7 +109,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.28.0"
+    assert payload["package"]["version"] == "0.29.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -121,6 +122,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "agent-ci",
         "agent-context",
         "agent-context-gate",
+        "agent-handoff",
         "intake",
         "build",
         "scan",
@@ -155,6 +157,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_context"]["schema_version"] == "deep_context_federation_agent_context_v1"
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
+    assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
     assert payload["safety_boundaries"]["external_tool_install"] == "never"
@@ -185,6 +188,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_context"]["schema_version"] == "deep_context_federation_agent_context_v1"
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
+    assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
 
@@ -631,6 +635,80 @@ def test_agent_context_gate_enforces_model_handoff_policy(tmp_path: Path) -> Non
     failed_ids = {row["id"] for row in failed["errors"]}
     assert "prompt_tokens_within_limit" in failed_ids
     assert validate_artifact_contract(strict_policy)["ok"] is True
+    assert validate_artifact_contract(failed)["ok"] is True
+
+
+def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
+    review_policy = {
+        "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "max_warn": 1,
+        "max_priority_score": 120,
+    }
+    result = build_agent_handoff(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "agent_handoff",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        efficiency_gate_policy=load_efficiency_gate_policy(EXAMPLE_EFFICIENCY_GATE_POLICY),
+        agent_context_gate_policy=load_agent_context_gate_policy(EXAMPLE_AGENT_CONTEXT_GATE_POLICY),
+        workflow_token_budget=900,
+        context_token_budget=1800,
+        max_artifact_tokens=500,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_agent_handoff_v1"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["ok"] is True
+    assert result["status"] in {"pass_agent_handoff", "warn_agent_handoff"}
+    assert result["decision"]["handoff_allowed"] is True
+    assert result["agent_ci_summary"]["status"] == "pass_agent_ci"
+    assert result["agent_context_gate_summary"]["status"] == "pass_agent_context_gate"
+    assert result["model_handoff"]["model_prompt_source"] == result["outputs"]["agent_context_json"]
+    assert result["model_handoff"]["model_prompt_estimated_tokens"] > 0
+    assert Path(result["outputs"]["agent_handoff_json"]).exists()
+    assert Path(result["outputs"]["agent_ci_json"]).exists()
+    assert Path(result["outputs"]["agent_context_json"]).exists()
+    assert Path(result["outputs"]["agent_context_gate_json"]).exists()
+    assert validate_artifact_contract(result)["ok"] is True
+
+    strict_context_gate_policy = normalize_agent_context_gate_policy(
+        {
+            "schema_version": "deep_context_federation_agent_context_gate_policy_v1",
+            "authority_effect": "none",
+            "no_apply": True,
+            "policy_id": "unit_strict_handoff_context_gate",
+            "max_prompt_tokens": 10,
+        }
+    )
+    failed = build_agent_handoff(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "agent_handoff_strict",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        efficiency_gate_policy=load_efficiency_gate_policy(EXAMPLE_EFFICIENCY_GATE_POLICY),
+        agent_context_gate_policy=strict_context_gate_policy,
+        workflow_token_budget=900,
+        context_token_budget=1800,
+        max_artifact_tokens=500,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+    assert failed["ok"] is False
+    assert failed["status"] == "fail_agent_handoff"
+    assert failed["decision"]["action"] == "stop"
+    assert failed["decision"]["stop_reasons"][0]["id"] == "agent_context_gate_failed"
+    assert failed["model_handoff"]["model_prompt_source"] == ""
     assert validate_artifact_contract(failed)["ok"] is True
 
 

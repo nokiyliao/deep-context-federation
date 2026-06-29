@@ -44,8 +44,25 @@ def _truncate_text(text: str, max_tokens: int) -> tuple[str, bool]:
         return "", bool(text)
     if estimate_tokens(text) <= max_tokens:
         return text, False
-    char_limit = max(0, max_tokens * 4 - 80)
-    return text[:char_limit].rstrip() + "\n...<truncated by dcf agent-context>...\n", True
+    suffix = "\n...<truncated by dcf agent-context>...\n"
+
+    best = ""
+    low = 0
+    high = len(text)
+    while low <= high:
+        mid = (low + high) // 2
+        candidate = text[:mid].rstrip() + suffix
+        if estimate_tokens(candidate) <= max_tokens:
+            best = candidate
+            low = mid + 1
+        else:
+            high = mid - 1
+    if best:
+        return best, True
+
+    # Extremely small budgets may not fit the full marker. Keep the invariant
+    # stronger than the marker readability in that degenerate case.
+    return suffix[: max(0, max_tokens * 4)], True
 
 
 def _source_contract(agent_ci: Mapping[str, Any]) -> dict[str, Any]:

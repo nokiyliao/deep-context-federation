@@ -11,6 +11,7 @@ from deep_context_federation.agent_context import AGENT_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA_VERSION
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
+from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import SCHEMA_VERSION
@@ -729,6 +730,44 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "checks": array_type,
                 "errors": array_type,
                 "summary": object_type,
+            },
+        ),
+        "agent_handoff": _schema(
+            AGENT_HANDOFF_SCHEMA_VERSION,
+            "Deep Context Federation gated agent handoff",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "decision",
+                "agent_ci_summary",
+                "agent_context_summary",
+                "agent_context_gate_summary",
+                "model_handoff",
+                "outputs",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_handoff", "warn_agent_handoff", "fail_agent_handoff"]},
+                **_boundary_props(),
+                "task": {"type": "string"},
+                "root": {"type": "string"},
+                "output_dir": {"type": "string"},
+                "duration_seconds": {"type": "number"},
+                "targets": array_type,
+                "decision": object_type,
+                "agent_ci_summary": object_type,
+                "agent_context_summary": object_type,
+                "agent_context_gate_summary": object_type,
+                "model_handoff": object_type,
+                "outputs": object_type,
+                "safety_boundaries": object_type,
+                "prompt_text": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+                "json_estimated_tokens": {"type": "integer"},
             },
         ),
     }

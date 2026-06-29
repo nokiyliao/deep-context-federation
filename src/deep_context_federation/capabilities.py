@@ -1533,6 +1533,53 @@ def _commands() -> list[dict[str, Any]]:
     ]
 
 
+def _recommended_entrypoints() -> list[dict[str, Any]]:
+    return [
+        {
+            "entrypoint_id": "new_agent_session_default",
+            "intent": "Start a new Codex, Claude, AGY, GitHub runner, or shell-wrapper session from one DCF machine-readable capsule.",
+            "command": "onboard-runner",
+            "terminal_artifact_kind": "agent_onboard",
+            "terminal_schema_version": AGENT_ONBOARD_SCHEMA_VERSION,
+            "terminal_decision_field": "model_entrypoint_selection.selected_model_input",
+            "primary_success_status": "pass_agent_onboard",
+            "selected_model_input_modes": ["prompt_file", "prompt_pack", "audit_json", "blocked"],
+            "requires_wrapper_branching": False,
+            "fallback_commands": ["decide-model-start", "prepare-model-input", "select-model-entrypoint"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "entrypoint_id": "existing_handoff_prompt_release",
+            "intent": "Release prompt text from an existing DCF handoff only after handoff verification passes.",
+            "command": "release-model-input",
+            "terminal_artifact_kind": "agent_model_input",
+            "terminal_schema_version": AGENT_MODEL_INPUT_SCHEMA_VERSION,
+            "terminal_decision_field": "entrypoint_decision",
+            "primary_success_status": "pass_agent_model_input",
+            "selected_model_input_modes": ["prompt"],
+            "requires_wrapper_branching": False,
+            "fallback_commands": ["verify-model-handoff", "prepare-model-handoff"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "entrypoint_id": "route_only_no_prompt",
+            "intent": "Decide what a wrapper should do next without building or releasing model prompt input.",
+            "command": "decide-model-start",
+            "terminal_artifact_kind": "agent_route",
+            "terminal_schema_version": AGENT_ROUTE_SCHEMA_VERSION,
+            "terminal_decision_field": "route",
+            "primary_success_status": "pass_agent_route",
+            "selected_model_input_modes": [],
+            "requires_wrapper_branching": True,
+            "fallback_commands": ["check-model-readiness", "bootstrap-context"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+    ]
+
+
 def build_capabilities() -> dict[str, Any]:
     """Return the stable machine-readable capability registry."""
 
@@ -1554,6 +1601,7 @@ def build_capabilities() -> dict[str, Any]:
             "fusion_roles": list(FUSION_ROLES),
         },
         "commands": _commands(),
+        "recommended_entrypoints": _recommended_entrypoints(),
         "query_presets": [{"preset": preset, "mode": "json_artifact"} for preset in QUERY_PRESETS],
         "sql_presets": [
             {"preset": preset, "mode": "sqlite_readonly", "description": spec["description"]}
@@ -1591,9 +1639,20 @@ def markdown_capabilities(payload: Mapping[str, Any]) -> str:
         f"- Authority effect: `{payload.get('authority_effect')}`",
         f"- No apply: `{payload.get('no_apply')}`",
         "",
-        "## Commands",
+        "## Recommended Entrypoints",
         "",
     ]
+    for entrypoint in payload.get("recommended_entrypoints") or []:
+        if isinstance(entrypoint, Mapping):
+            lines.append(
+                f"- `{entrypoint.get('entrypoint_id')}` -> `{entrypoint.get('command')}` "
+                f"(decision: `{entrypoint.get('terminal_decision_field')}`)"
+            )
+    lines.extend([
+        "",
+        "## Commands",
+        "",
+    ])
     for command in payload.get("commands") or []:
         if isinstance(command, Mapping):
             lines.append(f"- `{command.get('command')}`: {command.get('intent')}")

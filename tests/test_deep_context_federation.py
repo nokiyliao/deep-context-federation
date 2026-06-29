@@ -260,7 +260,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.70.0"
+    assert payload["package"]["version"] == "0.71.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -316,6 +316,13 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert "--profile" in by_command["select-model-entrypoint"]["options"]
     assert "--model-entrypoint-preference" in by_command["init-run-profile"]["options"]
     assert "--model-entrypoint-preference" in by_command["onboard-runner"]["options"]
+    by_entrypoint = {row["entrypoint_id"]: row for row in payload["recommended_entrypoints"]}
+    assert by_entrypoint["new_agent_session_default"]["command"] == "onboard-runner"
+    assert by_entrypoint["new_agent_session_default"]["terminal_artifact_kind"] == "agent_onboard"
+    assert by_entrypoint["new_agent_session_default"]["terminal_decision_field"] == "model_entrypoint_selection.selected_model_input"
+    assert by_entrypoint["new_agent_session_default"]["requires_wrapper_branching"] is False
+    assert by_entrypoint["existing_handoff_prompt_release"]["command"] == "release-model-input"
+    assert by_entrypoint["route_only_no_prompt"]["command"] == "decide-model-start"
 
     contracts = payload["contracts"]["artifact_contracts"]
     by_kind = {row["artifact_kind"]: row for row in contracts}

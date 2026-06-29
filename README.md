@@ -702,6 +702,7 @@ Reused handoffs are also request-bound. If a wrapper supplies a task or targets 
 - command names, intents, output schemas, and write boundaries
 - artifact contracts and generated source contracts
 - JSON query presets and SQLite query presets
+- recommended global entrypoints such as `new_agent_session_default`
 - edge types and local fusion roles
 - process exit-code meanings
 - explicit safety boundaries such as `authority_effect: none`, `no_apply: true`, no external installer, and generated-output-only writes
@@ -715,6 +716,8 @@ dcf describe-abilities \
 ```
 
 The public CLI is intentionally named by the function a runner wants to accomplish: `discover-project-context`, `assemble-context`, `query-context`, `prove-unified-context`, `select-context`, and `prepare-model-handoff`. Legacy source-shaped or implementation-shaped names remain hidden compatibility aliases only; new machine guidance should use the function names emitted by `describe-abilities`.
+
+For new model or agent sessions, wrappers should read `recommended_entrypoints.new_agent_session_default`: it points to `onboard-runner` and the terminal decision field `model_entrypoint_selection.selected_model_input`, so integrations do not need to guess between route-only, handoff, prompt-release, and selector commands.
 
 Function naming is part of the contract, not cosmetic naming. A runner should ask DCF to do something measurable, such as `summarize-operator-context`, `prove-context-advantage`, or `gate-model-context`; it should not dispatch against an upstream source name such as a graph provider, memory provider, or dashboard artifact name.
 

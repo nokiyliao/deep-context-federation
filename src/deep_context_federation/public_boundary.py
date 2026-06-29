@@ -23,6 +23,7 @@ PUBLIC_SECTION_KEYS = (
     "read_first",
     "prompt_pack",
     "context_advantage_summary",
+    "entrypoint_decision",
 )
 
 

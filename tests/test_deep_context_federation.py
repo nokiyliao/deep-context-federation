@@ -243,7 +243,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.65.0"
+    assert payload["package"]["version"] == "0.66.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -327,6 +327,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert "source_identity_policy" in by_kind["agent_model_input"]["top_level_required"]
     assert "prompt_pack" in by_kind["agent_model_input"]["top_level_required"]
     assert "context_advantage_summary" in by_kind["agent_model_input"]["top_level_required"]
+    assert "entrypoint_decision" in by_kind["agent_model_input"]["top_level_required"]
     assert by_kind["agent_model_input"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
@@ -344,6 +345,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert "source_identity_policy" in by_kind["agent_ready"]["top_level_required"]
     assert "prompt_pack" in by_kind["agent_ready"]["top_level_required"]
     assert "context_advantage_summary" in by_kind["agent_ready"]["top_level_required"]
+    assert "entrypoint_decision" in by_kind["agent_ready"]["top_level_required"]
     assert by_kind["agent_ready"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
     assert by_kind["input_fingerprint"]["schema_version"] == "deep_context_federation_input_fingerprint_v1"
@@ -394,6 +396,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert "source_identity_policy" in by_kind["agent_model_input"]["json_schema"]["required"]
     assert "prompt_pack" in by_kind["agent_model_input"]["json_schema"]["required"]
     assert "context_advantage_summary" in by_kind["agent_model_input"]["json_schema"]["required"]
+    assert "entrypoint_decision" in by_kind["agent_model_input"]["json_schema"]["required"]
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
@@ -409,6 +412,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert "source_identity_policy" in by_kind["agent_ready"]["json_schema"]["required"]
     assert "prompt_pack" in by_kind["agent_ready"]["json_schema"]["required"]
     assert "context_advantage_summary" in by_kind["agent_ready"]["json_schema"]["required"]
+    assert "entrypoint_decision" in by_kind["agent_ready"]["json_schema"]["required"]
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
     assert by_kind["input_fingerprint"]["schema_version"] == "deep_context_federation_input_fingerprint_v1"
     assert by_kind["input_fingerprint_compare"]["schema_version"] == "deep_context_federation_input_fingerprint_compare_v1"
@@ -1707,6 +1711,10 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert model_input["prompt_pack"]["prompt_text"].startswith("# Deep Context Federation Agent Context")
     assert model_input["context_advantage_summary"]["status"] == "pass_context_advantage"
     assert model_input["context_advantage_summary"]["summary"]["advantage_score"] >= 80
+    assert model_input["entrypoint_decision"]["status"] == "pass_entrypoint_decision"
+    assert model_input["entrypoint_decision"]["decision"] == "use_dcf_model_input"
+    assert model_input["entrypoint_decision"]["evidence"]["context_advantage_status"] == "pass_context_advantage"
+    assert model_input["entrypoint_decision"]["evidence"]["estimated_token_savings_percent"] > 0
     assert model_input["verification_summary"]["status"] == "pass_agent_handoff_verification"
     assert model_input["safety_boundaries"]["prompt_emitted_only_after_verification"] is True
     assert validate_artifact_contract(model_input)["ok"] is True
@@ -1724,6 +1732,8 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert tampered_model_input["status"] == "fail_agent_model_input"
     assert tampered_model_input["prompt_text"] == ""
     assert tampered_model_input["context_advantage_summary"]["status"] == "pass_context_advantage"
+    assert tampered_model_input["entrypoint_decision"]["status"] == "fail_entrypoint_decision"
+    assert tampered_model_input["entrypoint_decision"]["decision"] == "do_not_use_dcf_model_input"
     assert {row["id"] for row in tampered_model_input["errors"]} >= {"handoff_verification_ok"}
 
     strict_context_gate_policy = normalize_agent_context_gate_policy(
@@ -2213,12 +2223,14 @@ def test_agent_ready_builds_or_blocks_model_input(tmp_path: Path) -> None:
     assert missing_task["status"] == "fail_agent_ready"
     assert {row["id"] for row in missing_task["errors"]} == {"task_required"}
     assert missing_task["prompt_text"] == ""
+    assert missing_task["entrypoint_decision"]["decision"] == "do_not_use_dcf_model_input"
     assert validate_artifact_contract(missing_task)["ok"] is True
 
     missing_handoff = build_agent_ready(root=manifest_root, output_dir=manifest_root / ".dcf", handoff_path=manifest_root / "missing.json")
     assert missing_handoff["ok"] is False
     assert missing_handoff["action_taken"] == "blocked_by_route"
     assert missing_handoff["prompt_text"] == ""
+    assert missing_handoff["entrypoint_decision"]["decision"] == "do_not_use_dcf_model_input"
     assert validate_artifact_contract(missing_handoff)["ok"] is True
 
     shutil.copytree(REPO_ROOT / "examples/fixtures", manifest_root / "fixtures")
@@ -2251,6 +2263,8 @@ def test_agent_ready_builds_or_blocks_model_input(tmp_path: Path) -> None:
     assert ready["context_advantage_summary"]["status"] == "pass_context_advantage"
     assert ready["context_advantage_summary"]["summary"]["advantage_score"] > 0
     assert ready["context_advantage_summary"]["summary"]["read_first_savings_percent"] > 0
+    assert ready["entrypoint_decision"]["status"] == "pass_entrypoint_decision"
+    assert ready["entrypoint_decision"]["decision"] == "use_dcf_model_input"
     assert validate_artifact_contract(ready)["ok"] is True
     ready_boundary = build_public_boundary_audit([("agent_ready", ready)])
     assert ready_boundary["status"] == "pass_public_boundary_audit"

@@ -11,6 +11,7 @@ from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_route import route_agent_context
 from deep_context_federation.builder import read_json
 from deep_context_federation.builder import utc_now
+from deep_context_federation.entrypoint_decision import build_entrypoint_decision
 from deep_context_federation.input_fingerprint import build_input_fingerprint
 from deep_context_federation.input_fingerprint import compare_input_fingerprint
 from deep_context_federation.source_identity import public_prompt_pack
@@ -123,6 +124,20 @@ def _failure(
     input_freshness: Mapping[str, Any] | None = None,
     request_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    source_identity_policy = public_source_identity_policy(audit_provenance_location="route_handoff_and_model_input_artifacts")
+    prompt_pack = public_prompt_pack()
+    entrypoint_decision = build_entrypoint_decision(
+        ok=False,
+        prompt_source="",
+        prompt_format="",
+        source_identity_policy=source_identity_policy,
+        verification_summary={},
+        context_advantage_summary={},
+        token_economics={},
+        prompt_pack=prompt_pack,
+        errors=errors,
+        blocked_reason=action_taken,
+    )
     return {
         "schema_version": AGENT_READY_SCHEMA_VERSION,
         "ok": False,
@@ -130,7 +145,7 @@ def _failure(
         "authority_effect": "none",
         "no_apply": True,
         "generated_at": utc_now(),
-        "source_identity_policy": public_source_identity_policy(audit_provenance_location="route_handoff_and_model_input_artifacts"),
+        "source_identity_policy": source_identity_policy,
         "root": root.as_posix(),
         "task": task,
         "targets": list(targets),
@@ -144,8 +159,9 @@ def _failure(
         "prompt_format": "",
         "prompt_estimated_tokens": 0,
         "prompt_text": "",
-        "prompt_pack": public_prompt_pack(),
+        "prompt_pack": prompt_pack,
         "context_advantage_summary": {},
+        "entrypoint_decision": entrypoint_decision,
         "errors": [dict(row) for row in errors],
         "outputs": {},
         "safety_boundaries": {
@@ -379,6 +395,7 @@ def build_agent_ready(
     ok = model_input.get("ok") is True
     prompt_pack = model_input.get("prompt_pack") if isinstance(model_input.get("prompt_pack"), Mapping) else public_prompt_pack()
     advantage_summary = model_input.get("context_advantage_summary") if isinstance(model_input.get("context_advantage_summary"), Mapping) else {}
+    entrypoint_decision = model_input.get("entrypoint_decision") if isinstance(model_input.get("entrypoint_decision"), Mapping) else {}
     return {
         "schema_version": AGENT_READY_SCHEMA_VERSION,
         "ok": ok,
@@ -407,6 +424,7 @@ def build_agent_ready(
         "prompt_text": model_input.get("prompt_text") if ok else "",
         "prompt_pack": prompt_pack,
         "context_advantage_summary": dict(advantage_summary),
+        "entrypoint_decision": dict(entrypoint_decision),
         "token_economics": model_input.get("token_economics") if isinstance(model_input.get("token_economics"), Mapping) else {},
         "errors": list(model_input.get("errors") or []),
         "outputs": dict(handoff.get("outputs") if isinstance(handoff.get("outputs"), Mapping) else {}),
@@ -440,6 +458,7 @@ def markdown_agent_ready(result: Mapping[str, Any]) -> str:
         f"- Prompt source: `{result.get('prompt_source')}`",
         f"- Prompt tokens: `{result.get('prompt_estimated_tokens')}`",
         f"- Context advantage: `{(result.get('context_advantage_summary') if isinstance(result.get('context_advantage_summary'), Mapping) else {}).get('status')}`",
+        f"- Entrypoint decision: `{(result.get('entrypoint_decision') if isinstance(result.get('entrypoint_decision'), Mapping) else {}).get('decision')}`",
         "",
         "## Errors",
         "",

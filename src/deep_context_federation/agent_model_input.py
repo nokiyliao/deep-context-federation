@@ -10,6 +10,7 @@ from typing import Any
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.builder import utc_now
 from deep_context_federation.context_pack import estimate_tokens
+from deep_context_federation.entrypoint_decision import build_entrypoint_decision
 from deep_context_federation.source_identity import public_prompt_pack
 from deep_context_federation.source_identity import public_source_identity_policy
 
@@ -109,6 +110,20 @@ def build_agent_model_input(
         prompt_estimated_tokens=prompt_estimated_tokens if ok else 0,
         prompt_text=prompt_text if ok else "",
     )
+    source_identity_policy = public_source_identity_policy(audit_provenance_location="verified_handoff_and_prompt_file")
+    verification_summary = _summary(verification)
+    entrypoint_decision = build_entrypoint_decision(
+        ok=ok,
+        prompt_source=prompt_path.as_posix() if prompt_path is not None and ok else "",
+        prompt_format="markdown" if ok else "",
+        source_identity_policy=source_identity_policy,
+        verification_summary=verification_summary,
+        context_advantage_summary=advantage_summary,
+        token_economics=economics,
+        prompt_pack=prompt_pack,
+        errors=failed,
+        blocked_reason="handoff_verification_or_prompt_gate_failed",
+    )
 
     return {
         "schema_version": AGENT_MODEL_INPUT_SCHEMA_VERSION,
@@ -117,7 +132,7 @@ def build_agent_model_input(
         "authority_effect": "none",
         "no_apply": True,
         "generated_at": utc_now(),
-        "source_identity_policy": public_source_identity_policy(audit_provenance_location="verified_handoff_and_prompt_file"),
+        "source_identity_policy": source_identity_policy,
         "input_ref": handoff_path.expanduser().resolve().as_posix(),
         "prompt_source": prompt_path.as_posix() if prompt_path is not None else "",
         "prompt_format": "markdown" if ok else "",
@@ -132,8 +147,9 @@ def build_agent_model_input(
             "ok": payload.get("ok"),
             "decision": payload.get("decision") if isinstance(payload.get("decision"), Mapping) else {},
         },
-        "verification_summary": _summary(verification),
+        "verification_summary": verification_summary,
         "context_advantage_summary": advantage_summary,
+        "entrypoint_decision": entrypoint_decision,
         "token_economics": dict(economics),
         "checks": checks,
         "errors": failed,
@@ -161,6 +177,7 @@ def markdown_agent_model_input(result: Mapping[str, Any]) -> str:
         f"- Prompt source: `{result.get('prompt_source')}`",
         f"- Prompt tokens: `{result.get('prompt_estimated_tokens')}`",
         f"- Context advantage: `{(result.get('context_advantage_summary') if isinstance(result.get('context_advantage_summary'), Mapping) else {}).get('status')}`",
+        f"- Entrypoint decision: `{(result.get('entrypoint_decision') if isinstance(result.get('entrypoint_decision'), Mapping) else {}).get('decision')}`",
         "",
         "## Errors",
         "",

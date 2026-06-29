@@ -260,7 +260,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.69.0"
+    assert payload["package"]["version"] == "0.70.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -353,6 +353,8 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["model_entrypoint_selection"]["schema_version"] == "deep_context_federation_model_entrypoint_selection_v1"
     assert "selected_model_input" in by_kind["model_entrypoint_selection"]["top_level_required"]
     assert "recommended_reader" in by_kind["model_entrypoint_selection"]["top_level_required"]
+    assert "model_entrypoint_selection" in by_kind["agent_onboard"]["top_level_required"]
+    assert "model_entrypoint_selection_summary" in by_kind["agent_onboard"]["top_level_required"]
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert "entrypoint_decision" in by_kind["agent_onboard"]["top_level_required"]
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
@@ -425,6 +427,8 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["model_entrypoint_selection"]["schema_version"] == "deep_context_federation_model_entrypoint_selection_v1"
     assert "selected_model_input" in by_kind["model_entrypoint_selection"]["json_schema"]["required"]
     assert "recommended_reader" in by_kind["model_entrypoint_selection"]["json_schema"]["required"]
+    assert "model_entrypoint_selection" in by_kind["agent_onboard"]["json_schema"]["required"]
+    assert "model_entrypoint_selection_summary" in by_kind["agent_onboard"]["json_schema"]["required"]
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
     assert "entrypoint_decision" in by_kind["agent_onboard"]["json_schema"]["required"]
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
@@ -2558,15 +2562,16 @@ def test_agent_onboard_builds_profile_and_ready(tmp_path: Path) -> None:
     assert result["model_input_ready"] is True
     assert result["entrypoint_decision"]["status"] == "pass_entrypoint_decision"
     assert result["entrypoint_decision"]["decision"] == "use_dcf_model_input"
-    onboard_selection = build_model_entrypoint_selection(result, input_path=profile_root / ".dcf/agent_onboard.json")
-    assert onboard_selection["status"] == "pass_model_entrypoint_selection"
-    assert onboard_selection["selected_model_input"]["mode"] == "prompt_file"
+    assert result["model_entrypoint_selection_summary"]["status"] == "pass_model_entrypoint_selection"
+    assert result["model_entrypoint_selection"]["status"] == "pass_model_entrypoint_selection"
+    assert result["model_entrypoint_selection"]["selected_model_input"]["mode"] == "prompt_file"
     assert result["prompt_estimated_tokens"] > 0
     assert Path(result["outputs"]["agent_profile_json"]).exists()
     assert Path(result["outputs"]["agent_handoff_json"]).exists()
     assert "prepare-model-input --profile" in result["recommended_next_command"]
     assert validate_artifact_contract(result, artifact_kind="agent_onboard")["ok"] is True
     assert validate_artifact_contract(result["agent_ready"], artifact_kind="agent_ready")["ok"] is True
+    assert validate_artifact_contract(result["model_entrypoint_selection"], artifact_kind="model_entrypoint_selection")["ok"] is True
 
 
 def test_agent_onboard_cli_single_command(tmp_path: Path) -> None:
@@ -2628,10 +2633,15 @@ def test_agent_onboard_cli_single_command(tmp_path: Path) -> None:
     assert payload["agent_ready_summary"]["status"] == "pass_agent_ready"
     assert payload["entrypoint_decision"]["status"] == "pass_entrypoint_decision"
     assert payload["entrypoint_decision"]["decision"] == "use_dcf_model_input"
+    assert payload["model_entrypoint_selection"]["status"] == "pass_model_entrypoint_selection"
+    assert payload["model_entrypoint_selection"]["selected_model_input"]["mode"] == "audit_json"
+    assert payload["model_entrypoint_selection"]["selected_model_input"]["preference"] == "audit-json"
+    assert payload["model_entrypoint_selection"]["input_ref"] == onboard_path.resolve().as_posix()
     assert payload["outputs"]["agent_onboard_json"] == onboard_path.resolve().as_posix()
     assert profile_path.exists()
     assert onboard_path.exists()
     assert validate_artifact_contract(payload, artifact_kind="agent_onboard")["ok"] is True
+    assert validate_artifact_contract(payload["model_entrypoint_selection"], artifact_kind="model_entrypoint_selection")["ok"] is True
 
     selection_path = profile_root / ".dcf" / "model_entrypoint_selection.json"
     selected = subprocess.run(

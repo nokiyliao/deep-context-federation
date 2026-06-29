@@ -7,14 +7,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
-from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import build_agent_model_input
-from deep_context_federation.agent_onboard import AGENT_ONBOARD_SCHEMA_VERSION
-from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.builder import utc_now
 from deep_context_federation.source_identity import public_source_identity_policy
 
+AGENT_HANDOFF_SCHEMA_VERSION = "deep_context_federation_agent_handoff_v1"
+AGENT_MODEL_INPUT_SCHEMA_VERSION = "deep_context_federation_agent_model_input_v1"
+AGENT_READY_SCHEMA_VERSION = "deep_context_federation_agent_ready_v1"
+AGENT_ONBOARD_SCHEMA_VERSION = "deep_context_federation_agent_onboard_v1"
 MODEL_ENTRYPOINT_SELECTION_SCHEMA_VERSION = "deep_context_federation_model_entrypoint_selection_v1"
 
 SUPPORTED_INPUT_SCHEMAS = {

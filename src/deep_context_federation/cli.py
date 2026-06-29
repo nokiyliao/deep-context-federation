@@ -25,6 +25,7 @@ from deep_context_federation.agent_handoff_verify import markdown_agent_handoff_
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_model_input import markdown_agent_model_input
+from deep_context_federation.agent_onboard import attach_model_entrypoint_selection
 from deep_context_federation.agent_onboard import build_agent_onboard
 from deep_context_federation.agent_onboard import markdown_agent_onboard
 from deep_context_federation.agent_profile import load_agent_profile
@@ -1580,6 +1581,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.output:
             result["outputs"] = dict(result.get("outputs") if isinstance(result.get("outputs"), dict) else {})
             result["outputs"]["agent_onboard_json"] = args.output.expanduser().resolve().as_posix()
+            attach_model_entrypoint_selection(
+                result,
+                input_path=args.output,
+                prefer=args.model_entrypoint_preference,
+                allow_caution=args.allow_caution_model_entrypoint,
+            )
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_onboard(result))

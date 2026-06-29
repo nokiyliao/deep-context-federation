@@ -1354,6 +1354,8 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "agent_ready_summary",
                 "model_input_ready",
                 "entrypoint_decision",
+                "model_entrypoint_selection",
+                "model_entrypoint_selection_summary",
                 "safety_boundaries",
             ],
             {
@@ -1367,6 +1369,8 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "agent_ready_summary": object_type,
                 "model_input_ready": {"type": "boolean"},
                 "entrypoint_decision": object_type,
+                "model_entrypoint_selection": object_type,
+                "model_entrypoint_selection_summary": object_type,
                 "prompt_source": {"type": "string"},
                 "prompt_estimated_tokens": {"type": "integer"},
                 "recommended_next_command": {"type": "string"},

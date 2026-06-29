@@ -13,6 +13,7 @@ from deep_context_federation.agent_ready import markdown_agent_ready
 from deep_context_federation.builder import utc_now
 from deep_context_federation.entrypoint_decision import build_entrypoint_decision
 from deep_context_federation.efficiency_gate import load_efficiency_gate_policy
+from deep_context_federation.model_entrypoint_selection import build_model_entrypoint_selection
 from deep_context_federation.quality_gate import load_quality_gate_policy
 from deep_context_federation.source_identity import public_prompt_pack
 from deep_context_federation.source_identity import public_source_identity_policy
@@ -41,6 +42,24 @@ def _summary(payload: Mapping[str, Any]) -> dict[str, Any]:
         "status": payload.get("status"),
         "summary": dict(payload.get("summary") if isinstance(payload.get("summary"), Mapping) else {}),
     }
+
+
+def attach_model_entrypoint_selection(
+    result: dict[str, Any],
+    *,
+    input_path: Path | None = None,
+    prefer: str = "prompt-file",
+    allow_caution: bool = False,
+) -> dict[str, Any]:
+    selection = build_model_entrypoint_selection(
+        result,
+        input_path=input_path,
+        prefer=prefer,
+        allow_caution=allow_caution,
+    )
+    result["model_entrypoint_selection"] = selection
+    result["model_entrypoint_selection_summary"] = _summary(selection)
+    return result
 
 
 def _ready_args_from_profile(profile: Mapping[str, Any]) -> dict[str, Any]:
@@ -82,6 +101,8 @@ def _failure(
     profile_init: Mapping[str, Any],
     profile: Mapping[str, Any],
     errors: Sequence[Mapping[str, Any]],
+    model_entrypoint_preference: str = "prompt-file",
+    allow_caution_model_entrypoint: bool = False,
 ) -> dict[str, Any]:
     entrypoint_decision = build_entrypoint_decision(
         ok=False,
@@ -95,7 +116,7 @@ def _failure(
         errors=errors,
         blocked_reason="onboard_profile_or_validation_failed",
     )
-    return {
+    result = {
         "schema_version": AGENT_ONBOARD_SCHEMA_VERSION,
         "ok": False,
         "status": "fail_agent_onboard",
@@ -124,6 +145,11 @@ def _failure(
             "prompt_emitted_only_after_model_input_pass": True,
         },
     }
+    return attach_model_entrypoint_selection(
+        result,
+        prefer=model_entrypoint_preference,
+        allow_caution=allow_caution_model_entrypoint,
+    )
 
 
 def build_agent_onboard(
@@ -208,6 +234,8 @@ def build_agent_onboard(
             profile_init=profile_init,
             profile={},
             errors=[{"id": "profile_init_failed", "status": profile_init.get("status"), "errors": list(profile_init.get("errors") or [])}],
+            model_entrypoint_preference=model_entrypoint_preference,
+            allow_caution_model_entrypoint=allow_caution_model_entrypoint,
         )
     profile = load_agent_profile(resolved_profile_path)
     if profile.get("ok") is not True:
@@ -217,6 +245,8 @@ def build_agent_onboard(
             profile_init=profile_init,
             profile=profile,
             errors=[{"id": "profile_validation_failed", "status": profile.get("status"), "errors": list(profile.get("errors") or [])}],
+            model_entrypoint_preference=model_entrypoint_preference,
+            allow_caution_model_entrypoint=allow_caution_model_entrypoint,
         )
     ready_args = _ready_args_from_profile(profile)
     quality_policy = load_quality_gate_policy(ready_args["quality_policy_path"]) if ready_args["quality_policy_path"] else None
@@ -265,7 +295,7 @@ def build_agent_onboard(
     outputs = {"agent_profile_json": resolved_profile_path.as_posix(), **ready_outputs}
     ok = agent_ready.get("ok") is True
     entrypoint_decision = agent_ready.get("entrypoint_decision") if isinstance(agent_ready.get("entrypoint_decision"), Mapping) else {}
-    return {
+    result = {
         "schema_version": AGENT_ONBOARD_SCHEMA_VERSION,
         "ok": ok,
         "status": "pass_agent_onboard" if ok else "fail_agent_onboard",
@@ -295,10 +325,17 @@ def build_agent_onboard(
             "prompt_emitted_only_after_model_input_pass": True,
         },
     }
+    return attach_model_entrypoint_selection(
+        result,
+        prefer=model_entrypoint_preference,
+        allow_caution=allow_caution_model_entrypoint,
+    )
 
 
 def markdown_agent_onboard(result: Mapping[str, Any]) -> str:
     ready = result.get("agent_ready") if isinstance(result.get("agent_ready"), Mapping) else {}
+    selection = result.get("model_entrypoint_selection") if isinstance(result.get("model_entrypoint_selection"), Mapping) else {}
+    selected = selection.get("selected_model_input") if isinstance(selection.get("selected_model_input"), Mapping) else {}
     lines = [
         "# Deep Context Federation Agent Onboard",
         "",
@@ -308,6 +345,7 @@ def markdown_agent_onboard(result: Mapping[str, Any]) -> str:
         f"- Prompt source: `{result.get('prompt_source')}`",
         f"- Prompt tokens: `{result.get('prompt_estimated_tokens')}`",
         f"- Entrypoint decision: `{(result.get('entrypoint_decision') if isinstance(result.get('entrypoint_decision'), Mapping) else {}).get('decision')}`",
+        f"- Model entrypoint mode: `{selected.get('mode')}`",
         f"- Recommended next command: `{result.get('recommended_next_command')}`",
         "",
     ]

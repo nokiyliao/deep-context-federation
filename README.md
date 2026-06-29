@@ -307,7 +307,7 @@ python -m deep_context_federation.cli onboard-runner \
   --output .dcf/deep_context_federation_agent_onboard.json
 ```
 
-`onboard-runner` is the one-command path for Codex, Claude, AGY, GitHub runners, or shell wrappers. It generates a profile, validates it, runs the fail-closed `prepare-model-input` path, and returns one machine-readable capsule with `profile_init_summary`, `profile_validation_summary`, `agent_ready_summary`, `model_input_ready`, top-level `entrypoint_decision`, prompt token counts, and output paths.
+`onboard-runner` is the one-command path for Codex, Claude, AGY, GitHub runners, or shell wrappers. It generates a profile, validates it, runs the fail-closed `prepare-model-input` path, selects the final model input surface, and returns one machine-readable capsule with `profile_init_summary`, `profile_validation_summary`, `agent_ready_summary`, `model_input_ready`, top-level `entrypoint_decision`, top-level `model_entrypoint_selection`, prompt token counts, and output paths.
 
 When the wrapper wants to split generation and execution into separate audited steps:
 
@@ -362,7 +362,7 @@ python -m deep_context_federation.cli release-model-input \
 
 `release-model-input` verifies the handoff first. It prints prompt text only when the handoff, generated artifacts, and token economics pass verification; otherwise it exits with code `2` and emits no prompt in `prompt` mode. In JSON mode it includes `prompt_pack`, `source_identity_policy`, `context_advantage_summary`, and `entrypoint_decision`, making the final model-input artifact both public-boundary auditable and self-explanatory about why DCF is the preferred read-first path.
 
-When a wrapper wants a machine-readable choice instead of immediate prompt output, use `select-model-entrypoint --input <artifact.json>`. It accepts `agent_handoff`, `agent_model_input`, `agent_ready`, or `agent_onboard` artifacts and returns `model_entrypoint_selection` with one selected mode: `prompt_file`, `prompt_pack`, `audit_json`, or `blocked`. Add `--profile <profile.json>` to reuse the profile's `model_entrypoint_preference` and `allow_caution_model_entrypoint` defaults; explicit CLI flags still override the profile.
+When a wrapper wants a machine-readable choice instead of immediate prompt output, use `select-model-entrypoint --input <artifact.json>`. It accepts `agent_handoff`, `agent_model_input`, `agent_ready`, or `agent_onboard` artifacts and returns `model_entrypoint_selection` with one selected mode: `prompt_file`, `prompt_pack`, `audit_json`, or `blocked`. Add `--profile <profile.json>` to reuse the profile's `model_entrypoint_preference` and `allow_caution_model_entrypoint` defaults; explicit CLI flags still override the profile. `onboard-runner` embeds the same selection as a top-level field, so global wrappers can usually consume one onboarding JSON without running a second selector command.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -687,7 +687,7 @@ Use `dcf decide-model-start --root <repo> --task '<task>'` as the first global s
 
 Use `dcf prepare-model-input --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then release prompt text only if the final model-input gate passes.
 
-Use `dcf onboard-runner --root <repo> --profile-output <profile.json> --task '<task>' --format json` when the runner wants one onboarding capsule that creates the profile and immediately runs the safe ready path. The top-level `entrypoint_decision` is the direct wrapper adoption gate. The result is still read-only with respect to source and authority surfaces; it only writes generated DCF outputs.
+Use `dcf onboard-runner --root <repo> --profile-output <profile.json> --task '<task>' --format json` when the runner wants one onboarding capsule that creates the profile, runs the safe ready path, and selects the final model input surface. The top-level `entrypoint_decision` is the direct wrapper adoption gate, and top-level `model_entrypoint_selection` tells the wrapper whether to read the prompt file, read the audit JSON, consume the embedded prompt pack, or block startup. The result is still read-only with respect to source and authority surfaces; it only writes generated DCF outputs.
 
 Use `dcf init-run-profile --root <repo> --output <profile.json> --task '<task>' --model-entrypoint-preference prompt-file` to generate one launch contract, `dcf validate-run-profile --profile <profile.json>` to validate it, and then `dcf prepare-model-input --profile <profile.json> --format prompt` when the runner should consume that contract. Profile fields act as defaults; explicit CLI arguments can still add or override the operational request without changing the profile file.
 

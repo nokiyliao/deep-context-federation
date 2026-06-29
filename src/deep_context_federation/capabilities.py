@@ -597,6 +597,8 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "agent_ready_summary",
                 "model_input_ready",
                 "entrypoint_decision",
+                "model_entrypoint_selection",
+                "model_entrypoint_selection_summary",
                 "safety_boundaries",
             ],
             "authority_effect": "none",
@@ -1284,6 +1286,7 @@ def _commands() -> list[dict[str, Any]]:
                 AGENT_PROFILE_SCHEMA_VERSION,
                 AGENT_PROFILE_VALIDATION_SCHEMA_VERSION,
                 AGENT_READY_SCHEMA_VERSION,
+                MODEL_ENTRYPOINT_SELECTION_SCHEMA_VERSION,
             ],
             "input_schemas": [MANIFEST_SCHEMA],
             "options": [

@@ -45,6 +45,7 @@ from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_POLICY
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.unified_index import UNIFIED_INDEX_SCHEMA_VERSION
+from deep_context_federation.unified_index import UNIFIED_WORKING_SET_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 from deep_context_federation.workflow_plan import WORKFLOW_PLAN_SCHEMA_VERSION
 from deep_context_federation.workflow_run import WORKFLOW_RUN_SCHEMA_VERSION
@@ -204,6 +205,37 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "limit": {"type": "integer"},
                 "inputs": object_type,
                 "summary": object_type,
+                "source_identity_policy": object_type,
+                "rows": array_type,
+                "warnings": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "unified_working_set": _schema(
+            UNIFIED_WORKING_SET_SCHEMA_VERSION,
+            "Deep Context Federation selected compact working set",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "optimization_policy",
+                "source_identity_policy",
+                "summary",
+                "rows",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_unified_working_set", "warn_unified_working_set"]},
+                **_boundary_props(),
+                "generated_at": {"type": "string"},
+                "query": {"type": "string"},
+                "limit": {"type": "integer"},
+                "inputs": object_type,
+                "summary": object_type,
+                "optimization_policy": object_type,
                 "source_identity_policy": object_type,
                 "rows": array_type,
                 "warnings": array_type,

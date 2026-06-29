@@ -11,6 +11,7 @@ from typing import Any
 from deep_context_federation.builder import utc_now
 
 UNIFIED_INDEX_SCHEMA_VERSION = "deep_context_federation_unified_index_v1"
+UNIFIED_WORKING_SET_SCHEMA_VERSION = "deep_context_federation_unified_working_set_v1"
 
 EDGE_WEIGHTS = {
     "SUPPORTS": 5,
@@ -65,6 +66,18 @@ def _json_text(value: Any) -> str:
 def _count_terms(row: Mapping[str, Any], terms: Sequence[str]) -> int:
     text = _json_text(row).lower()
     return sum(1 for term in terms if term and term.lower() in text)
+
+
+def _terms(query: str) -> list[str]:
+    return [term.lower() for term in str(query or "").replace("/", " ").replace("_", " ").split() if len(term) >= 2]
+
+
+def _truncate(value: Any, limit: int) -> str:
+    text = str(value or "")
+    limit = max(8, int(limit))
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "..."
 
 
 def _strip_identity(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -271,7 +284,7 @@ def build_unified_index(
     memory_ledger = dict(memory_ledger or {})
     capabilities = dict(capabilities or {})
     native_plan = dict(native_plan or {})
-    terms = [term.lower() for term in str(query or "").replace("/", " ").replace("_", " ").split() if len(term) >= 2]
+    terms = _terms(query)
     rows = [
         *_entity_rows(federation, limit=limit),
         *_conflict_rows(federation, limit=limit),
@@ -339,6 +352,120 @@ def build_unified_index(
     }
 
 
+def _compact_working_row(row: Mapping[str, Any], *, label_chars: int, value_chars: int) -> dict[str, Any]:
+    compact = {
+        "row_id": str(row.get("row_id") or ""),
+        "facet": str(row.get("facet") or ""),
+        "label": _truncate(row.get("label"), label_chars),
+        "value": _truncate(row.get("value"), value_chars),
+        "score": int(row.get("score") or 0),
+    }
+    for key in (
+        "entity_type",
+        "conflict_count",
+        "highest_conflict_severity",
+        "severity",
+        "status",
+        "reusable",
+        "task",
+        "command",
+        "capability_id",
+        "integration_status",
+        "query_match_score",
+    ):
+        if key in row:
+            compact[key] = row[key]
+    if row.get("facet") == "conflict":
+        compact["attention"] = "inspect_before_use"
+    elif int(row.get("conflict_count") or 0) > 0:
+        compact["attention"] = "has_conflict"
+    else:
+        compact["attention"] = "normal"
+    return _strip_identity(compact)
+
+
+def build_unified_working_set(
+    *,
+    unified_index: Mapping[str, Any],
+    unified_index_path: str = "",
+    query: str = "",
+    limit: int = 24,
+    label_chars: int = 96,
+    value_chars: int = 160,
+) -> dict[str, Any]:
+    """Build a compact, task-scoped machine working set from a unified index."""
+
+    limit = max(1, int(limit))
+    terms = _terms(query)
+    source_rows = _rows(unified_index.get("rows"))
+    rows: list[dict[str, Any]] = []
+    for row in source_rows:
+        candidate = dict(row)
+        if terms:
+            candidate["query_match_score"] = int(candidate.get("query_match_score") or _count_terms(candidate, terms))
+        rows.append(candidate)
+    if terms:
+        matched = [row for row in rows if int(row.get("query_match_score") or 0) > 0]
+        if matched:
+            rows = matched
+    rows.sort(key=lambda item: (-int(item.get("query_match_score") or 0), -int(item.get("score") or 0), str(item.get("facet") or ""), str(item.get("label") or "")))
+    selected = [_compact_working_row(row, label_chars=label_chars, value_chars=value_chars) for row in rows[:limit]]
+    facet_counts = Counter(str(row.get("facet") or "") for row in selected)
+    warnings = []
+    if not selected:
+        warnings.append({"id": "no_selected_context_rows", "detail": "No rows were available for the compact working set."})
+    return {
+        "schema_version": UNIFIED_WORKING_SET_SCHEMA_VERSION,
+        "ok": True,
+        "status": "pass_unified_working_set" if selected else "warn_unified_working_set",
+        "authority_effect": "none",
+        "no_apply": True,
+        "generated_at": utc_now(),
+        "query": str(query or ""),
+        "limit": limit,
+        "inputs": {
+            "unified_index": {
+                "path": unified_index_path,
+                "schema_version": unified_index.get("schema_version"),
+                "row_count": len(source_rows),
+            }
+        },
+        "summary": {
+            "selected_row_count": len(selected),
+            "source_row_count": len(source_rows),
+            "omitted_row_count": max(0, len(source_rows) - len(selected)),
+            "facet_counts": dict(sorted(facet_counts.items())),
+            "query_filtered": bool(terms),
+            "warning_count": len(warnings),
+        },
+        "optimization_policy": {
+            "purpose": "task_scoped_machine_read_first",
+            "full_index_role": "audit_only",
+            "label_chars": max(8, int(label_chars)),
+            "value_chars": max(8, int(value_chars)),
+            "source_identity_collapsed": True,
+        },
+        "source_identity_policy": {
+            "public_identity": "deep_context_federation",
+            "user_facing_source_identity_collapsed": True,
+            "source_ids_exposed": False,
+            "source_table_exposed": False,
+            "upstream_identity_fields_stripped": True,
+            "audit_provenance_location": "unified_index_source",
+        },
+        "rows": selected,
+        "warnings": warnings,
+        "safety_boundaries": {
+            "authority_effect": "none",
+            "no_apply": True,
+            "mutation_allowed": False,
+            "external_model_calls": False,
+            "source_or_authority_mutation": False,
+            "user_facing_source_identity_collapsed_to_dcf": True,
+        },
+    }
+
+
 def markdown_unified_index(payload: Mapping[str, Any]) -> str:
     summary = _mapping(payload.get("summary"))
     policy = _mapping(payload.get("source_identity_policy"))
@@ -366,6 +493,35 @@ def markdown_unified_index(payload: Mapping[str, Any]) -> str:
                 facet=row.get("facet"),
                 label=row.get("label"),
                 score=row.get("score"),
+                value=row.get("value"),
+            )
+        )
+    if not payload.get("rows"):
+        lines.append("- none")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def markdown_unified_working_set(payload: Mapping[str, Any]) -> str:
+    summary = _mapping(payload.get("summary"))
+    policy = _mapping(payload.get("source_identity_policy"))
+    lines = [
+        "# DCF Selected Context",
+        "",
+        f"- Status: `{payload.get('status')}`",
+        f"- Selected rows: `{summary.get('selected_row_count', 0)}` / `{summary.get('source_row_count', 0)}`",
+        f"- Public identity: `{policy.get('public_identity')}`",
+        f"- Source ids exposed: `{policy.get('source_ids_exposed')}`",
+        "",
+        "## Rows",
+        "",
+    ]
+    for row in _rows(payload.get("rows"))[:25]:
+        lines.append(
+            "- `{facet}` `{label}` score=`{score}` attention=`{attention}` value=`{value}`".format(
+                facet=row.get("facet"),
+                label=row.get("label"),
+                score=row.get("score"),
+                attention=row.get("attention"),
                 value=row.get("value"),
             )
         )

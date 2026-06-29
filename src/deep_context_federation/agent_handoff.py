@@ -21,7 +21,9 @@ from deep_context_federation.builder import write_markdown
 from deep_context_federation.context_pack import estimate_tokens
 from deep_context_federation.input_fingerprint import build_input_fingerprint
 from deep_context_federation.unified_index import build_unified_index
+from deep_context_federation.unified_index import build_unified_working_set
 from deep_context_federation.unified_index import markdown_unified_index
+from deep_context_federation.unified_index import markdown_unified_working_set
 
 AGENT_HANDOFF_SCHEMA_VERSION = "deep_context_federation_agent_handoff_v1"
 DEFAULT_AGENT_HANDOFF_JSON_NAME = "deep_context_federation_agent_handoff.json"
@@ -35,6 +37,8 @@ DEFAULT_AGENT_HANDOFF_VERIFICATION_JSON_NAME = "deep_context_federation_agent_ha
 DEFAULT_AGENT_HANDOFF_VERIFICATION_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_HANDOFF_VERIFICATION.md"
 DEFAULT_AGENT_UNIFIED_INDEX_JSON_NAME = "deep_context_federation_unified_index.json"
 DEFAULT_AGENT_UNIFIED_INDEX_MD_NAME = "DEEP_CONTEXT_FEDERATION_UNIFIED_INDEX.md"
+DEFAULT_AGENT_SELECTED_CONTEXT_JSON_NAME = "deep_context_federation_selected_context.json"
+DEFAULT_AGENT_SELECTED_CONTEXT_MD_NAME = "DEEP_CONTEXT_FEDERATION_SELECTED_CONTEXT.md"
 
 
 def _normalize_output_dir(root: Path, output_dir: Path) -> Path:
@@ -124,7 +128,7 @@ def _build_unified_context_for_handoff(
     out_dir: Path,
     limit: int,
     query: str,
-) -> tuple[dict[str, Any], Path, Path]:
+) -> tuple[dict[str, Any], Path, Path, dict[str, Any], Path, Path]:
     intake_outputs = _workflow_intake_outputs(agent_ci)
     federation_path = Path(str(intake_outputs.get("federation_json") or ""))
     federation = read_json(federation_path)
@@ -138,7 +142,17 @@ def _build_unified_context_for_handoff(
     )
     write_json(unified_index_json, unified_index)
     write_markdown(unified_index_md, markdown_unified_index(unified_index).splitlines())
-    return unified_index, unified_index_json, unified_index_md
+    selected_context_json = out_dir / DEFAULT_AGENT_SELECTED_CONTEXT_JSON_NAME
+    selected_context_md = out_dir / DEFAULT_AGENT_SELECTED_CONTEXT_MD_NAME
+    selected_context = build_unified_working_set(
+        unified_index=unified_index,
+        unified_index_path=unified_index_json.as_posix(),
+        query=query,
+        limit=min(24, max(1, int(limit))),
+    )
+    write_json(selected_context_json, selected_context)
+    write_markdown(selected_context_md, markdown_unified_working_set(selected_context).splitlines())
+    return unified_index, unified_index_json, unified_index_md, selected_context, selected_context_json, selected_context_md
 
 
 def _handoff_decision(agent_ci: Mapping[str, Any], agent_context: Mapping[str, Any], agent_context_gate: Mapping[str, Any]) -> dict[str, Any]:
@@ -301,7 +315,7 @@ def build_agent_handoff(
     if include_prompt and prompt_text:
         write_markdown(agent_model_prompt_md, prompt_text.splitlines())
 
-    unified_index, unified_index_json, unified_index_md = _build_unified_context_for_handoff(
+    unified_index, unified_index_json, unified_index_md, selected_context, selected_context_json, selected_context_md = _build_unified_context_for_handoff(
         agent_ci=agent_ci,
         out_dir=out_dir,
         limit=max_rows,
@@ -339,25 +353,29 @@ def build_agent_handoff(
         "agent_context_gate_json": agent_context_gate_json.as_posix(),
         "unified_index_json": unified_index_json.as_posix(),
         "unified_index_markdown": unified_index_md.as_posix(),
+        "selected_context_json": selected_context_json.as_posix(),
+        "selected_context_markdown": selected_context_md.as_posix(),
     }
     model_prompt_source = agent_model_prompt_md.as_posix() if ok and include_prompt and prompt_text else ""
     prompt_fingerprint = _artifact_fingerprint(agent_model_prompt_md, role="model_prompt", default_model_input=bool(model_prompt_source))
     context_fingerprint = _artifact_fingerprint(agent_context_json, role="machine_context")
     gate_fingerprint = _artifact_fingerprint(agent_context_gate_json, role="context_gate")
-    unified_fingerprint = _artifact_fingerprint(unified_index_json, role="unified_context")
+    unified_fingerprint = _artifact_fingerprint(unified_index_json, role="unified_context_audit")
+    selected_fingerprint = _artifact_fingerprint(selected_context_json, role="selected_context")
     read_first_artifacts = [
         gate_fingerprint,
-        unified_fingerprint,
+        selected_fingerprint,
         prompt_fingerprint,
     ]
     machine_context_tokens = int(context_fingerprint.get("estimated_tokens") or 0)
     model_prompt_tokens = int(prompt_fingerprint.get("estimated_tokens") or 0) if model_prompt_source else 0
     unified_context_tokens = int(unified_fingerprint.get("estimated_tokens") or 0)
+    selected_context_tokens = int(selected_fingerprint.get("estimated_tokens") or 0)
     measured_prompt_economics = bool(model_prompt_source)
     model_handoff = {
         "read_first": [
             item
-            for item in (handoff_json.as_posix(), agent_context_gate_json.as_posix(), unified_index_json.as_posix(), model_prompt_source)
+            for item in (handoff_json.as_posix(), agent_context_gate_json.as_posix(), selected_context_json.as_posix(), model_prompt_source)
             if item
         ],
         "model_prompt_source": model_prompt_source,
@@ -368,6 +386,9 @@ def build_agent_handoff(
         "unified_context_source": unified_index_json.as_posix(),
         "unified_context_markdown": unified_index_md.as_posix(),
         "unified_context_estimated_tokens": unified_context_tokens,
+        "selected_context_source": selected_context_json.as_posix(),
+        "selected_context_markdown": selected_context_md.as_posix(),
+        "selected_context_estimated_tokens": selected_context_tokens,
         "unified_context_summary": {
             "schema_version": unified_index.get("schema_version"),
             "status": unified_index.get("status"),
@@ -375,15 +396,25 @@ def build_agent_handoff(
             "row_count": unified_index.get("summary", {}).get("row_count") if isinstance(unified_index.get("summary"), Mapping) else 0,
             "source_identity_policy": unified_index.get("source_identity_policy"),
         },
+        "selected_context_summary": {
+            "schema_version": selected_context.get("schema_version"),
+            "status": selected_context.get("status"),
+            "ok": selected_context.get("ok"),
+            "selected_row_count": selected_context.get("summary", {}).get("selected_row_count") if isinstance(selected_context.get("summary"), Mapping) else 0,
+            "source_identity_policy": selected_context.get("source_identity_policy"),
+            "optimization_policy": selected_context.get("optimization_policy"),
+        },
         "read_first_artifacts": read_first_artifacts,
-        "audit_artifacts": [context_fingerprint],
+        "audit_artifacts": [context_fingerprint, unified_fingerprint],
         "token_economics": {
             "status": "measured" if measured_prompt_economics else "not_applicable",
             "default_model_input": "model_prompt_source" if model_prompt_source else "",
             "model_prompt_estimated_tokens": model_prompt_tokens,
             "machine_context_estimated_tokens": machine_context_tokens,
             "unified_context_estimated_tokens": unified_context_tokens,
-            "read_first_support_estimated_tokens": int(gate_fingerprint.get("estimated_tokens") or 0) + unified_context_tokens,
+            "selected_context_estimated_tokens": selected_context_tokens,
+            "selected_context_to_unified_context_ratio": _ratio(selected_context_tokens, unified_context_tokens),
+            "read_first_support_estimated_tokens": int(gate_fingerprint.get("estimated_tokens") or 0) + selected_context_tokens,
             "model_prompt_to_machine_context_ratio": _ratio(model_prompt_tokens, machine_context_tokens) if measured_prompt_economics else 0.0,
             "estimated_token_savings": max(0, machine_context_tokens - model_prompt_tokens) if measured_prompt_economics else 0,
             "estimated_token_savings_percent": _savings_percent(machine_context_tokens, model_prompt_tokens) if measured_prompt_economics else 0.0,
@@ -391,6 +422,7 @@ def build_agent_handoff(
         "skip_by_default": [
             "full repository tree",
             "full federation artifact",
+            "full unified index unless auditing",
             "machine context JSON unless debugging or auditing",
             "upstream source-specific context tools",
             "raw source files without target match",

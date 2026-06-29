@@ -94,7 +94,9 @@ from deep_context_federation.target_review_gate import markdown_target_review_ga
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.task_brief import markdown_task_brief
 from deep_context_federation.unified_index import build_unified_index
+from deep_context_federation.unified_index import build_unified_working_set
 from deep_context_federation.unified_index import markdown_unified_index
+from deep_context_federation.unified_index import markdown_unified_working_set
 from deep_context_federation.verifier import read_json as read_required_json
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.workflow_plan import build_workflow_plan
@@ -342,6 +344,14 @@ def build_parser() -> argparse.ArgumentParser:
     unified_index.add_argument("--limit", type=int, default=200)
     unified_index.add_argument("--output", type=Path)
     unified_index.add_argument("--format", choices=["json", "markdown"], default="json")
+    selected_context = sub.add_parser("select-context", help="Select a compact task-scoped DCF working set from a unified context index.")
+    selected_context.add_argument("--input", type=Path, default=Path(".dcf") / "deep_context_federation_unified_index.json", help="Unified context index JSON artifact.")
+    selected_context.add_argument("--query", default="")
+    selected_context.add_argument("--limit", type=int, default=24)
+    selected_context.add_argument("--label-chars", type=int, default=96)
+    selected_context.add_argument("--value-chars", type=int, default=160)
+    selected_context.add_argument("--output", type=Path)
+    selected_context.add_argument("--format", choices=["json", "markdown"], default="json")
     build = sub.add_parser("build", help="Build a federation artifact from a manifest.")
     add_common_source_args(build)
     add_memory_import_args(build)
@@ -841,6 +851,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_unified_index(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "select-context":
+        unified_index = read_required_json(args.input)
+        result = build_unified_working_set(
+            unified_index=unified_index,
+            unified_index_path=args.input.expanduser().resolve().as_posix(),
+            query=args.query,
+            limit=args.limit,
+            label_chars=args.label_chars,
+            value_chars=args.value_chars,
+        )
+        if args.output:
+            result["outputs"] = {"selected_context_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_unified_working_set(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

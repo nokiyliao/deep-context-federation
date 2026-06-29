@@ -61,6 +61,7 @@ from deep_context_federation.target_review_gate import evaluate_target_review_ga
 from deep_context_federation.target_review_gate import normalize_target_review_gate_policy
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.unified_index import build_unified_index
+from deep_context_federation.unified_index import build_unified_working_set
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.workflow_plan import build_workflow_plan
 from deep_context_federation.workflow_run import build_workflow_run
@@ -238,7 +239,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.46.0"
+    assert payload["package"]["version"] == "0.47.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -304,6 +305,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
+    assert by_kind["unified_working_set"]["schema_version"] == "deep_context_federation_unified_working_set_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -350,6 +352,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
+    assert by_kind["unified_working_set"]["schema_version"] == "deep_context_federation_unified_working_set_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -463,6 +466,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "plan-native-ownership" in top_help.stdout
     assert "index-context-memory" in top_help.stdout
     assert "unify-context" in top_help.stdout
+    assert "select-context" in top_help.stdout
     assert "decide-continuation" in top_help.stdout
     assert "prepare-model-input" in top_help.stdout
     assert "native-integration-plan" not in top_help.stdout
@@ -1013,12 +1017,17 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["model_handoff"]["model_prompt_format"] == "markdown"
     assert result["model_handoff"]["machine_context_source"] == result["outputs"]["agent_context_json"]
     assert result["model_handoff"]["unified_context_source"] == result["outputs"]["unified_index_json"]
-    assert result["outputs"]["unified_index_json"] in result["model_handoff"]["read_first"]
+    assert result["model_handoff"]["selected_context_source"] == result["outputs"]["selected_context_json"]
+    assert result["outputs"]["selected_context_json"] in result["model_handoff"]["read_first"]
+    assert result["outputs"]["unified_index_json"] not in result["model_handoff"]["read_first"]
     assert result["model_handoff"]["read_first"][-1] == result["outputs"]["agent_model_prompt_markdown"]
     assert result["model_handoff"]["model_prompt_estimated_tokens"] > 0
     assert result["model_handoff"]["machine_context_estimated_tokens"] > result["model_handoff"]["model_prompt_estimated_tokens"]
     assert result["model_handoff"]["unified_context_estimated_tokens"] > 0
+    assert 0 < result["model_handoff"]["selected_context_estimated_tokens"] < result["model_handoff"]["unified_context_estimated_tokens"]
     assert result["model_handoff"]["unified_context_summary"]["source_identity_policy"]["source_ids_exposed"] is False
+    assert result["model_handoff"]["selected_context_summary"]["source_identity_policy"]["source_ids_exposed"] is False
+    assert result["model_handoff"]["selected_context_summary"]["optimization_policy"]["full_index_role"] == "audit_only"
     assert result["input_fingerprint_summary"]["status"] == "pass_input_fingerprint"
     assert len(result["input_fingerprint_summary"]["digest"]) == 64
     assert result["input_fingerprint"]["source_count"] > 0
@@ -1031,11 +1040,20 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert Path(result["outputs"]["agent_handoff_verification_markdown"]).exists()
     assert Path(result["outputs"]["unified_index_json"]).exists()
     assert Path(result["outputs"]["unified_index_markdown"]).exists()
+    assert Path(result["outputs"]["selected_context_json"]).exists()
+    assert Path(result["outputs"]["selected_context_markdown"]).exists()
     unified_index = json.loads(Path(result["outputs"]["unified_index_json"]).read_text(encoding="utf-8"))
+    selected_context = json.loads(Path(result["outputs"]["selected_context_json"]).read_text(encoding="utf-8"))
     assert unified_index["schema_version"] == "deep_context_federation_unified_index_v1"
     assert unified_index["source_identity_policy"]["public_identity"] == "deep_context_federation"
     assert unified_index["source_identity_policy"]["source_ids_exposed"] is False
     assert validate_artifact_contract(unified_index, artifact_kind="unified_index")["ok"] is True
+    assert selected_context["schema_version"] == "deep_context_federation_unified_working_set_v1"
+    assert selected_context["source_identity_policy"]["public_identity"] == "deep_context_federation"
+    assert selected_context["source_identity_policy"]["source_ids_exposed"] is False
+    assert selected_context["optimization_policy"]["full_index_role"] == "audit_only"
+    assert selected_context["summary"]["selected_row_count"] <= 24
+    assert validate_artifact_contract(selected_context, artifact_kind="unified_working_set")["ok"] is True
 
     def assert_no_source_identity(value: object) -> None:
         if isinstance(value, dict):
@@ -1048,6 +1066,7 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
                 assert_no_source_identity(child)
 
     assert_no_source_identity(unified_index["rows"])
+    assert_no_source_identity(selected_context["rows"])
     discovery = discover_agent_context(root=tmp_path, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
     assert discovery["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert discovery["ok"] is True
@@ -1081,16 +1100,20 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert prompt_path.stat().st_size < context_path.stat().st_size
     prompt_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "model_prompt")
     gate_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "context_gate")
-    unified_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "unified_context")
+    selected_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "selected_context")
+    unified_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "unified_context_audit")
     context_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "machine_context")
     assert prompt_artifact["path"] == prompt_path.as_posix()
     assert prompt_artifact["exists"] is True
     assert prompt_artifact["default_model_input"] is True
     assert len(prompt_artifact["sha256"]) == 64
     assert gate_artifact["exists"] is True
+    assert selected_artifact["path"] == result["outputs"]["selected_context_json"]
+    assert selected_artifact["exists"] is True
+    assert selected_artifact["default_model_input"] is False
+    assert selected_artifact["estimated_tokens"] == result["model_handoff"]["selected_context_estimated_tokens"]
     assert unified_artifact["path"] == result["outputs"]["unified_index_json"]
     assert unified_artifact["exists"] is True
-    assert unified_artifact["default_model_input"] is False
     assert unified_artifact["estimated_tokens"] == result["model_handoff"]["unified_context_estimated_tokens"]
     assert context_artifact["path"] == context_path.as_posix()
     assert context_artifact["estimated_tokens"] == result["model_handoff"]["machine_context_estimated_tokens"]
@@ -1100,7 +1123,10 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert economics["model_prompt_estimated_tokens"] == result["model_handoff"]["model_prompt_estimated_tokens"]
     assert economics["machine_context_estimated_tokens"] == result["model_handoff"]["machine_context_estimated_tokens"]
     assert economics["unified_context_estimated_tokens"] == result["model_handoff"]["unified_context_estimated_tokens"]
-    assert economics["read_first_support_estimated_tokens"] >= result["model_handoff"]["unified_context_estimated_tokens"]
+    assert economics["selected_context_estimated_tokens"] == result["model_handoff"]["selected_context_estimated_tokens"]
+    assert 0 < economics["selected_context_to_unified_context_ratio"] < 1
+    assert economics["read_first_support_estimated_tokens"] >= result["model_handoff"]["selected_context_estimated_tokens"]
+    assert economics["read_first_support_estimated_tokens"] < result["model_handoff"]["unified_context_estimated_tokens"]
     assert 0 < economics["model_prompt_to_machine_context_ratio"] < 1
     assert economics["estimated_token_savings"] > 0
     assert economics["estimated_token_savings_percent"] > 50
@@ -1170,11 +1196,13 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert failed["model_handoff"]["model_prompt_source"] == ""
     assert failed["model_handoff"]["machine_context_source"] == failed["outputs"]["agent_context_json"]
     assert failed["model_handoff"]["unified_context_source"] == failed["outputs"]["unified_index_json"]
+    assert failed["model_handoff"]["selected_context_source"] == failed["outputs"]["selected_context_json"]
     assert failed["model_handoff"]["token_economics"]["status"] == "not_applicable"
     assert failed["model_handoff"]["token_economics"]["default_model_input"] == ""
     assert failed["model_handoff"]["token_economics"]["model_prompt_estimated_tokens"] == 0
     assert failed["model_handoff"]["token_economics"]["estimated_token_savings"] == 0
     assert Path(failed["outputs"]["unified_index_json"]).exists()
+    assert Path(failed["outputs"]["selected_context_json"]).exists()
     assert failed["agent_handoff_verification_summary"]["status"] == "pass_agent_handoff_verification"
     assert validate_artifact_contract(failed)["ok"] is True
     blocked_verified = verify_agent_handoff(failed, handoff_path=Path(failed["outputs"]["agent_handoff_json"]))
@@ -1362,6 +1390,23 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     assert_no_source_identity(unified["rows"])
     assert validate_artifact_contract(unified, artifact_kind="unified_index")["ok"] is True
 
+    selected = build_unified_working_set(
+        unified_index=unified,
+        unified_index_path=federation["outputs"]["json"],
+        query="dashboard operator",
+        limit=12,
+    )
+    assert selected["schema_version"] == "deep_context_federation_unified_working_set_v1"
+    assert selected["status"] == "pass_unified_working_set"
+    assert selected["source_identity_policy"]["source_ids_exposed"] is False
+    assert selected["optimization_policy"]["purpose"] == "task_scoped_machine_read_first"
+    assert selected["optimization_policy"]["full_index_role"] == "audit_only"
+    assert 0 < selected["summary"]["selected_row_count"] <= 12
+    assert selected["summary"]["source_row_count"] == len(unified["rows"])
+    assert len(json.dumps(selected, sort_keys=True)) < len(json.dumps(unified, sort_keys=True))
+    assert_no_source_identity(selected["rows"])
+    assert validate_artifact_contract(selected, artifact_kind="unified_working_set")["ok"] is True
+
 
 def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
     federation = build_federation(
@@ -1411,6 +1456,40 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
     assert payload["source_identity_policy"]["source_ids_exposed"] is False
     assert output_path.exists()
     assert validate_artifact_contract(payload, artifact_kind="unified_index")["ok"] is True
+
+    selected_path = tmp_path / "selected_context.json"
+    selected_completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "select-context",
+            "--input",
+            str(output_path),
+            "--query",
+            "dashboard",
+            "--limit",
+            "8",
+            "--output",
+            str(selected_path),
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert selected_completed.returncode == 0, selected_completed.stderr + selected_completed.stdout
+    selected_payload = json.loads(selected_completed.stdout)
+    assert selected_payload["schema_version"] == "deep_context_federation_unified_working_set_v1"
+    assert selected_payload["outputs"]["selected_context_json"] == selected_path.resolve().as_posix()
+    assert selected_payload["source_identity_policy"]["source_ids_exposed"] is False
+    assert selected_payload["summary"]["selected_row_count"] <= 8
+    assert selected_path.exists()
+    assert validate_artifact_contract(selected_payload, artifact_kind="unified_working_set")["ok"] is True
 
 
 def test_agent_discovery_reports_repo_readiness_states(tmp_path: Path) -> None:

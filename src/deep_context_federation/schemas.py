@@ -15,6 +15,7 @@ from deep_context_federation.agent_discover import AGENT_DISCOVERY_SCHEMA_VERSIO
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
+from deep_context_federation.agent_route import AGENT_ROUTE_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import SCHEMA_VERSION
@@ -829,6 +830,53 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "discovered": object_type,
                 "recommended_next_command": {"type": "string"},
                 "diagnostics": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "agent_route": _schema(
+            AGENT_ROUTE_SCHEMA_VERSION,
+            "Deep Context Federation agent route",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "root",
+                "discovery_status",
+                "action",
+                "recommended_next_command",
+                "route_steps",
+                "wrapper_contract",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "ready_agent_route",
+                        "needs_agent_handoff",
+                        "needs_task_agent_route",
+                        "needs_bootstrap_agent_route",
+                        "needs_manifest_refresh_agent_route",
+                        "blocked_agent_route",
+                    ],
+                },
+                **_boundary_props(),
+                "root": {"type": "string"},
+                "task": {"type": "string"},
+                "targets": array_type,
+                "discovery_status": {"type": "string"},
+                "action": {"type": "string"},
+                "model_input_ready": {"type": "boolean"},
+                "route_ready": {"type": "boolean"},
+                "recommended_next_command": {"type": "string"},
+                "route_steps": array_type,
+                "requires_user_input": array_type,
+                "discovered": object_type,
+                "discovery_summary": object_type,
+                "wrapper_contract": object_type,
                 "safety_boundaries": object_type,
             },
         ),

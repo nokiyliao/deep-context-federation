@@ -64,6 +64,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - agent context bundle that materializes selected `agent-ci` read-plan artifacts into one bounded prompt/context payload
 - agent context gate that enforces token, missing-artifact, truncation, and schema thresholds before model handoff
 - agent handoff command that runs the CI decision, bounded context bundle, and context gate in one pipeline
+- agent route command that normalizes discovery into a stable global-wrapper route decision
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -231,14 +232,24 @@ python -m deep_context_federation.cli agent-handoff \
 
 `agent-handoff` writes the underlying `agent-ci`, `agent-context`, `agent-context-gate`, and `agent-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `agent-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff also includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
 
-Global wrappers can discover the current repo state before deciding what to run:
+Global wrappers can route from the current repo state before deciding what to run:
+
+```bash
+python -m deep_context_federation.cli agent-route \
+  --root . \
+  --task "dashboard operator evidence authority"
+```
+
+`agent-route` is read-only and does not execute its recommended command. It normalizes discovery into `ready_agent_route`, `needs_agent_handoff`, `needs_task_agent_route`, `needs_bootstrap_agent_route`, `needs_manifest_refresh_agent_route`, or `blocked_agent_route`, then returns `route_steps` and `recommended_next_command`. This gives Codex, Claude, AGY, GitHub runners, or shell wrappers one stable routing contract instead of making each wrapper hard-code DCF status branching.
+
+Use lower-level discovery when a wrapper only needs to probe the repo state:
 
 ```bash
 python -m deep_context_federation.cli agent-discover \
   --root .
 ```
 
-`agent-discover` is read-only. It reports whether a repo already has a verified handoff ready for `agent-model-input`, only has a manifest, only has federation artifacts, or is not configured yet. The output includes `recommended_next_command` so Codex, Claude, AGY, GitHub runners, or shell wrappers can route without embedding DCF-specific logic.
+`agent-discover` is read-only. It reports whether a repo already has a verified handoff ready for `agent-model-input`, only has a manifest, only has federation artifacts, or is not configured yet. The output includes `recommended_next_command`; `agent-route` wraps that lower-level probe into a stronger global-wrapper contract.
 
 `agent-handoff` writes `deep_context_federation_agent_handoff_verification.json` automatically. Re-run verification explicitly when a handoff or generated prompt may have moved, been copied, or been modified:
 
@@ -575,7 +586,7 @@ Run `dcf verify-handoff --input <handoff.json>` before giving a copied or extern
 
 For global wrappers, prefer `dcf agent-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic.
 
-Use `dcf agent-discover --root <repo>` as the first global step. If it returns `ready_model_input`, execute its `recommended_next_command`; if it returns `manifest_available`, run an `agent-handoff` for the current task; if it returns `not_configured`, bootstrap or scan the repo first.
+Use `dcf agent-route --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `agent-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
 
 ## Capabilities Manifest
 

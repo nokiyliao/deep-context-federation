@@ -10,6 +10,7 @@ from deep_context_federation.agent_discover import discover_agent_context
 from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
+from deep_context_federation.agent_route import route_agent_context
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation
 from deep_context_federation.capabilities import build_capabilities
@@ -54,6 +55,7 @@ __all__ = [
     "build_agent_handoff",
     "build_agent_model_input",
     "discover_agent_context",
+    "route_agent_context",
     "verify_agent_handoff",
     "build_workflow_plan",
     "build_workflow_run",

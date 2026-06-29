@@ -24,6 +24,8 @@ from deep_context_federation.agent_handoff_verify import markdown_agent_handoff_
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_model_input import markdown_agent_model_input
+from deep_context_federation.agent_route import markdown_agent_route
+from deep_context_federation.agent_route import route_agent_context
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.bootstrap import markdown_bootstrap
@@ -305,6 +307,14 @@ def build_parser() -> argparse.ArgumentParser:
     agent_discover.add_argument("--handoff", type=Path)
     agent_discover.add_argument("--output", type=Path)
     agent_discover.add_argument("--format", choices=["json", "markdown"], default="json")
+    agent_route = sub.add_parser("agent-route", help="Normalize DCF discovery into a global-wrapper route decision.")
+    agent_route.add_argument("--root", type=Path, default=Path.cwd())
+    agent_route.add_argument("--task", default="")
+    agent_route.add_argument("--target", action="append", default=[])
+    agent_route.add_argument("--handoff", type=Path)
+    agent_route.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+    agent_route.add_argument("--output", type=Path)
+    agent_route.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -847,6 +857,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_discovery(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "agent-route":
+        result = route_agent_context(
+            root=args.root,
+            task=args.task,
+            targets=args.target,
+            handoff_path=args.handoff,
+            output_dir=args.output_dir,
+        )
+        if args.output:
+            result["outputs"] = {"agent_route_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_agent_route(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0

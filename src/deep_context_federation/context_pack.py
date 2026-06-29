@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -52,6 +53,52 @@ def estimate_tokens(value: Any) -> int:
 
     text = value if isinstance(value, str) else _json_text(value)
     return max(1, (len(text) + 3) // 4)
+
+
+def _render_prompt_row(item: Mapping[str, Any]) -> str:
+    row = item.get("row") if isinstance(item.get("row"), Mapping) else {}
+    matched_terms = item.get("matched_terms") if isinstance(item.get("matched_terms"), list) else []
+    return "- {kind} id={id} score={score} matched={matched} row={row}".format(
+        kind=item.get("kind"),
+        id=item.get("id"),
+        score=item.get("score"),
+        matched=",".join(str(term) for term in matched_terms) or "none",
+        row=_json_text(row),
+    )
+
+
+def _render_prompt_text(result: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]) -> str:
+    source_snapshot = result.get("source_snapshot") if isinstance(result.get("source_snapshot"), Mapping) else {}
+    coverage = result.get("coverage") if isinstance(result.get("coverage"), Mapping) else {}
+    lines = [
+        "# Deep Context Federation Prompt Pack",
+        "",
+        "Task: {task}".format(task=result.get("task") or ""),
+        "Boundary: authority_effect=none; no_apply=true; do not mutate repo/runtime/authority from this context alone.",
+        "Source: schema={schema} generated_at={generated_at} head_commit={head_commit}".format(
+            schema=source_snapshot.get("schema_version") or "unknown",
+            generated_at=source_snapshot.get("generated_at") or "unknown",
+            head_commit=source_snapshot.get("head_commit") or "unknown",
+        ),
+        "Budget: token_budget={budget} selected_rows={selected} dropped_rows={dropped} source_coverage={coverage}".format(
+            budget=result.get("token_budget"),
+            selected=result.get("summary", {}).get("selected_count") if isinstance(result.get("summary"), Mapping) else len(rows),
+            dropped=result.get("summary", {}).get("dropped_count") if isinstance(result.get("summary"), Mapping) else 0,
+            coverage=coverage.get("source_coverage_ratio", 0),
+        ),
+        "",
+        "Use the selected rows as the only task context. Treat conflicts and missing coverage as blockers or caveats.",
+        "",
+        "## Selected Rows",
+    ]
+    if not rows:
+        lines.append("- no rows selected")
+    else:
+        lines.extend(_render_prompt_row(item) for item in rows)
+    missing_terms = coverage.get("missing_terms") if isinstance(coverage.get("missing_terms"), list) else []
+    if missing_terms:
+        lines.extend(["", "## Missing Task Terms", "- " + ", ".join(str(term) for term in missing_terms)])
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _terms(task: str) -> list[str]:
@@ -150,7 +197,8 @@ def _candidate_rows(payload: Mapping[str, Any], terms: Sequence[str]) -> list[di
                 "matched_terms": matched,
                 "row": compact,
             }
-            candidate["estimated_tokens"] = estimate_tokens(candidate)
+            candidate["json_estimated_tokens"] = estimate_tokens(candidate)
+            candidate["estimated_tokens"] = estimate_tokens(_render_prompt_row(candidate))
             candidates.append(candidate)
     candidates.sort(key=lambda item: (-int(item["score"]), int(item["estimated_tokens"]), str(item["kind"]), str(item["id"])))
     return candidates
@@ -178,6 +226,88 @@ def _relationship_boost(candidates: list[dict[str, Any]], selected: Sequence[Map
     candidates.sort(key=lambda item: (-int(item["score"]), int(item["estimated_tokens"]), str(item["kind"]), str(item["id"])))
 
 
+def _source_ids_from_item(item: Mapping[str, Any]) -> set[str]:
+    row = item.get("row") if isinstance(item.get("row"), Mapping) else {}
+    source_ids: set[str] = set()
+    if item.get("kind") == "source" and row.get("source_id"):
+        source_ids.add(str(row.get("source_id")))
+    if row.get("source_id"):
+        source_ids.add(str(row.get("source_id")))
+    raw_source_ids = row.get("source_ids")
+    if isinstance(raw_source_ids, list):
+        source_ids.update(str(source_id) for source_id in raw_source_ids if source_id)
+    return source_ids
+
+
+def _coverage(payload: Mapping[str, Any], selected: Sequence[Mapping[str, Any]], terms: Sequence[str]) -> dict[str, Any]:
+    all_source_ids = {str(row.get("source_id")) for row in _rows(payload, "sources") if row.get("source_id")}
+    selected_source_ids: set[str] = set()
+    entity_types: Counter[str] = Counter()
+    conflict_severities: Counter[str] = Counter()
+    matched_terms: set[str] = set()
+
+    for item in selected:
+        selected_source_ids.update(_source_ids_from_item(item))
+        matched_terms.update(str(term) for term in item.get("matched_terms") or [])
+        row = item.get("row") if isinstance(item.get("row"), Mapping) else {}
+        if item.get("kind") == "entity":
+            entity_types[str(row.get("entity_type") or "unknown")] += 1
+        if item.get("kind") == "conflict":
+            conflict_severities[str(row.get("severity") or "unknown")] += 1
+
+    matched = sorted(term for term in terms if term in matched_terms)
+    missing = sorted(term for term in terms if term not in matched_terms)
+    source_total = len(all_source_ids)
+    selected_source_count = len(selected_source_ids)
+    return {
+        "selected_source_ids": sorted(selected_source_ids),
+        "selected_source_count": selected_source_count,
+        "source_count": source_total,
+        "source_coverage_ratio": round(selected_source_count / source_total, 6) if source_total else 0.0,
+        "matched_terms": matched,
+        "missing_terms": missing,
+        "matched_term_ratio": round(len(matched) / len(terms), 6) if terms else 1.0,
+        "selected_entity_type_counts": dict(sorted(entity_types.items())),
+        "selected_conflict_severity_counts": dict(sorted(conflict_severities.items())),
+    }
+
+
+def _selected_by_kind(selected: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    return {kind: sum(1 for item in selected if item["kind"] == kind) for kind in ("source", "entity", "edge", "conflict")}
+
+
+def _finalize_prompt_budget(
+    result: dict[str, Any],
+    selected: list[dict[str, Any]],
+    dropped: list[dict[str, Any]],
+    dropped_keys: set[tuple[str, str]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str, int]:
+    prompt_text = _render_prompt_text(result, selected)
+    prompt_tokens = estimate_tokens(prompt_text)
+    token_budget = int(result.get("token_budget") or 0)
+    while selected and prompt_tokens > token_budget:
+        removed = selected.pop()
+        key = (str(removed["kind"]), str(removed["id"]))
+        if key not in dropped_keys:
+            dropped.append(
+                {
+                    "kind": removed["kind"],
+                    "id": removed["id"],
+                    "reason": "prompt_budget_rebalance",
+                    "score": removed["score"],
+                    "estimated_tokens": removed["estimated_tokens"],
+                }
+            )
+            dropped_keys.add(key)
+        result["summary"]["selected_count"] = len(selected)
+        result["summary"]["dropped_count"] = len(dropped)
+        result["summary"]["selected_by_kind"] = _selected_by_kind(selected)
+        result["coverage"] = _coverage(result.get("_source_payload", {}), selected, result.get("terms") or [])
+        prompt_text = _render_prompt_text(result, selected)
+        prompt_tokens = estimate_tokens(prompt_text)
+    return selected, dropped, prompt_text, prompt_tokens
+
+
 def pack_context(
     payload: Mapping[str, Any],
     *,
@@ -185,6 +315,7 @@ def pack_context(
     token_budget: int = 4000,
     min_score: int = 0,
     max_rows: int = 80,
+    include_prompt: bool = True,
 ) -> dict[str, Any]:
     """Build a bounded context bundle from a federation artifact."""
 
@@ -197,7 +328,14 @@ def pack_context(
     dropped: list[dict[str, Any]] = []
     selected_keys: set[tuple[str, str]] = set()
     dropped_keys: set[tuple[str, str]] = set()
-    used_tokens = estimate_tokens({"task": task, "schema_version": CONTEXT_PACK_SCHEMA_VERSION})
+    used_tokens = estimate_tokens(
+        {
+            "task": task,
+            "schema_version": CONTEXT_PACK_SCHEMA_VERSION,
+            "authority_effect": "none",
+            "no_apply": True,
+        }
+    )
 
     for pass_index in range(2):
         if pass_index == 1:
@@ -246,7 +384,7 @@ def pack_context(
         dropped_keys.add(key)
 
     compression_ratio = round(used_tokens / original_estimated_tokens, 6) if original_estimated_tokens else 0.0
-    return {
+    result: dict[str, Any] = {
         "schema_version": CONTEXT_PACK_SCHEMA_VERSION,
         "status": "ok",
         "authority_effect": "none",
@@ -259,10 +397,13 @@ def pack_context(
         "original_estimated_tokens": original_estimated_tokens,
         "estimated_token_savings": max(0, original_estimated_tokens - used_tokens),
         "compression_ratio": compression_ratio,
+        "json_estimated_tokens": estimate_tokens({"rows": selected, "dropped": dropped[:100]}),
+        "budget_utilization": round(used_tokens / token_budget, 6),
         "selection_policy": {
             "min_score": int(min_score),
             "max_rows": max_rows,
             "token_estimator": "ceil(json_chars/4)",
+            "budgeted_surface": "prompt_text",
             "relationship_boost": "selected entity adjacency",
         },
         "source_snapshot": {
@@ -276,14 +417,34 @@ def pack_context(
             "candidate_count": len(candidates),
             "selected_count": len(selected),
             "dropped_count": len(dropped),
-            "selected_by_kind": {
-                kind: sum(1 for item in selected if item["kind"] == kind)
-                for kind in ("source", "entity", "edge", "conflict")
-            },
+            "selected_by_kind": _selected_by_kind(selected),
         },
+        "coverage": _coverage(payload, selected, terms),
         "rows": selected,
         "dropped": dropped[:100],
     }
+    result["_source_payload"] = payload
+
+    if include_prompt:
+        selected, dropped, prompt_text, prompt_tokens = _finalize_prompt_budget(result, selected, dropped, dropped_keys)
+        result["rows"] = selected
+        result["dropped"] = dropped[:100]
+        result["estimated_tokens"] = prompt_tokens
+        result["prompt_estimated_tokens"] = prompt_tokens
+        result["prompt_text"] = prompt_text
+        result["estimated_token_savings"] = max(0, original_estimated_tokens - prompt_tokens)
+        result["compression_ratio"] = round(prompt_tokens / original_estimated_tokens, 6) if original_estimated_tokens else 0.0
+        result["budget_utilization"] = round(prompt_tokens / token_budget, 6)
+        result["coverage"] = _coverage(payload, selected, terms)
+        result["summary"]["selected_count"] = len(selected)
+        result["summary"]["dropped_count"] = len(dropped)
+        result["summary"]["selected_by_kind"] = _selected_by_kind(selected)
+    else:
+        result["prompt_estimated_tokens"] = 0
+        result["prompt_text"] = ""
+
+    result.pop("_source_payload", None)
+    return result
 
 
 def markdown_context_pack(result: Mapping[str, Any]) -> str:

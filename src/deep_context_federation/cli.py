@@ -118,6 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     pack.add_argument("--token-budget", type=int, default=4000)
     pack.add_argument("--min-score", type=int, default=0)
     pack.add_argument("--max-rows", type=int, default=80)
+    pack.add_argument("--no-prompt", action="store_true", help="Emit scored JSON rows without the rendered prompt_text field.")
     pack.add_argument("--output", type=Path)
     pack.add_argument("--format", choices=["json", "markdown"], default="json")
     trace = sub.add_parser("trace", help="Trace neighboring federation entities by text match.")
@@ -323,6 +324,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             token_budget=args.token_budget,
             min_score=args.min_score,
             max_rows=args.max_rows,
+            include_prompt=not args.no_prompt,
         )
         if args.output:
             result["outputs"] = {"context_pack_json": args.output.expanduser().resolve().as_posix()}

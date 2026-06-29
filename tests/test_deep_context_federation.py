@@ -57,7 +57,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.13.0"
+    assert payload["package"]["version"] == "0.14.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -127,13 +127,29 @@ def test_context_pack_is_token_bounded(tmp_path: Path) -> None:
     assert pack["authority_effect"] == "none"
     assert pack["no_apply"] is True
     assert pack["estimated_tokens"] <= 700
+    assert pack["prompt_estimated_tokens"] == pack["estimated_tokens"]
+    assert pack["prompt_text"].startswith("# Deep Context Federation Prompt Pack")
     assert pack["original_estimated_tokens"] > pack["estimated_tokens"]
     assert pack["estimated_token_savings"] > 0
     assert 0 < pack["compression_ratio"] < 1
+    assert 0 < pack["budget_utilization"] <= 1
     assert pack["summary"]["selected_count"] == len(pack["rows"])
     assert pack["summary"]["dropped_count"] > 0
     assert any(row["matched_terms"] for row in pack["rows"])
+    assert pack["coverage"]["selected_source_count"] > 0
+    assert pack["coverage"]["matched_term_ratio"] > 0
+    assert "authority" in pack["coverage"]["matched_terms"]
     assert validate_artifact_contract(pack)["ok"] is True
+
+    rows_only = pack_context(
+        payload,
+        task="dashboard operator evidence authority",
+        token_budget=700,
+        max_rows=12,
+        include_prompt=False,
+    )
+    assert rows_only["prompt_text"] == ""
+    assert rows_only["prompt_estimated_tokens"] == 0
 
 
 def test_build_verify_and_query_example(tmp_path: Path) -> None:

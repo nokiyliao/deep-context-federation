@@ -327,12 +327,14 @@ dcf pack \
 
 The output includes:
 
+- `prompt_text`: a ready-to-send bounded prompt surface for the task
 - selected rows with score, matched terms, and estimated token cost
 - dropped-row summary with budget or rank reasons
 - original estimated tokens, packed estimated tokens, token savings, and compression ratio
+- budget utilization and coverage metrics for selected sources, matched task terms, entity types, and conflict severities
 - source snapshot and explicit `authority_effect: none` / `no_apply: true`
 
-This is the intended way to reduce model input tokens: run local federation queries and packing first, then feed the compact context pack to the model instead of the whole repository or full federation JSON.
+This is the intended way to reduce model input tokens: run local federation queries and packing first, then feed `prompt_text` to the model instead of the whole repository or full federation JSON. Use `--no-prompt` when an agent only needs the machine-readable scored rows and will render its own prompt.
 
 ## Quality Gate
 

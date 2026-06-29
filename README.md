@@ -330,7 +330,7 @@ python -m deep_context_federation.cli prepare-model-input \
   --format prompt
 ```
 
-The profile schema is still read-only: `authority_effect: none` and `no_apply: true`. `init-run-profile` writes only the generated profile file after input checks pass, then validates it with the same loader used by `prepare-model-input`. Relative paths resolve from the profile file, not from the caller's shell, so Codex, Claude, AGY, GitHub runners, or shell wrappers can share the same machine-readable launch contract without duplicating manifest, policy, target, and token-budget flags. Invalid profiles return `fail_agent_ready` with `action_taken: blocked_by_profile` and emit no prompt.
+The profile schema is still read-only: `authority_effect: none` and `no_apply: true`. `init-run-profile` writes only the generated profile file after input checks pass, then validates it with the same loader used by `prepare-model-input`. Relative paths resolve from the profile file, not from the caller's shell, so Codex, Claude, AGY, GitHub runners, or shell wrappers can share the same machine-readable launch contract without duplicating manifest, policy, target, token-budget, and model-entrypoint preference flags. Invalid profiles return `fail_agent_ready` with `action_taken: blocked_by_profile` and emit no prompt.
 
 Fresh `prepare-model-handoff` artifacts include an `input_fingerprint` digest over the manifest and explicitly listed source files. When `prepare-model-input` reuses an existing handoff and can see the current manifest, it compares that digest first; if a manifest-declared source changed, it returns `fail_agent_ready` and emits no prompt.
 
@@ -362,7 +362,7 @@ python -m deep_context_federation.cli release-model-input \
 
 `release-model-input` verifies the handoff first. It prints prompt text only when the handoff, generated artifacts, and token economics pass verification; otherwise it exits with code `2` and emits no prompt in `prompt` mode. In JSON mode it includes `prompt_pack`, `source_identity_policy`, `context_advantage_summary`, and `entrypoint_decision`, making the final model-input artifact both public-boundary auditable and self-explanatory about why DCF is the preferred read-first path.
 
-When a wrapper wants a machine-readable choice instead of immediate prompt output, use `select-model-entrypoint --input <artifact.json>`. It accepts `agent_handoff`, `agent_model_input`, `agent_ready`, or `agent_onboard` artifacts and returns `model_entrypoint_selection` with one selected mode: `prompt_file`, `prompt_pack`, `audit_json`, or `blocked`.
+When a wrapper wants a machine-readable choice instead of immediate prompt output, use `select-model-entrypoint --input <artifact.json>`. It accepts `agent_handoff`, `agent_model_input`, `agent_ready`, or `agent_onboard` artifacts and returns `model_entrypoint_selection` with one selected mode: `prompt_file`, `prompt_pack`, `audit_json`, or `blocked`. Add `--profile <profile.json>` to reuse the profile's `model_entrypoint_preference` and `allow_caution_model_entrypoint` defaults; explicit CLI flags still override the profile.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -681,7 +681,7 @@ Run `dcf verify-model-handoff --input <handoff.json>` before giving a copied or 
 
 For global wrappers, prefer `dcf release-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic. JSON output retains the compact `context_advantage_summary` and final `entrypoint_decision`, so wrappers can record the advantage proof and adopt/reject decision alongside the released prompt.
 
-Use `dcf select-model-entrypoint --input <artifact.json> --format json` when the wrapper should decide automatically between reading the prompt file, using embedded prompt text, opening audit JSON, or blocking model startup. The selector never emits prompt text by itself; it turns verified DCF artifacts into one final `selected_model_input` plus `recommended_reader`.
+Use `dcf select-model-entrypoint --input <artifact.json> --profile <profile.json> --format json` when the wrapper should decide automatically between reading the prompt file, using embedded prompt text, opening audit JSON, or blocking model startup. The selector never emits prompt text by itself; it turns verified DCF artifacts and profile defaults into one final `selected_model_input` plus `recommended_reader`.
 
 Use `dcf decide-model-start --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `release-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
 
@@ -689,7 +689,7 @@ Use `dcf prepare-model-input --root <repo> --task '<task>' --format prompt` when
 
 Use `dcf onboard-runner --root <repo> --profile-output <profile.json> --task '<task>' --format json` when the runner wants one onboarding capsule that creates the profile and immediately runs the safe ready path. The top-level `entrypoint_decision` is the direct wrapper adoption gate. The result is still read-only with respect to source and authority surfaces; it only writes generated DCF outputs.
 
-Use `dcf init-run-profile --root <repo> --output <profile.json> --task '<task>'` to generate one launch contract, `dcf validate-run-profile --profile <profile.json>` to validate it, and then `dcf prepare-model-input --profile <profile.json> --format prompt` when the runner should consume that contract. Profile fields act as defaults; explicit CLI arguments can still add or override the operational request without changing the profile file.
+Use `dcf init-run-profile --root <repo> --output <profile.json> --task '<task>' --model-entrypoint-preference prompt-file` to generate one launch contract, `dcf validate-run-profile --profile <profile.json>` to validate it, and then `dcf prepare-model-input --profile <profile.json> --format prompt` when the runner should consume that contract. Profile fields act as defaults; explicit CLI arguments can still add or override the operational request without changing the profile file.
 
 Reused handoffs are freshness-aware when their original `input_fingerprint` is present. A changed manifest-declared source produces `input_fingerprint_mismatch`, so wrappers do not accidentally feed a model prompt built from stale evidence.
 

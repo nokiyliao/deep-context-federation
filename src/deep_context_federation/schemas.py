@@ -1276,6 +1276,8 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "efficiency_policy": {"type": "string"},
                 "context_gate_policy": {"type": "string"},
                 "baselines": array_type,
+                "model_entrypoint_preference": {"type": "string", "enum": ["prompt-file", "prompt-pack", "audit-json"]},
+                "allow_caution_model_entrypoint": {"type": "boolean"},
             },
         ),
         "agent_profile_validation": _schema(

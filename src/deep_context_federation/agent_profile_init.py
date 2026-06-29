@@ -82,6 +82,8 @@ def build_agent_profile_init(
     include_content: bool = True,
     include_prompt: bool = True,
     include_details: bool = False,
+    model_entrypoint_preference: str = "prompt-file",
+    allow_caution_model_entrypoint: bool = False,
     extra_baselines: Sequence[Path] = (),
     write: bool = True,
 ) -> dict[str, Any]:
@@ -114,8 +116,10 @@ def build_agent_profile_init(
 
     task_text = str(task or "").strip()
     normalized_targets = list(dict.fromkeys(str(item).strip() for item in targets if str(item).strip()))
+    entrypoint_preference = str(model_entrypoint_preference or "prompt-file")
     add("root_exists", root.exists() and root.is_dir(), root.as_posix())
     add("task_present", bool(task_text), task_text)
+    add("model_entrypoint_preference_valid", entrypoint_preference in {"prompt-file", "prompt-pack", "audit-json"}, entrypoint_preference)
     if not normalized_targets:
         warn("no_targets", "profile can still run, but request binding will be weaker")
     add("manifest_or_handoff_present", bool(selected_manifests or resolved_handoff), {"manifest_count": len(selected_manifests), "handoff": resolved_handoff.as_posix() if resolved_handoff else ""})
@@ -155,6 +159,8 @@ def build_agent_profile_init(
         "include_details": bool(include_details),
         "include_content": bool(include_content),
         "include_prompt": bool(include_prompt),
+        "model_entrypoint_preference": entrypoint_preference,
+        "allow_caution_model_entrypoint": bool(allow_caution_model_entrypoint),
     }
     if selected_manifests:
         profile["manifests"] = [_relpath(path, base_dir=profile_dir) for path in selected_manifests]

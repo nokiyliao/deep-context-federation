@@ -17,5 +17,7 @@
   "context_gate_policy": "agent_context_gate_policy.example.json",
   "workflow_token_budget": 900,
   "context_token_budget": 1800,
-  "max_artifact_tokens": 500
+  "max_artifact_tokens": 500,
+  "model_entrypoint_preference": "prompt-file",
+  "allow_caution_model_entrypoint": false
 }

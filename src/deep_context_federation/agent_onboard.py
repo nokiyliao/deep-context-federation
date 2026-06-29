@@ -156,6 +156,8 @@ def build_agent_onboard(
     include_content: bool = True,
     include_prompt: bool = True,
     include_details: bool = False,
+    model_entrypoint_preference: str = "prompt-file",
+    allow_caution_model_entrypoint: bool = False,
     extra_baselines: Sequence[Path] = (),
 ) -> dict[str, Any]:
     """Generate a profile and immediately run the fail-closed agent-ready path."""
@@ -189,6 +191,8 @@ def build_agent_onboard(
         include_details=include_details,
         include_content=include_content,
         include_prompt=include_prompt,
+        model_entrypoint_preference=model_entrypoint_preference,
+        allow_caution_model_entrypoint=allow_caution_model_entrypoint,
         extra_baselines=extra_baselines,
         write=True,
     )

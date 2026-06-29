@@ -267,6 +267,17 @@ def _profile_string(args: argparse.Namespace, normalized: Mapping[str, Any], fie
     return value
 
 
+def _model_entrypoint_preference(args: argparse.Namespace, normalized: Mapping[str, Any]) -> str:
+    value = getattr(args, "prefer", None)
+    if value:
+        return str(value)
+    return str(normalized.get("model_entrypoint_preference") or "prompt-file")
+
+
+def _allow_caution_model_entrypoint(args: argparse.Namespace, normalized: Mapping[str, Any]) -> bool:
+    return bool(getattr(args, "allow_caution", False) or normalized.get("allow_caution_model_entrypoint"))
+
+
 def _agent_ready_profile_failure(*, args: argparse.Namespace, profile: Mapping[str, Any]) -> dict[str, Any]:
     root = Path.cwd()
     normalized = profile.get("normalized") if isinstance(profile.get("normalized"), Mapping) else {}
@@ -638,8 +649,9 @@ def build_parser() -> argparse.ArgumentParser:
     agent_model_input.add_argument("--format", choices=["json", "markdown", "prompt"], default="json")
     model_entrypoint = sub.add_parser("select-model-entrypoint", help="Select the final model input surface from a verified DCF artifact.")
     model_entrypoint.add_argument("--input", type=Path, required=True)
+    model_entrypoint.add_argument("--profile", type=Path, help="Optional run profile providing model entrypoint defaults.")
     model_entrypoint.add_argument("--output", type=Path)
-    model_entrypoint.add_argument("--prefer", choices=["prompt-file", "prompt-pack", "audit-json"], default="prompt-file")
+    model_entrypoint.add_argument("--prefer", choices=["prompt-file", "prompt-pack", "audit-json"])
     model_entrypoint.add_argument("--allow-caution", action="store_true", help="Allow use_dcf_model_input_with_caution decisions to select a model input.")
     model_entrypoint.add_argument("--format", choices=["json", "markdown"], default="json")
     agent_profile = sub.add_parser("validate-run-profile", help="Validate and normalize a model-input run profile for global wrappers.")
@@ -676,6 +688,8 @@ def build_parser() -> argparse.ArgumentParser:
     agent_profile_init.add_argument("--include-details", action="store_true")
     agent_profile_init.add_argument("--no-content", action="store_true")
     agent_profile_init.add_argument("--no-prompt", action="store_true")
+    agent_profile_init.add_argument("--model-entrypoint-preference", choices=["prompt-file", "prompt-pack", "audit-json"], default="prompt-file")
+    agent_profile_init.add_argument("--allow-caution-model-entrypoint", action="store_true")
     agent_profile_init.add_argument("--format", choices=["json", "markdown"], default="json")
     agent_onboard = sub.add_parser("onboard-runner", help="Generate a run profile and run the fail-closed model-input path in one wrapper command.")
     agent_onboard.add_argument("--root", type=Path, default=Path.cwd())
@@ -708,6 +722,8 @@ def build_parser() -> argparse.ArgumentParser:
     agent_onboard.add_argument("--include-details", action="store_true")
     agent_onboard.add_argument("--no-content", action="store_true")
     agent_onboard.add_argument("--no-prompt", action="store_true")
+    agent_onboard.add_argument("--model-entrypoint-preference", choices=["prompt-file", "prompt-pack", "audit-json"], default="prompt-file")
+    agent_onboard.add_argument("--allow-caution-model-entrypoint", action="store_true")
     agent_onboard.add_argument("--format", choices=["json", "markdown"], default="json")
     agent_discover = sub.add_parser("check-model-readiness", help="Check repo-local DCF handoff readiness for global wrappers.")
     agent_discover.set_defaults(command="discover-model-readiness")
@@ -1442,12 +1458,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if result["ok"] else 2
     if args.command == "select-model-entrypoint":
         payload = read_required_json(args.input)
+        profile = load_agent_profile(args.profile) if args.profile else {}
+        normalized = profile.get("normalized") if isinstance(profile.get("normalized"), Mapping) and profile.get("ok") is True else {}
         result = build_model_entrypoint_selection(
             payload,
             input_path=args.input,
-            prefer=args.prefer,
-            allow_caution=args.allow_caution,
+            prefer=_model_entrypoint_preference(args, normalized),
+            allow_caution=_allow_caution_model_entrypoint(args, normalized),
         )
+        if profile:
+            result["agent_profile_summary"] = _profile_summary(profile)
+            if profile.get("ok") is not True:
+                result["ok"] = False
+                result["status"] = "fail_model_entrypoint_selection"
+                result["errors"] = list(result.get("errors") or []) + [
+                    {"id": "agent_profile_invalid", "status": profile.get("status"), "profile_errors": list(profile.get("errors") or [])}
+                ]
+                result["selected_model_input"] = dict(result.get("selected_model_input") if isinstance(result.get("selected_model_input"), Mapping) else {})
+                result["selected_model_input"]["mode"] = "blocked"
+                result["selected_model_input"]["model_input_ref"] = ""
+                result["selected_model_input"]["token_policy"] = "agent_profile_blocks_model_input"
+                result["recommended_reader"] = {"action": "repair_before_model_use", "command": "", "read_path": "", "read_json_path": ""}
         if args.output:
             result["outputs"] = {"model_entrypoint_selection_json": args.output.expanduser().resolve().as_posix()}
             write_json(args.output, result)
@@ -1499,6 +1530,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             include_details=args.include_details,
             include_content=not args.no_content,
             include_prompt=not args.no_prompt,
+            model_entrypoint_preference=args.model_entrypoint_preference,
+            allow_caution_model_entrypoint=args.allow_caution_model_entrypoint,
             extra_baselines=args.baseline,
             write=True,
         )
@@ -1540,6 +1573,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             include_details=args.include_details,
             include_content=not args.no_content,
             include_prompt=not args.no_prompt,
+            model_entrypoint_preference=args.model_entrypoint_preference,
+            allow_caution_model_entrypoint=args.allow_caution_model_entrypoint,
             extra_baselines=args.baseline,
         )
         if args.output:

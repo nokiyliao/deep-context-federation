@@ -137,6 +137,8 @@ def test_agent_profile_example_loads_and_validates() -> None:
     assert profile["normalized"]["root"] == (REPO_ROOT / "examples").resolve().as_posix()
     assert profile["normalized"]["manifests"] == [(REPO_ROOT / "examples/deep_context_federation.example.json").resolve().as_posix()]
     assert profile["normalized"]["targets"] == ["dashboard_readiness_projection"]
+    assert profile["normalized"]["model_entrypoint_preference"] == "prompt-file"
+    assert profile["normalized"]["allow_caution_model_entrypoint"] is False
     assert profile["summary"]["field_count"] > 0
     assert validate_artifact_contract(profile, artifact_kind="agent_profile_validation")["ok"] is True
 
@@ -153,6 +155,8 @@ def test_agent_profile_rejects_wrong_field_types(tmp_path: Path) -> None:
                 "targets": "dashboard_readiness_projection",
                 "workflow_token_budget": "900",
                 "include_prompt": "false",
+                "model_entrypoint_preference": 7,
+                "allow_caution_model_entrypoint": "false",
             }
         ),
         encoding="utf-8",
@@ -162,7 +166,13 @@ def test_agent_profile_rejects_wrong_field_types(tmp_path: Path) -> None:
 
     assert profile["ok"] is False
     error_ids = {row["id"] for row in profile["errors"]}
-    assert {"targets_list", "workflow_token_budget_integer", "include_prompt_boolean"} <= error_ids
+    assert {
+        "targets_list",
+        "workflow_token_budget_integer",
+        "include_prompt_boolean",
+        "model_entrypoint_preference_string",
+        "allow_caution_model_entrypoint_boolean",
+    } <= error_ids
     assert validate_artifact_contract(profile, artifact_kind="agent_profile_validation")["ok"] is True
 
 
@@ -189,6 +199,8 @@ def test_agent_profile_init_writes_valid_profile(tmp_path: Path) -> None:
         workflow_token_budget=900,
         context_token_budget=1800,
         max_artifact_tokens=500,
+        model_entrypoint_preference="prompt-pack",
+        allow_caution_model_entrypoint=True,
         write=True,
     )
 
@@ -202,6 +214,8 @@ def test_agent_profile_init_writes_valid_profile(tmp_path: Path) -> None:
     assert result["profile"]["manifests"] == ["../deep_context_federation.json"]
     assert result["profile"]["include_memory_import"] is False
     assert "include_codebase_memory" not in result["profile"]
+    assert result["profile"]["model_entrypoint_preference"] == "prompt-pack"
+    assert result["profile"]["allow_caution_model_entrypoint"] is True
     assert result["profile_validation_summary"]["status"] == "pass_agent_profile"
     assert Path(result["outputs"]["agent_profile_json"]).exists()
     assert validate_artifact_contract(result, artifact_kind="agent_profile_init")["ok"] is True
@@ -211,6 +225,8 @@ def test_agent_profile_init_writes_valid_profile(tmp_path: Path) -> None:
     assert profile["normalized"]["root"] == profile_root.resolve().as_posix()
     assert profile["normalized"]["include_memory_import"] is False
     assert "include_codebase_memory" not in profile["normalized"]
+    assert profile["normalized"]["model_entrypoint_preference"] == "prompt-pack"
+    assert profile["normalized"]["allow_caution_model_entrypoint"] is True
     assert validate_artifact_contract(profile, artifact_kind="agent_profile_validation")["ok"] is True
 
 
@@ -244,7 +260,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.68.0"
+    assert payload["package"]["version"] == "0.69.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -297,6 +313,9 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert {"source-health", "search", "code-to-authority"} <= sql_presets
     by_command = {row["command"]: row for row in payload["commands"]}
     assert "--read-model" in by_command["brief-task"]["options"]
+    assert "--profile" in by_command["select-model-entrypoint"]["options"]
+    assert "--model-entrypoint-preference" in by_command["init-run-profile"]["options"]
+    assert "--model-entrypoint-preference" in by_command["onboard-runner"]["options"]
 
     contracts = payload["contracts"]["artifact_contracts"]
     by_kind = {row["artifact_kind"]: row for row in contracts}
@@ -415,6 +434,8 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["unified_working_set"]["schema_version"] == "deep_context_federation_unified_working_set_v1"
     assert "expansion_plan" in by_kind["unified_working_set"]["json_schema"]["required"]
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
+    assert "model_entrypoint_preference" in by_kind["agent_profile"]["json_schema"]["properties"]
+    assert "allow_caution_model_entrypoint" in by_kind["agent_profile"]["json_schema"]["properties"]
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
     assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
@@ -2457,6 +2478,8 @@ def test_agent_profile_init_cli_feeds_agent_ready(tmp_path: Path) -> None:
             "1800",
             "--max-artifact-tokens",
             "500",
+            "--model-entrypoint-preference",
+            "audit-json",
             "--format",
             "json",
         ],
@@ -2586,6 +2609,8 @@ def test_agent_onboard_cli_single_command(tmp_path: Path) -> None:
             "1800",
             "--max-artifact-tokens",
             "500",
+            "--model-entrypoint-preference",
+            "audit-json",
             "--format",
             "json",
         ],
@@ -2617,6 +2642,8 @@ def test_agent_onboard_cli_single_command(tmp_path: Path) -> None:
             "select-model-entrypoint",
             "--input",
             str(onboard_path),
+            "--profile",
+            str(profile_path),
             "--output",
             str(selection_path),
             "--format",
@@ -2631,7 +2658,9 @@ def test_agent_onboard_cli_single_command(tmp_path: Path) -> None:
     assert selected.returncode == 0, selected.stderr + selected.stdout
     selection_payload = json.loads(selected.stdout)
     assert selection_payload["status"] == "pass_model_entrypoint_selection"
-    assert selection_payload["selected_model_input"]["mode"] == "prompt_file"
+    assert selection_payload["selected_model_input"]["mode"] == "audit_json"
+    assert selection_payload["selected_model_input"]["preference"] == "audit-json"
+    assert selection_payload["agent_profile_summary"]["status"] == "pass_agent_profile"
     assert selection_payload["recommended_reader"]["action"] == "use_selected_model_input"
     assert selection_path.exists()
     assert validate_artifact_contract(selection_payload, artifact_kind="model_entrypoint_selection")["ok"] is True

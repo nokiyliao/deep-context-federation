@@ -26,9 +26,18 @@ PATH_FIELDS = {
 }
 PATH_LIST_FIELDS = {"manifests", "baselines"}
 STRING_LIST_FIELDS = {"targets"}
-BOOL_FIELDS = {"hash_files", "include_memory_import", "include_codebase_memory", "include_details", "include_content", "include_prompt"}
+BOOL_FIELDS = {
+    "hash_files",
+    "include_memory_import",
+    "include_codebase_memory",
+    "include_details",
+    "include_content",
+    "include_prompt",
+    "allow_caution_model_entrypoint",
+}
 INT_FIELDS = {"workflow_token_budget", "context_token_budget", "max_artifact_tokens", "query_limit", "max_presets", "max_rows", "max_files", "max_parse_bytes"}
-STRING_FIELDS = {"task", "context_mode"}
+STRING_FIELDS = {"task", "context_mode", "model_entrypoint_preference"}
+MODEL_ENTRYPOINT_PREFERENCES = {"prompt-file", "prompt-pack", "audit-json"}
 
 
 def _resolve_path(value: Any, *, base_dir: Path) -> str:
@@ -121,6 +130,12 @@ def load_agent_profile(path: Path) -> dict[str, Any]:
             add(f"{field}_string", isinstance(raw.get(field), str), raw.get(field))
             if isinstance(raw.get(field), str):
                 normalized[field] = str(raw.get(field) or "")
+    if "model_entrypoint_preference" in normalized:
+        add(
+            "model_entrypoint_preference_valid",
+            normalized["model_entrypoint_preference"] in MODEL_ENTRYPOINT_PREFERENCES,
+            normalized["model_entrypoint_preference"],
+        )
 
     if "memory_import_cache_dir" not in normalized and "codebase_memory_cache_dir" in normalized:
         normalized["memory_import_cache_dir"] = normalized["codebase_memory_cache_dir"]

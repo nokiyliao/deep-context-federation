@@ -243,7 +243,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.60.0"
+    assert payload["package"]["version"] == "0.61.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -306,9 +306,13 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
     assert by_kind["context_advantage"]["schema_version"] == "deep_context_federation_context_advantage_v1"
+    assert "source_identity_policy" in by_kind["context_advantage"]["top_level_required"]
+    assert by_kind["context_advantage"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["agent_ci"]["schema_version"] == "deep_context_federation_agent_ci_v1"
     assert by_kind["agent_context"]["schema_version"] == "deep_context_federation_agent_context_v1"
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
+    assert "source_identity_policy" in by_kind["agent_context_gate"]["top_level_required"]
+    assert by_kind["agent_context_gate"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["top_level_required"]
@@ -365,9 +369,11 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
     assert by_kind["context_advantage"]["schema_version"] == "deep_context_federation_context_advantage_v1"
+    assert "source_identity_policy" in by_kind["context_advantage"]["json_schema"]["required"]
     assert by_kind["agent_ci"]["schema_version"] == "deep_context_federation_agent_ci_v1"
     assert by_kind["agent_context"]["schema_version"] == "deep_context_federation_agent_context_v1"
     assert by_kind["agent_context_gate"]["schema_version"] == "deep_context_federation_agent_context_gate_v1"
+    assert "source_identity_policy" in by_kind["agent_context_gate"]["json_schema"]["required"]
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["json_schema"]["required"]
@@ -1197,6 +1203,8 @@ def test_context_advantage_proves_integrated_token_efficient_entrypoint(tmp_path
     assert proof["schema_version"] == "deep_context_federation_context_advantage_v1"
     assert proof["ok"] is True
     assert proof["status"] == "pass_context_advantage"
+    assert proof["source_identity_policy"]["public_identity"] == "deep_context_federation"
+    assert proof["source_identity_policy"]["source_ids_exposed"] is False
     assert proof["summary"]["advantage_score"] >= 80
     assert proof["summary"]["read_first_savings_percent"] >= 50
     check_ids = {row["id"] for row in proof["checks"]}
@@ -1417,6 +1425,8 @@ def test_agent_context_gate_enforces_model_handoff_policy(tmp_path: Path) -> Non
     assert passed["no_apply"] is True
     assert passed["ok"] is True
     assert passed["status"] == "pass_agent_context_gate"
+    assert passed["source_identity_policy"]["public_identity"] == "deep_context_federation"
+    assert passed["source_identity_policy"]["source_ids_exposed"] is False
     assert passed["summary"]["prompt_estimated_tokens"] <= passed["summary"]["token_budget"]
     assert validate_artifact_contract(passed)["ok"] is True
 
@@ -1475,7 +1485,7 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["context_advantage_summary"]["status"] == "pass_context_advantage"
     assert result["context_advantage_summary"]["ok"] is True
     assert result["public_boundary_audit_summary"]["ok"] is True
-    assert result["public_boundary_audit_summary"]["status"] in {"pass_public_boundary_audit", "warn_public_boundary_audit"}
+    assert result["public_boundary_audit_summary"]["status"] == "pass_public_boundary_audit"
     prompt_path = Path(result["outputs"]["agent_model_prompt_markdown"])
     context_path = Path(result["outputs"]["agent_context_json"])
     assert result["model_handoff"]["model_prompt_source"] == result["outputs"]["agent_model_prompt_markdown"]
@@ -1545,10 +1555,15 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert validate_artifact_contract(unified_plane_audit, artifact_kind="unified_plane_audit")["ok"] is True
     assert context_advantage["status"] == "pass_context_advantage"
     assert context_advantage["ok"] is True
+    assert context_advantage["source_identity_policy"]["source_ids_exposed"] is False
     assert validate_artifact_contract(context_advantage, artifact_kind="context_advantage")["ok"] is True
     assert public_boundary_audit["schema_version"] == "deep_context_federation_public_boundary_audit_v1"
     assert public_boundary_audit["ok"] is True
-    assert public_boundary_audit["status"] in {"pass_public_boundary_audit", "warn_public_boundary_audit"}
+    assert public_boundary_audit["status"] == "pass_public_boundary_audit"
+    assert public_boundary_audit["summary"]["warning_count"] == 0
+    assert public_boundary_audit["summary"]["public_artifact_count"] == 3
+    assert {row["artifact_ref"] for row in public_boundary_audit["rows"]} == {"selected_context", "agent_context_gate", "context_advantage"}
+    assert all(row["public_boundary_declared"] is True for row in public_boundary_audit["rows"])
     assert any(row["artifact_ref"] == "selected_context" for row in public_boundary_audit["rows"])
     assert validate_artifact_contract(public_boundary_audit, artifact_kind="public_boundary_audit")["ok"] is True
 

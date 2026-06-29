@@ -6,6 +6,8 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from deep_context_federation.source_identity import public_source_identity_policy
+
 CONTEXT_ADVANTAGE_SCHEMA_VERSION = "deep_context_federation_context_advantage_v1"
 
 
@@ -206,6 +208,7 @@ def prove_context_advantage(
         "authority_effect": "none",
         "no_apply": True,
         "generated_at": _utc_now(),
+        "source_identity_policy": public_source_identity_policy(audit_provenance_location="referenced_evidence_artifacts"),
         "policy": {
             "min_read_first_savings_percent": float(min_read_first_savings_percent),
             "max_read_first_ratio": float(max_read_first_ratio),
@@ -239,6 +242,8 @@ def prove_context_advantage(
             "executes_commands": False,
             "external_model_calls": False,
             "proof_uses_existing_artifacts_only": True,
+            "source_ids_exposed": False,
+            "source_identity_collapsed": True,
         },
     }
 

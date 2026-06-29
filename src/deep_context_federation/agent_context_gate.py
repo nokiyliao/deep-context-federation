@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from deep_context_federation.agent_context import AGENT_CONTEXT_SCHEMA_VERSION
+from deep_context_federation.source_identity import public_source_identity_policy
 
 AGENT_CONTEXT_GATE_SCHEMA_VERSION = "deep_context_federation_agent_context_gate_v1"
 AGENT_CONTEXT_GATE_POLICY_SCHEMA_VERSION = "deep_context_federation_agent_context_gate_policy_v1"
@@ -245,6 +246,7 @@ def evaluate_agent_context_gate(
         "authority_effect": "none",
         "no_apply": True,
         "generated_at": _utc_now(),
+        "source_identity_policy": public_source_identity_policy(audit_provenance_location="input_agent_context_and_policy"),
         "policy": normalized_policy,
         "check_count": len(checks),
         "error_count": len(failed),

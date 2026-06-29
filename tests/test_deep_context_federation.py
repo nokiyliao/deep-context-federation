@@ -38,6 +38,7 @@ from deep_context_federation.target_review_gate import normalize_target_review_g
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.workflow_plan import build_workflow_plan
+from deep_context_federation.workflow_run import build_workflow_run
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -65,13 +66,14 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.21.0"
+    assert payload["package"]["version"] == "0.22.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
         "capabilities",
         "bootstrap",
         "workflow-plan",
+        "workflow-run",
         "intake",
         "build",
         "scan",
@@ -100,6 +102,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["quality_gate_policy"]["no_apply"] is True
     assert by_kind["federation"]["schema_version"] == "deep_context_federation_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
+    assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
     assert payload["safety_boundaries"]["external_tool_install"] == "never"
 
 
@@ -122,6 +125,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["target_review_gate"]["schema_version"] == "deep_context_federation_target_review_gate_v1"
     assert by_kind["target_review_gate_policy"]["schema_version"] == "deep_context_federation_target_review_gate_policy_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
+    assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
 
     policy = json.loads(EXAMPLE_QUALITY_GATE_POLICY.read_text(encoding="utf-8"))
     valid = validate_artifact_contract(policy)
@@ -192,6 +196,73 @@ def test_workflow_plan_without_targets_warns(tmp_path: Path) -> None:
     assert any("No targets supplied" in warning for warning in plan["warnings"])
     assert all(row["authority_effect"] == "none" and row["no_apply"] is True for row in plan["steps"])
     assert validate_artifact_contract(plan)["ok"] is True
+
+
+def test_workflow_run_executes_compact_readonly_capsule(tmp_path: Path) -> None:
+    review_policy = {
+        "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "max_warn": 1,
+        "max_priority_score": 120,
+    }
+    result = build_workflow_run(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "workflow_run",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection", "dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        token_budget=900,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_workflow_run_v1"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["ok"] is True
+    assert result["status"] == "pass_workflow_run"
+    assert result["target_count"] == 1
+    step_ids = [row["step_id"] for row in result["step_results"]]
+    assert step_ids == [
+        "00_workflow_plan",
+        "01_agent_intake",
+        "02_validate_intake_contract",
+        "03_review_targets",
+        "04_review_gate",
+        "05_priority_resolve",
+    ]
+    by_step = {row["step_id"]: row for row in result["step_results"]}
+    assert by_step["04_review_gate"]["ok"] is True
+    assert by_step["05_priority_resolve"]["status"] in {"matched", "warn"}
+    assert "full federation artifact" in result["model_handoff"]["skip_by_default"]
+    assert Path(result["outputs"]["workflow_run_json"]).exists()
+    assert Path(result["outputs"]["workflow_plan_json"]).exists()
+    assert Path(result["outputs"]["target_review_gate_json"]).exists()
+    assert validate_artifact_contract(result)["ok"] is True
+
+
+def test_workflow_run_without_targets_warns_and_skips_review(tmp_path: Path) -> None:
+    result = build_workflow_run(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "workflow_run",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=[],
+        token_budget=900,
+        max_files=200,
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == "warn_workflow_run"
+    assert result["target_count"] == 0
+    by_step = {row["step_id"]: row for row in result["step_results"]}
+    assert by_step["03_review_targets"]["status"] == "skipped"
+    assert by_step["03_review_targets"]["ok"] is None
+    assert result["outputs"]["target_review_json"] == ""
+    assert validate_artifact_contract(result)["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

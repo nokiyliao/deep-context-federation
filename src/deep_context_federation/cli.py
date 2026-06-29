@@ -61,6 +61,8 @@ from deep_context_federation.verifier import read_json as read_required_json
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.workflow_plan import build_workflow_plan
 from deep_context_federation.workflow_plan import markdown_workflow_plan
+from deep_context_federation.workflow_run import build_workflow_run
+from deep_context_federation.workflow_run import markdown_workflow_run
 
 
 def add_common_source_args(parser: argparse.ArgumentParser) -> None:
@@ -157,6 +159,28 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_plan.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     workflow_plan.add_argument("--output", type=Path)
     workflow_plan.add_argument("--format", choices=["json", "markdown"], default="json")
+    workflow_run = sub.add_parser("workflow-run", help="Execute the read-only DCF workflow into one compact run capsule.")
+    workflow_run.add_argument("--root", type=Path, default=Path.cwd())
+    workflow_run.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+    workflow_run.add_argument("--manifest", type=Path, action="append", default=[])
+    workflow_run.add_argument("--task", required=True)
+    workflow_run.add_argument("--target", action="append", default=[])
+    workflow_run.add_argument("--targets-file", type=Path)
+    workflow_run.add_argument("--quality-policy", type=Path)
+    workflow_run.add_argument("--target-review-policy", type=Path)
+    workflow_run.add_argument("--token-budget", type=int, default=4000)
+    workflow_run.add_argument("--query-limit", type=int, default=10)
+    workflow_run.add_argument("--max-presets", type=int, default=3)
+    workflow_run.add_argument("--max-rows", type=int, default=80)
+    workflow_run.add_argument("--max-files", type=int, default=5000)
+    workflow_run.add_argument("--max-parse-bytes", type=int, default=1_000_000)
+    workflow_run.add_argument("--hash-files", action="store_true")
+    workflow_run.add_argument("--include-codebase-memory", action="store_true")
+    workflow_run.add_argument("--codebase-memory-cache-dir", type=Path)
+    workflow_run.add_argument("--include-details", action="store_true", help="Include full target adjudication details inside target review.")
+    workflow_run.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
+    workflow_run.add_argument("--output", type=Path)
+    workflow_run.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -434,6 +458,47 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0
+    if args.command == "workflow-run":
+        targets = list(args.target or [])
+        if args.targets_file:
+            targets.extend(read_targets_file(args.targets_file))
+        quality_policy = load_quality_gate_policy(args.quality_policy) if args.quality_policy else None
+        target_policy = load_target_review_gate_policy(args.target_review_policy) if args.target_review_policy else None
+        result = build_workflow_run(
+            root=args.root,
+            output_dir=args.output_dir,
+            manifests=args.manifest,
+            task=args.task,
+            targets=targets,
+            quality_gate_policy=quality_policy,
+            target_review_gate_policy=target_policy,
+            quality_policy_path=args.quality_policy,
+            target_review_policy_path=args.target_review_policy,
+            token_budget=args.token_budget,
+            query_limit=args.query_limit,
+            max_presets=args.max_presets,
+            max_rows=args.max_rows,
+            max_files=args.max_files,
+            max_parse_bytes=args.max_parse_bytes,
+            include_hashes=args.hash_files,
+            include_codebase_memory=args.include_codebase_memory,
+            codebase_memory_cache_dir=args.codebase_memory_cache_dir,
+            include_details=args.include_details,
+            include_prompt=not args.no_prompt,
+        )
+        if args.output:
+            original_output = str(result["outputs"].get("workflow_run_json") or "")
+            resolved_output = args.output.expanduser().resolve().as_posix()
+            result["outputs"]["workflow_run_json"] = resolved_output
+            handoff = result.get("model_handoff") if isinstance(result.get("model_handoff"), dict) else {}
+            if isinstance(handoff.get("read_first"), list):
+                handoff["read_first"] = [resolved_output if item == original_output else item for item in handoff["read_first"]]
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_workflow_run(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
     if args.command == "scan":
         if args.build and not args.write:
             print("scan --build requires --write so the generated manifest exists", flush=True)

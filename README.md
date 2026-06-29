@@ -57,6 +57,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - one-command agent intake packet for bootstrap, quality gate, and task brief
 - workflow plan artifact that sequences intake, validation, target review, gates, and bounded context reads
+- workflow run capsule that executes the read-only DCF chain and returns one compact handoff artifact
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -136,6 +137,20 @@ python -m deep_context_federation.cli workflow-plan \
 ```
 
 The plan does not execute commands. It emits the intended run order, stop gates, artifact paths, and token-efficiency guidance so a model can first read a compact plan and then expand only into the bounded `task_brief`, `target_review`, or target resolver artifacts it actually needs.
+
+Execute that read-only DCF chain into a single compact run capsule:
+
+```bash
+python -m deep_context_federation.cli workflow-run \
+  --root . \
+  --output-dir .dcf \
+  --task "dashboard operator evidence authority" \
+  --target dashboard_readiness_projection \
+  --target research_only_boundary \
+  --output .dcf/deep_context_federation_workflow_run.json
+```
+
+`workflow-run` writes generated DCF artifacts only. It runs intake, contract validation, optional target review, review gate, and priority target resolution, then emits a compact `model_handoff` that tells an agent what to read first and what to skip by default.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -350,6 +365,20 @@ Use `bootstrap` when you only need the federation artifact. Use `intake` when a 
 - safety boundaries proving the plan is read-only and does not execute commands
 
 This is the preferred first artifact for token-sensitive agents. It lets Codex, Claude, AGY, GitHub runners, or another orchestrator decide whether to continue from a compact contract rather than loading the full federation, SQLite export, README set, or raw source tree.
+
+## Workflow Run
+
+`dcf workflow-run` is the executable read-only companion to `workflow-plan`. It creates:
+
+- `deep_context_federation_workflow_plan.json`
+- `deep_context_federation_agent_intake.json`
+- `deep_context_federation_agent_intake_contract_validation.json`
+- optional `deep_context_federation_target_review.json`
+- optional `deep_context_federation_target_review_gate.json`
+- optional `deep_context_federation_priority_resolve.json`
+- `deep_context_federation_workflow_run.json`
+
+The run capsule summarizes each step, records pass/fail gates, and gives a compact `model_handoff` with `read_first`, `read_next_if_gate_passes`, and `skip_by_default`. It still preserves `authority_effect: none` and `no_apply: true`; it does not mutate source code, authority, runtime state, broker paths, or promotion surfaces.
 
 ## Capabilities Manifest
 

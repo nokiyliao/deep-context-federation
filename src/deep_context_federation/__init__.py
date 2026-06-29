@@ -30,12 +30,14 @@ from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.version import __version__
 from deep_context_federation.workflow_plan import build_workflow_plan
+from deep_context_federation.workflow_run import build_workflow_run
 
 __all__ = [
     "adjudicate_target",
     "bootstrap_federation",
     "build_federation",
     "build_workflow_plan",
+    "build_workflow_run",
     "build_capabilities",
     "build_agent_intake",
     "build_task_brief",

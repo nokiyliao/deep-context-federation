@@ -25,6 +25,7 @@ from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 from deep_context_federation.workflow_plan import WORKFLOW_PLAN_SCHEMA_VERSION
+from deep_context_federation.workflow_run import WORKFLOW_RUN_SCHEMA_VERSION
 
 SCHEMA_REGISTRY_SCHEMA_VERSION = "deep_context_federation_schema_registry_v1"
 CONTRACT_VALIDATION_SCHEMA_VERSION = "deep_context_federation_contract_validation_v1"
@@ -496,6 +497,41 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "gates": array_type,
                 "warnings": array_type,
                 "token_efficiency": object_type,
+                "outputs": object_type,
+                "safety_boundaries": object_type,
+                "prompt_text": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+                "json_estimated_tokens": {"type": "integer"},
+            },
+        ),
+        "workflow_run": _schema(
+            WORKFLOW_RUN_SCHEMA_VERSION,
+            "Deep Context Federation workflow run",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "task",
+                "step_results",
+                "model_handoff",
+                "outputs",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_workflow_run", "warn_workflow_run", "fail_workflow_run"]},
+                **_boundary_props(),
+                "task": {"type": "string"},
+                "root": {"type": "string"},
+                "output_dir": {"type": "string"},
+                "duration_seconds": {"type": "number"},
+                "targets": array_type,
+                "target_count": {"type": "integer"},
+                "workflow_plan_summary": object_type,
+                "step_results": array_type,
+                "model_handoff": object_type,
                 "outputs": object_type,
                 "safety_boundaries": object_type,
                 "prompt_text": {"type": "string"},

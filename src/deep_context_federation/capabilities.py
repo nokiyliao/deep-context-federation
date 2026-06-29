@@ -37,6 +37,7 @@ from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 from deep_context_federation.version import __version__
 from deep_context_federation.workflow_plan import WORKFLOW_PLAN_SCHEMA_VERSION
+from deep_context_federation.workflow_run import WORKFLOW_RUN_SCHEMA_VERSION
 
 CAPABILITIES_SCHEMA_VERSION = "deep_context_federation_capabilities_v1"
 
@@ -222,7 +223,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "workflow_plan",
             "schema_version": WORKFLOW_PLAN_SCHEMA_VERSION,
             "producer": "workflow-plan",
-            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "consumer_commands": ["workflow-run", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "status",
@@ -230,6 +231,24 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "steps",
                 "gates",
                 "token_efficiency",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "workflow_run",
+            "schema_version": WORKFLOW_RUN_SCHEMA_VERSION,
+            "producer": "workflow-run",
+            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "task",
+                "step_results",
+                "model_handoff",
+                "outputs",
                 "safety_boundaries",
             ],
             "authority_effect": "none",
@@ -351,6 +370,33 @@ def _commands() -> list[dict[str, Any]]:
                 "--query-limit",
                 "--max-presets",
                 "--max-rows",
+                "--no-prompt",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "workflow-run",
+            "intent": "Execute the DCF read-only workflow and emit one compact run capsule for agents.",
+            "writes": ["output_dir generated artifacts", "optional workflow run JSON when --output is set"],
+            "output_schemas": [WORKFLOW_RUN_SCHEMA_VERSION],
+            "input_schemas": [
+                WORKFLOW_PLAN_SCHEMA_VERSION,
+                AGENT_INTAKE_SCHEMA_VERSION,
+                TARGET_REVIEW_SCHEMA_VERSION,
+                TARGET_REVIEW_GATE_SCHEMA_VERSION,
+            ],
+            "options": [
+                "--task",
+                "--target",
+                "--targets-file",
+                "--quality-policy",
+                "--target-review-policy",
+                "--token-budget",
+                "--query-limit",
+                "--max-presets",
+                "--max-rows",
+                "--include-details",
                 "--no-prompt",
             ],
             "authority_effect": "none",

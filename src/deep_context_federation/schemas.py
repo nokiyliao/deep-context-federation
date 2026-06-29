@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from deep_context_federation.adjudicate import ADJUDICATE_SCHEMA_VERSION
+from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import SCHEMA_VERSION
@@ -608,6 +609,44 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "checks": array_type,
                 "errors": array_type,
                 "summary": object_type,
+            },
+        ),
+        "agent_ci": _schema(
+            AGENT_CI_SCHEMA_VERSION,
+            "Deep Context Federation agent continuation decision",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "decision",
+                "workflow_run_summary",
+                "efficiency_report_summary",
+                "efficiency_gate_summary",
+                "next_reads",
+                "outputs",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_ci", "warn_agent_ci", "fail_agent_ci"]},
+                **_boundary_props(),
+                "task": {"type": "string"},
+                "root": {"type": "string"},
+                "output_dir": {"type": "string"},
+                "duration_seconds": {"type": "number"},
+                "targets": array_type,
+                "decision": object_type,
+                "workflow_run_summary": object_type,
+                "efficiency_report_summary": object_type,
+                "efficiency_gate_summary": object_type,
+                "next_reads": object_type,
+                "outputs": object_type,
+                "safety_boundaries": object_type,
+                "prompt_text": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+                "json_estimated_tokens": {"type": "integer"},
             },
         ),
     }

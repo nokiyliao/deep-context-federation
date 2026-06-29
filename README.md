@@ -60,6 +60,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - workflow run capsule that executes the read-only DCF chain and returns one compact handoff artifact
 - efficiency report that measures read-first and gate-pass token savings against generated baselines
 - efficiency gate that turns token-savings targets into CI or agent routing thresholds
+- agent CI continuation decision that chains workflow run, efficiency report, and efficiency gate into one read-first artifact
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -173,6 +174,20 @@ python -m deep_context_federation.cli efficiency-gate \
   --max-read-first-ratio 0.5 \
   --output .dcf/deep_context_federation_efficiency_gate.json
 ```
+
+Or let DCF create the full continuation decision in one command:
+
+```bash
+python -m deep_context_federation.cli agent-ci \
+  --root . \
+  --output-dir .dcf \
+  --task "dashboard operator evidence authority" \
+  --target dashboard_readiness_projection \
+  --efficiency-policy examples/efficiency_gate_policy.example.json \
+  --output .dcf/deep_context_federation_agent_ci.json
+```
+
+`agent-ci` writes the workflow run, efficiency report, efficiency gate, and final `agent_ci` artifact. External Codex, Claude, AGY, GitHub Actions, or another runner can read only `deep_context_federation_agent_ci.json` first, inspect `decision.action`, then follow `next_reads` instead of loading the full repository or full federation by default.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -430,6 +445,24 @@ Use it when you need to prove that DCF is reducing model input cost. It is also 
 Use a policy JSON or CLI overrides when a repo needs stricter context budgets. The gate is designed for CI and agent routing: if it fails, the agent should tighten the workflow handoff before expanding model context.
 
 A starter policy is available at `examples/efficiency_gate_policy.example.json`.
+
+## Agent CI
+
+`dcf agent-ci` is the highest-level machine entrypoint for token-sensitive agent continuation. It runs:
+
+1. `workflow-run`
+2. `efficiency-report`
+3. `efficiency-gate`
+
+and emits `deep_context_federation_agent_ci_v1` with:
+
+- `decision.action`: `continue`, `continue_with_caution`, or `stop`
+- `decision.continue_agent`: boolean continuation gate
+- `workflow_run_summary`, `efficiency_report_summary`, and `efficiency_gate_summary`
+- `next_reads.read_first` and `next_reads.read_next_if_decision_allows`
+- `safety_boundaries` proving generated-output-only, no external model calls, and no source or authority mutation
+
+This is the preferred artifact for external orchestrators. It reduces model input by making the first read a compact decision artifact, then expanding only into the listed workflow, report, gate, or target evidence files when the decision allows.
 
 ## Capabilities Manifest
 

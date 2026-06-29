@@ -12,6 +12,8 @@ from deep_context_federation.efficiency_report import EFFICIENCY_REPORT_SCHEMA_V
 
 EFFICIENCY_GATE_SCHEMA_VERSION = "deep_context_federation_efficiency_gate_v1"
 EFFICIENCY_GATE_POLICY_SCHEMA_VERSION = "deep_context_federation_efficiency_gate_policy_v1"
+DEFAULT_EFFICIENCY_GATE_JSON_NAME = "deep_context_federation_efficiency_gate.json"
+DEFAULT_EFFICIENCY_GATE_MD_NAME = "DEEP_CONTEXT_FEDERATION_EFFICIENCY_GATE.md"
 
 DEFAULT_EFFICIENCY_GATE_POLICY: dict[str, Any] = {
     "schema_version": EFFICIENCY_GATE_POLICY_SCHEMA_VERSION,

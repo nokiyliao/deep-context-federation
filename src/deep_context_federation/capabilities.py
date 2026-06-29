@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from deep_context_federation.adjudicate import ADJUDICATE_SCHEMA_VERSION
+from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import DEFAULT_JSON_NAME
 from deep_context_federation.builder import DEFAULT_MD_NAME
@@ -301,6 +302,28 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "agent_ci",
+            "schema_version": AGENT_CI_SCHEMA_VERSION,
+            "producer": "agent-ci",
+            "consumer_commands": ["agent_router", "ci", "operator_context", "github_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "decision",
+                "workflow_run_summary",
+                "efficiency_report_summary",
+                "efficiency_gate_summary",
+                "next_reads",
+                "outputs",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "schema_registry",
             "schema_version": "deep_context_federation_schema_registry_v1",
             "producer": "schema",
@@ -473,6 +496,34 @@ def _commands() -> list[dict[str, Any]]:
                 "--min-read-first-savings-percent",
                 "--min-gate-pass-savings-percent",
                 "--require-artifact-role",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "agent-ci",
+            "intent": "Run workflow-run, efficiency-report, and efficiency-gate into one machine-readable continuation decision.",
+            "writes": ["output_dir generated artifacts", "optional agent CI JSON when --output is set"],
+            "output_schemas": [AGENT_CI_SCHEMA_VERSION, WORKFLOW_RUN_SCHEMA_VERSION, EFFICIENCY_REPORT_SCHEMA_VERSION, EFFICIENCY_GATE_SCHEMA_VERSION],
+            "input_schemas": [
+                QUALITY_GATE_POLICY_SCHEMA_VERSION,
+                TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION,
+                EFFICIENCY_GATE_POLICY_SCHEMA_VERSION,
+            ],
+            "options": [
+                "--task",
+                "--target",
+                "--targets-file",
+                "--quality-policy",
+                "--target-review-policy",
+                "--efficiency-policy",
+                "--baseline",
+                "--token-budget",
+                "--query-limit",
+                "--max-presets",
+                "--max-rows",
+                "--include-details",
+                "--no-prompt",
             ],
             "authority_effect": "none",
             "no_apply": True,

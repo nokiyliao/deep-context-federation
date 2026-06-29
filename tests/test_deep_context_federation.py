@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from deep_context_federation.adjudicate import adjudicate_target
+from deep_context_federation.agent_ci import build_agent_ci
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation, codebase_memory_source
@@ -86,7 +87,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.24.0"
+    assert payload["package"]["version"] == "0.25.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -96,6 +97,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "workflow-run",
         "efficiency-report",
         "efficiency-gate",
+        "agent-ci",
         "intake",
         "build",
         "scan",
@@ -126,6 +128,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["efficiency_gate"]["schema_version"] == "deep_context_federation_efficiency_gate_v1"
     assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
+    assert by_kind["agent_ci"]["schema_version"] == "deep_context_federation_agent_ci_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
     assert payload["safety_boundaries"]["external_tool_install"] == "never"
@@ -152,6 +155,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["efficiency_gate"]["schema_version"] == "deep_context_federation_efficiency_gate_v1"
     assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
+    assert by_kind["agent_ci"]["schema_version"] == "deep_context_federation_agent_ci_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
 
@@ -380,6 +384,90 @@ def test_efficiency_gate_enforces_token_savings_policy(tmp_path: Path) -> None:
     assert "read_first_savings_minimum" in failed_ids
     assert validate_artifact_contract(strict_policy)["ok"] is True
     assert validate_artifact_contract(failed)["ok"] is True
+
+
+def test_agent_ci_runs_integrated_continuation_gate(tmp_path: Path) -> None:
+    review_policy = {
+        "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "max_warn": 1,
+        "max_priority_score": 120,
+    }
+    result = build_agent_ci(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "agent_ci",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        efficiency_gate_policy=load_efficiency_gate_policy(EXAMPLE_EFFICIENCY_GATE_POLICY),
+        token_budget=900,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_agent_ci_v1"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["ok"] is True
+    assert result["status"] == "pass_agent_ci"
+    assert result["decision"]["action"] == "continue"
+    assert result["decision"]["continue_agent"] is True
+    assert result["workflow_run_summary"]["status"] == "pass_workflow_run"
+    assert result["efficiency_report_summary"]["status"] == "pass_efficiency_report"
+    assert result["efficiency_gate_summary"]["status"] == "pass_efficiency_gate"
+    assert result["efficiency_report_summary"]["read_first_savings_percent"] >= 50
+    assert Path(result["outputs"]["agent_ci_json"]).exists()
+    assert Path(result["outputs"]["workflow_run_json"]).exists()
+    assert Path(result["outputs"]["efficiency_report_json"]).exists()
+    assert Path(result["outputs"]["efficiency_gate_json"]).exists()
+    assert result["outputs"]["agent_ci_json"] in result["next_reads"]["read_first"]
+    assert result["safety_boundaries"]["source_or_authority_mutation"] is False
+    assert validate_artifact_contract(result)["ok"] is True
+
+
+def test_agent_ci_stops_on_efficiency_gate_failure(tmp_path: Path) -> None:
+    review_policy = {
+        "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "max_warn": 1,
+        "max_priority_score": 120,
+    }
+    strict_efficiency_policy = normalize_efficiency_gate_policy(
+        {
+            "schema_version": "deep_context_federation_efficiency_gate_policy_v1",
+            "authority_effect": "none",
+            "no_apply": True,
+            "policy_id": "unit_strict_agent_ci",
+            "min_read_first_savings_percent": 95,
+        }
+    )
+
+    result = build_agent_ci(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "agent_ci_strict",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        efficiency_gate_policy=strict_efficiency_policy,
+        token_budget=900,
+        query_limit=5,
+        max_presets=3,
+        max_files=200,
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "fail_agent_ci"
+    assert result["decision"]["action"] == "stop"
+    assert result["decision"]["continue_agent"] is False
+    assert result["decision"]["stop_reasons"][0]["id"] == "efficiency_gate_failed"
+    assert "read_first_savings_minimum" in result["efficiency_gate_summary"]["failed_check_ids"]
+    assert result["next_reads"]["read_next_if_decision_allows"] == []
+    assert validate_artifact_contract(result)["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

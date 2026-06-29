@@ -110,7 +110,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.32.0"
+    assert payload["package"]["version"] == "0.33.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -683,8 +683,12 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["model_handoff"]["read_first"][-1] == result["outputs"]["agent_model_prompt_markdown"]
     assert result["model_handoff"]["model_prompt_estimated_tokens"] > 0
     assert result["model_handoff"]["machine_context_estimated_tokens"] > result["model_handoff"]["model_prompt_estimated_tokens"]
+    assert result["agent_handoff_verification_summary"]["status"] == "pass_agent_handoff_verification"
+    assert result["agent_handoff_verification_summary"]["ok"] is True
     assert Path(result["outputs"]["agent_handoff_json"]).exists()
     assert Path(result["outputs"]["agent_ci_json"]).exists()
+    assert Path(result["outputs"]["agent_handoff_verification_json"]).exists()
+    assert Path(result["outputs"]["agent_handoff_verification_markdown"]).exists()
     assert context_path.exists()
     assert prompt_path.exists()
     assert prompt_path.read_text(encoding="utf-8").startswith("# Deep Context Federation Agent Context")
@@ -715,6 +719,9 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert verified["status"] == "pass_agent_handoff_verification"
     assert verified["summary"]["token_economics_status"] == "measured"
     assert validate_artifact_contract(verified)["ok"] is True
+    verification_payload = json.loads(Path(result["outputs"]["agent_handoff_verification_json"]).read_text(encoding="utf-8"))
+    assert verification_payload["status"] == "pass_agent_handoff_verification"
+    assert validate_artifact_contract(verification_payload, artifact_kind="agent_handoff_verification")["ok"] is True
 
     prompt_path.write_text(prompt_path.read_text(encoding="utf-8") + "\nmutated\n", encoding="utf-8")
     tampered = verify_agent_handoff(result, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
@@ -758,6 +765,7 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert failed["model_handoff"]["token_economics"]["default_model_input"] == ""
     assert failed["model_handoff"]["token_economics"]["model_prompt_estimated_tokens"] == 0
     assert failed["model_handoff"]["token_economics"]["estimated_token_savings"] == 0
+    assert failed["agent_handoff_verification_summary"]["status"] == "pass_agent_handoff_verification"
     assert validate_artifact_contract(failed)["ok"] is True
     blocked_verified = verify_agent_handoff(failed, handoff_path=Path(failed["outputs"]["agent_handoff_json"]))
     assert blocked_verified["ok"] is True

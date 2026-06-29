@@ -27,6 +27,8 @@ DEFAULT_AGENT_CONTEXT_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_CONTEXT.md"
 DEFAULT_AGENT_CONTEXT_GATE_JSON_NAME = "deep_context_federation_agent_context_gate.json"
 DEFAULT_AGENT_CONTEXT_GATE_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_CONTEXT_GATE.md"
 DEFAULT_AGENT_MODEL_PROMPT_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md"
+DEFAULT_AGENT_HANDOFF_VERIFICATION_JSON_NAME = "deep_context_federation_agent_handoff_verification.json"
+DEFAULT_AGENT_HANDOFF_VERIFICATION_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_HANDOFF_VERIFICATION.md"
 
 
 def _normalize_output_dir(root: Path, output_dir: Path) -> Path:
@@ -276,9 +278,13 @@ def build_agent_handoff(
 
     handoff_json = out_dir / DEFAULT_AGENT_HANDOFF_JSON_NAME
     handoff_md = out_dir / DEFAULT_AGENT_HANDOFF_MD_NAME
+    handoff_verification_json = out_dir / DEFAULT_AGENT_HANDOFF_VERIFICATION_JSON_NAME
+    handoff_verification_md = out_dir / DEFAULT_AGENT_HANDOFF_VERIFICATION_MD_NAME
     outputs = {
         "agent_handoff_json": handoff_json.as_posix(),
         "agent_handoff_markdown": handoff_md.as_posix(),
+        "agent_handoff_verification_json": handoff_verification_json.as_posix(),
+        "agent_handoff_verification_markdown": handoff_verification_md.as_posix(),
         "agent_ci_json": str(agent_ci.get("outputs", {}).get("agent_ci_json") or ""),
         "agent_context_json": agent_context_json.as_posix(),
         "agent_model_prompt_markdown": agent_model_prompt_md.as_posix() if include_prompt and prompt_text else "",
@@ -341,6 +347,7 @@ def build_agent_handoff(
         "agent_ci_summary": _summary(agent_ci),
         "agent_context_summary": _summary(agent_context),
         "agent_context_gate_summary": _summary(agent_context_gate),
+        "agent_handoff_verification_summary": {},
         "model_handoff": model_handoff,
         "outputs": outputs,
         "safety_boundaries": {
@@ -355,6 +362,18 @@ def build_agent_handoff(
     prompt_text = _render_prompt_text(result) if include_prompt else ""
     result["prompt_text"] = prompt_text
     result["prompt_estimated_tokens"] = estimate_tokens(prompt_text) if prompt_text else 0
+    result["json_estimated_tokens"] = estimate_tokens(_json_text(result))
+    write_json(handoff_json, result)
+    write_markdown(handoff_md, markdown_agent_handoff(result).splitlines())
+    from deep_context_federation.agent_handoff_verify import markdown_agent_handoff_verification
+    from deep_context_federation.agent_handoff_verify import verify_agent_handoff
+
+    verification = verify_agent_handoff(result, handoff_path=handoff_json)
+    write_json(handoff_verification_json, verification)
+    write_markdown(handoff_verification_md, markdown_agent_handoff_verification(verification).splitlines())
+    result["agent_handoff_verification_summary"] = _summary(verification)
+    result["prompt_text"] = _render_prompt_text(result) if include_prompt else ""
+    result["prompt_estimated_tokens"] = estimate_tokens(result["prompt_text"]) if result["prompt_text"] else 0
     result["json_estimated_tokens"] = estimate_tokens(_json_text(result))
     write_json(handoff_json, result)
     write_markdown(handoff_md, markdown_agent_handoff(result).splitlines())
@@ -374,6 +393,7 @@ def markdown_agent_handoff(result: Mapping[str, Any]) -> str:
         f"- Handoff allowed: `{decision.get('handoff_allowed')}`",
         f"- Task: `{result.get('task')}`",
         f"- Context gate status: `{gate_summary.get('status')}`",
+        f"- Handoff verification status: `{result.get('agent_handoff_verification_summary', {}).get('status') if isinstance(result.get('agent_handoff_verification_summary'), Mapping) else ''}`",
         f"- Model prompt source: `{model_handoff.get('model_prompt_source')}`",
         f"- Model prompt tokens: `{model_handoff.get('model_prompt_estimated_tokens')}`",
         "",

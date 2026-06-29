@@ -229,9 +229,9 @@ python -m deep_context_federation.cli agent-handoff \
   --output .dcf/deep_context_federation_agent_handoff.json
 ```
 
-`agent-handoff` writes the underlying `agent-ci`, `agent-context`, and `agent-context-gate` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `agent-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff also includes `read_first_artifacts`, `audit_artifacts`, and `token_economics` so runners can verify hashes and token savings without opening every generated file first.
+`agent-handoff` writes the underlying `agent-ci`, `agent-context`, `agent-context-gate`, and `agent-handoff-verification` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `agent-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff also includes `read_first_artifacts`, `audit_artifacts`, `token_economics`, and `agent_handoff_verification_summary` so runners can verify hashes and token savings without opening every generated file first.
 
-Verify the generated handoff before using it as model input:
+`agent-handoff` writes `deep_context_federation_agent_handoff_verification.json` automatically. Re-run verification explicitly when a handoff or generated prompt may have moved, been copied, or been modified:
 
 ```bash
 python -m deep_context_federation.cli verify-handoff \
@@ -552,7 +552,7 @@ and emits `deep_context_federation_agent_handoff_v1` with a final `decision`, co
 
 For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md`, not the full machine JSON. The JSON context is still recorded as `model_handoff.machine_context_source`, so agents can default to the smaller prompt-only surface and open the heavier JSON only when auditing evidence, hashes, or skipped/truncated rows. `model_handoff.token_economics` records prompt/context estimated tokens, ratio, and estimated savings; `read_first_artifacts` and `audit_artifacts` record path, bytes, SHA-256, and default-model-input flags.
 
-Run `dcf verify-handoff --input <handoff.json>` before giving `model_prompt_source` to an external model. The verifier is read-only and emits `deep_context_federation_agent_handoff_verification_v1`; it checks safety boundaries, pass/fail semantics, artifact hashes, prompt/context token estimates, and `token_economics` consistency.
+Run `dcf verify-handoff --input <handoff.json>` before giving a copied or externally transferred `model_prompt_source` to a model. The verifier is read-only and emits `deep_context_federation_agent_handoff_verification_v1`; it checks safety boundaries, pass/fail semantics, artifact hashes, prompt/context token estimates, and `token_economics` consistency. Fresh `dcf agent-handoff` runs already include the same verification summary and verification artifact.
 
 ## Capabilities Manifest
 

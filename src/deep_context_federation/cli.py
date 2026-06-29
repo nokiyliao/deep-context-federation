@@ -23,7 +23,7 @@ from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.bootstrap import markdown_bootstrap
-from deep_context_federation.builder import DEFAULT_JSON_NAME, build_federation, read_json, write_json
+from deep_context_federation.builder import DEFAULT_JSON_NAME, build_federation, read_json, write_json, write_markdown
 from deep_context_federation.capabilities import build_capabilities
 from deep_context_federation.capabilities import markdown_capabilities
 from deep_context_federation.compose import compose_manifests
@@ -781,6 +781,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             model_handoff = result.get("model_handoff") if isinstance(result.get("model_handoff"), dict) else {}
             if isinstance(model_handoff.get("read_first"), list):
                 model_handoff["read_first"] = [resolved_output if item == original_output else item for item in model_handoff["read_first"]]
+            write_json(args.output, result)
+            verification = verify_agent_handoff(result, handoff_path=args.output)
+            verification_json = Path(str(result["outputs"].get("agent_handoff_verification_json") or "")).expanduser()
+            verification_markdown = Path(str(result["outputs"].get("agent_handoff_verification_markdown") or "")).expanduser()
+            if verification_json:
+                write_json(verification_json, verification)
+            if verification_markdown:
+                write_markdown(verification_markdown, markdown_agent_handoff_verification(verification).splitlines())
+            result["agent_handoff_verification_summary"] = {
+                "schema_version": verification.get("schema_version"),
+                "status": verification.get("status"),
+                "ok": verification.get("ok"),
+                "summary": dict(verification.get("summary") if isinstance(verification.get("summary"), dict) else {}),
+            }
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_handoff(result))

@@ -87,7 +87,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.25.0"
+    assert payload["package"]["version"] == "0.26.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -419,10 +419,21 @@ def test_agent_ci_runs_integrated_continuation_gate(tmp_path: Path) -> None:
     assert result["efficiency_report_summary"]["status"] == "pass_efficiency_report"
     assert result["efficiency_gate_summary"]["status"] == "pass_efficiency_gate"
     assert result["efficiency_report_summary"]["read_first_savings_percent"] >= 50
+    assert result["contract_validation_summary"]["ok"] is True
+    assert result["contract_validation_summary"]["artifact_count"] == 4
+    assert result["contract_validations"]["workflow_run"]["ok"] is True
+    assert result["contract_validations"]["efficiency_report"]["ok"] is True
+    assert result["contract_validations"]["efficiency_gate"]["ok"] is True
+    assert result["contract_validations"]["agent_ci"]["ok"] is True
+    assert result["artifact_read_plan"]["ok"] is True
+    assert result["artifact_read_plan"]["totals"]["missing_artifact_count"] == 0
+    assert result["artifact_read_plan"]["totals"]["read_first_estimated_tokens"] > 0
+    assert any(row["schema_version"] == "deep_context_federation_agent_ci_v1" for row in result["artifact_read_plan"]["rows"])
     assert Path(result["outputs"]["agent_ci_json"]).exists()
     assert Path(result["outputs"]["workflow_run_json"]).exists()
     assert Path(result["outputs"]["efficiency_report_json"]).exists()
     assert Path(result["outputs"]["efficiency_gate_json"]).exists()
+    assert Path(result["outputs"]["agent_ci_contract_validation_json"]).exists()
     assert result["outputs"]["agent_ci_json"] in result["next_reads"]["read_first"]
     assert result["safety_boundaries"]["source_or_authority_mutation"] is False
     assert validate_artifact_contract(result)["ok"] is True
@@ -467,6 +478,8 @@ def test_agent_ci_stops_on_efficiency_gate_failure(tmp_path: Path) -> None:
     assert result["decision"]["stop_reasons"][0]["id"] == "efficiency_gate_failed"
     assert "read_first_savings_minimum" in result["efficiency_gate_summary"]["failed_check_ids"]
     assert result["next_reads"]["read_next_if_decision_allows"] == []
+    assert result["artifact_read_plan"]["ok"] is True
+    assert result["contract_validation_summary"]["ok"] is True
     assert validate_artifact_contract(result)["ok"] is True
 
 

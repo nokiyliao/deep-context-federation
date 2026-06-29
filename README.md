@@ -459,7 +459,9 @@ and emits `deep_context_federation_agent_ci_v1` with:
 - `decision.action`: `continue`, `continue_with_caution`, or `stop`
 - `decision.continue_agent`: boolean continuation gate
 - `workflow_run_summary`, `efficiency_report_summary`, and `efficiency_gate_summary`
+- `contract_validations`: built-in contract checks for the generated workflow, report, gate, and agent CI artifacts
 - `next_reads.read_first` and `next_reads.read_next_if_decision_allows`
+- `artifact_read_plan`: ordered file refs with existence, schema version, byte size, and estimated tokens
 - `safety_boundaries` proving generated-output-only, no external model calls, and no source or authority mutation
 
 This is the preferred artifact for external orchestrators. It reduces model input by making the first read a compact decision artifact, then expanding only into the listed workflow, report, gate, or target evidence files when the decision allows.

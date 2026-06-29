@@ -622,6 +622,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             next_reads = result.get("next_reads") if isinstance(result.get("next_reads"), dict) else {}
             if isinstance(next_reads.get("read_first"), list):
                 next_reads["read_first"] = [resolved_output if item == original_output else item for item in next_reads["read_first"]]
+            read_plan = result.get("artifact_read_plan") if isinstance(result.get("artifact_read_plan"), dict) else {}
+            for row in read_plan.get("rows") or []:
+                if isinstance(row, dict):
+                    if row.get("artifact_ref") == original_output:
+                        row["artifact_ref"] = resolved_output
+                    if row.get("path") == original_output:
+                        row["path"] = resolved_output
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_ci(result))

@@ -25,6 +25,7 @@ from deep_context_federation.workflow_run import build_workflow_run
 AGENT_CI_SCHEMA_VERSION = "deep_context_federation_agent_ci_v1"
 DEFAULT_AGENT_CI_JSON_NAME = "deep_context_federation_agent_ci.json"
 DEFAULT_AGENT_CI_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_CI.md"
+DEFAULT_AGENT_CI_CONTRACT_VALIDATION_JSON_NAME = "deep_context_federation_agent_ci_contract_validation.json"
 
 
 def _normalize_output_dir(root: Path, output_dir: Path) -> Path:
@@ -49,6 +50,26 @@ def _failed_check_ids(gate: Mapping[str, Any]) -> list[str]:
         if isinstance(row, Mapping):
             result.append(str(row.get("id") or "unknown_check"))
     return result
+
+
+def _validation_summary(validation: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "status": validation.get("status"),
+        "ok": validation.get("ok"),
+        "artifact_kind": validation.get("artifact_kind"),
+        "error_count": validation.get("error_count"),
+    }
+
+
+def _contract_validation_summaries(validations: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    rows = {artifact_kind: _validation_summary(validation) for artifact_kind, validation in validations.items()}
+    failed = [artifact_kind for artifact_kind, row in rows.items() if row.get("ok") is not True]
+    return {
+        "ok": not failed,
+        "artifact_count": len(rows),
+        "failed_artifact_kinds": failed,
+        "rows": rows,
+    }
 
 
 def _status_is_warn(payload: Mapping[str, Any]) -> bool:
@@ -100,8 +121,18 @@ def _decision(
     workflow_run: Mapping[str, Any],
     efficiency_report: Mapping[str, Any],
     efficiency_gate: Mapping[str, Any],
+    contract_validations: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     stop_reasons: list[dict[str, Any]] = []
+    contract_summary = _contract_validation_summaries(contract_validations or {})
+    if contract_summary["failed_artifact_kinds"]:
+        stop_reasons.append(
+            {
+                "id": "artifact_contract_validation_failed",
+                "status": "fail_contract_validation",
+                "failed_artifact_kinds": contract_summary["failed_artifact_kinds"],
+            }
+        )
     if workflow_run.get("ok") is not True:
         stop_reasons.append(
             {
@@ -182,6 +213,72 @@ def _next_reads(
         "read_first": list(dict.fromkeys(read_first)),
         "read_next_if_decision_allows": list(dict.fromkeys(read_next)),
         "skip_by_default": list(handoff.get("skip_by_default") or []),
+    }
+
+
+def _schema_version_from_text(text: str) -> str:
+    if not text:
+        return ""
+    try:
+        payload = json.loads(text)
+    except Exception:
+        return ""
+    if isinstance(payload, Mapping):
+        return str(payload.get("schema_version") or "")
+    return ""
+
+
+def _read_plan_row(*, artifact_ref: str, role: str, order: int, base_dir: Path) -> dict[str, Any]:
+    path = Path(artifact_ref).expanduser()
+    if not path.is_absolute():
+        path = base_dir / path
+    path = path.resolve()
+    exists = path.exists() and path.is_file()
+    text = ""
+    if exists:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            text = ""
+    return {
+        "order": order,
+        "role": role,
+        "artifact_ref": artifact_ref,
+        "path": path.as_posix(),
+        "exists": exists,
+        "bytes": path.stat().st_size if exists else 0,
+        "estimated_tokens": estimate_tokens(text) if text else 0,
+        "schema_version": _schema_version_from_text(text),
+    }
+
+
+def _artifact_read_plan(next_reads: Mapping[str, Any], *, base_dir: Path) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for role in ("read_first", "read_next_if_decision_allows"):
+        for artifact_ref in next_reads.get(role) or []:
+            if not artifact_ref:
+                continue
+            key = (role, str(artifact_ref))
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(_read_plan_row(artifact_ref=str(artifact_ref), role=role, order=len(rows) + 1, base_dir=base_dir))
+    totals = {
+        "read_first_estimated_tokens": sum(row["estimated_tokens"] for row in rows if row["role"] == "read_first"),
+        "read_next_if_decision_allows_estimated_tokens": sum(
+            row["estimated_tokens"] for row in rows if row["role"] == "read_next_if_decision_allows"
+        ),
+        "missing_artifact_count": sum(1 for row in rows if not row["exists"]),
+    }
+    totals["total_estimated_tokens"] = totals["read_first_estimated_tokens"] + totals["read_next_if_decision_allows_estimated_tokens"]
+    return {
+        "status": "pass_read_plan" if totals["missing_artifact_count"] == 0 else "fail_read_plan",
+        "ok": totals["missing_artifact_count"] == 0,
+        "row_count": len(rows),
+        "schema_versions": sorted({row["schema_version"] for row in rows if row["schema_version"]}),
+        "totals": totals,
+        "rows": rows,
     }
 
 
@@ -291,10 +388,19 @@ def build_agent_ci(
     write_json(efficiency_gate_json, efficiency_gate)
     write_markdown(efficiency_gate_md, markdown_efficiency_gate(efficiency_gate).splitlines())
 
+    from deep_context_federation.schemas import validate_artifact_contract
+
+    contract_validations = {
+        "workflow_run": validate_artifact_contract(workflow_run, artifact_kind="workflow_run"),
+        "efficiency_report": validate_artifact_contract(efficiency_report, artifact_kind="efficiency_report"),
+        "efficiency_gate": validate_artifact_contract(efficiency_gate, artifact_kind="efficiency_gate"),
+    }
+
     decision = _decision(
         workflow_run=workflow_run,
         efficiency_report=efficiency_report,
         efficiency_gate=efficiency_gate,
+        contract_validations=contract_validations,
     )
     ok = bool(decision.get("continue_agent"))
     status = "fail_agent_ci"
@@ -313,6 +419,13 @@ def build_agent_ci(
         "efficiency_gate_json": efficiency_gate_json.as_posix(),
         "efficiency_gate_markdown": efficiency_gate_md.as_posix(),
     }
+    next_reads = _next_reads(
+        agent_ci_json=agent_ci_json.as_posix(),
+        efficiency_report_json=efficiency_report_json.as_posix(),
+        efficiency_gate_json=efficiency_gate_json.as_posix(),
+        workflow_run=workflow_run,
+        decision=decision,
+    )
     result: dict[str, Any] = {
         "schema_version": AGENT_CI_SCHEMA_VERSION,
         "ok": ok,
@@ -329,13 +442,22 @@ def build_agent_ci(
         "workflow_run_summary": _workflow_summary(workflow_run),
         "efficiency_report_summary": _report_summary(efficiency_report),
         "efficiency_gate_summary": _gate_summary(efficiency_gate),
-        "next_reads": _next_reads(
-            agent_ci_json=agent_ci_json.as_posix(),
-            efficiency_report_json=efficiency_report_json.as_posix(),
-            efficiency_gate_json=efficiency_gate_json.as_posix(),
-            workflow_run=workflow_run,
-            decision=decision,
-        ),
+        "contract_validation_summary": _contract_validation_summaries(contract_validations),
+        "contract_validations": contract_validations,
+        "next_reads": next_reads,
+        "artifact_read_plan": {
+            "status": "pending_read_plan",
+            "ok": False,
+            "row_count": 0,
+            "schema_versions": [],
+            "totals": {
+                "read_first_estimated_tokens": 0,
+                "read_next_if_decision_allows_estimated_tokens": 0,
+                "missing_artifact_count": 0,
+                "total_estimated_tokens": 0,
+            },
+            "rows": [],
+        },
         "outputs": outputs,
         "safety_boundaries": {
             "authority_effect": "none",
@@ -352,6 +474,15 @@ def build_agent_ci(
     result["prompt_estimated_tokens"] = estimate_tokens(prompt_text) if prompt_text else 0
     result["json_estimated_tokens"] = estimate_tokens(json.dumps(result, ensure_ascii=True, sort_keys=True))
     write_json(agent_ci_json, result)
+    result["artifact_read_plan"] = _artifact_read_plan(next_reads, base_dir=out_dir)
+    contract_validations["agent_ci"] = validate_artifact_contract(result, artifact_kind="agent_ci")
+    result["contract_validation_summary"] = _contract_validation_summaries(contract_validations)
+    result["json_estimated_tokens"] = estimate_tokens(json.dumps(result, ensure_ascii=True, sort_keys=True))
+    contract_validation_path = out_dir / DEFAULT_AGENT_CI_CONTRACT_VALIDATION_JSON_NAME
+    result["outputs"]["agent_ci_contract_validation_json"] = contract_validation_path.as_posix()
+    result["json_estimated_tokens"] = estimate_tokens(json.dumps(result, ensure_ascii=True, sort_keys=True))
+    write_json(agent_ci_json, result)
+    write_json(contract_validation_path, result["contract_validations"])
     write_markdown(agent_ci_md, markdown_agent_ci(result).splitlines())
     return result
 
@@ -392,4 +523,17 @@ def markdown_agent_ci(result: Mapping[str, Any]) -> str:
                 lines.append(f"- `{item}`")
         else:
             lines.append("- none")
+    read_plan = result.get("artifact_read_plan") if isinstance(result.get("artifact_read_plan"), Mapping) else {}
+    totals = read_plan.get("totals") if isinstance(read_plan.get("totals"), Mapping) else {}
+    lines.extend(
+        [
+            "",
+            "## Artifact Read Plan",
+            "",
+            f"- Status: `{read_plan.get('status')}`",
+            f"- Read-first estimated tokens: `{totals.get('read_first_estimated_tokens')}`",
+            f"- Total estimated tokens: `{totals.get('total_estimated_tokens')}`",
+            f"- Missing artifacts: `{totals.get('missing_artifact_count')}`",
+        ]
+    )
     return "\n".join(lines).rstrip() + "\n"

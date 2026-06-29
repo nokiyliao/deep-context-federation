@@ -44,6 +44,7 @@ from deep_context_federation.target_review import TARGET_REVIEW_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
+from deep_context_federation.unified_plane_audit import UNIFIED_PLANE_AUDIT_SCHEMA_VERSION
 from deep_context_federation.unified_index import UNIFIED_INDEX_SCHEMA_VERSION
 from deep_context_federation.unified_index import UNIFIED_WORKING_SET_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
@@ -149,6 +150,35 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "summary": object_type,
                 "capabilities": array_type,
                 "nativeization_sequence": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "unified_plane_audit": _schema(
+            UNIFIED_PLANE_AUDIT_SCHEMA_VERSION,
+            "Deep Context Federation unified plane audit",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "summary",
+                "checks",
+                "errors",
+                "warnings",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_unified_plane_audit", "warn_unified_plane_audit", "fail_unified_plane_audit"]},
+                **_boundary_props(),
+                "generated_at": {"type": "string"},
+                "strict": object_type,
+                "summary": object_type,
+                "checks": array_type,
+                "errors": array_type,
+                "warnings": array_type,
+                "next_actions": array_type,
                 "safety_boundaries": object_type,
             },
         ),

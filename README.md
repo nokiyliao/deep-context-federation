@@ -73,6 +73,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - native integration plan that collapses overlapping tool identities into DCF-owned capabilities
 - memory ledger that materializes generated handoff, ready, onboard, workflow, and fingerprint artifacts into reusable DCF-native context memory
 - unified context index that collapses graph, memory, commands, and native capability rows into source-hidden function facets
+- unified-plane audit that checks command naming, ownership collapse, context-index facets, and source-identity leakage
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -762,6 +763,27 @@ dcf build-context-index \
   --ability-registry .dcf/deep_context_federation_capabilities.json \
   --ownership-plan .dcf/deep_context_federation_native_integration_plan.json \
   --query dashboard \
+  --format markdown
+```
+
+## Unified Plane Audit
+
+`dcf audit-unified-plane` is the machine gate that checks whether DCF is really acting like one integrated tool:
+
+- public command manifest uses function names, not legacy/source names
+- ownership plan collapses upstream identity into `deep_context_federation`
+- `task_brief` exposes `query_plan` for machine runners
+- context index hides source identity and includes command/capability facets
+- working set preserves DCF-only identity for model read-first use
+
+By default, `native_partial` capabilities are warnings. Add `--require-all-owned` when using the audit as a stricter CI or final-acceptance gate.
+
+```bash
+dcf audit-unified-plane \
+  --ability-registry .dcf/deep_context_federation_capabilities.json \
+  --ownership-plan .dcf/deep_context_federation_native_integration_plan.json \
+  --context-index .dcf/deep_context_federation_unified_index.json \
+  --working-set .dcf/deep_context_federation_selected_context.json \
   --format markdown
 ```
 

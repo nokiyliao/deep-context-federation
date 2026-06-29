@@ -60,6 +60,7 @@ from deep_context_federation.target_review import review_targets
 from deep_context_federation.target_review_gate import evaluate_target_review_gate
 from deep_context_federation.target_review_gate import normalize_target_review_gate_policy
 from deep_context_federation.task_brief import build_task_brief
+from deep_context_federation.unified_plane_audit import audit_unified_plane
 from deep_context_federation.unified_index import build_unified_index
 from deep_context_federation.unified_index import build_unified_working_set
 from deep_context_federation.verifier import verify_federation
@@ -239,7 +240,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.52.0"
+    assert payload["package"]["version"] == "0.53.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -269,6 +270,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "plan-capability-ownership",
         "build-reuse-index",
         "build-context-index",
+        "audit-unified-plane",
         "pack-working-set",
         "adjudicate",
         "brief",
@@ -308,6 +310,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
+    assert by_kind["unified_plane_audit"]["schema_version"] == "deep_context_federation_unified_plane_audit_v1"
     assert by_kind["unified_working_set"]["schema_version"] == "deep_context_federation_unified_working_set_v1"
     assert "expansion_plan" in by_kind["unified_working_set"]["top_level_required"]
     assert "query_plan" in by_kind["task_brief"]["top_level_required"]
@@ -358,6 +361,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
+    assert by_kind["unified_plane_audit"]["schema_version"] == "deep_context_federation_unified_plane_audit_v1"
     assert by_kind["unified_working_set"]["schema_version"] == "deep_context_federation_unified_working_set_v1"
     assert "expansion_plan" in by_kind["unified_working_set"]["json_schema"]["required"]
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
@@ -473,6 +477,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "plan-capability-ownership" in top_help.stdout
     assert "build-reuse-index" in top_help.stdout
     assert "build-context-index" in top_help.stdout
+    assert "audit-unified-plane" in top_help.stdout
     assert "pack-working-set" in top_help.stdout
     assert "query-read-model" in top_help.stdout
     assert "decide-continuation" in top_help.stdout
@@ -525,6 +530,24 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert native.returncode == 0
     assert "--function" in native.stdout
     assert "--capability" not in native.stdout
+
+    audit = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "audit-unified-plane",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert audit.returncode == 0
+    assert "--context-index" in audit.stdout
+    assert "--require-all-owned" in audit.stdout
 
     brief = subprocess.run(
         [
@@ -592,6 +615,71 @@ def test_legacy_cli_names_remain_hidden_compatibility_aliases(tmp_path: Path) ->
     assert payload["status"] == "pass_native_integration_plan"
     assert payload["outputs"]["native_integration_plan_json"] == output_path.resolve().as_posix()
     assert output_path.exists()
+
+
+def test_unified_plane_audit_checks_function_named_integrated_plane(tmp_path: Path) -> None:
+    federation = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=False,
+    )
+    capabilities = build_capabilities()
+    ownership = build_native_integration_plan(
+        capabilities=[
+            "symbol-call-graph",
+            "surface-map",
+            "long-term-context-memory",
+            "evidence-lineage",
+            "workflow-orchestration",
+        ]
+    )
+    context_index = build_unified_index(
+        federation=federation,
+        capabilities=capabilities,
+        native_plan=ownership,
+        limit=200,
+    )
+    working_set = build_unified_working_set(
+        unified_index=context_index,
+        query="dashboard operator authority",
+        limit=24,
+        min_facets=4,
+    )
+
+    audit = audit_unified_plane(
+        capabilities=capabilities,
+        ownership_plan=ownership,
+        context_index=context_index,
+        working_set=working_set,
+        min_facets=4,
+    )
+
+    assert audit["schema_version"] == "deep_context_federation_unified_plane_audit_v1"
+    assert audit["ok"] is True
+    assert audit["status"] == "pass_unified_plane_audit"
+    check_ids = {row["id"] for row in audit["checks"]}
+    assert {
+        "command_surface_uses_function_names",
+        "required_function_commands_present",
+        "task_brief_has_machine_query_plan",
+        "ownership_policy_collapses_public_identity",
+        "context_index_hides_source_identity",
+        "context_index_has_function_facets",
+        "working_set_hides_source_identity",
+    } <= check_ids
+    assert audit["summary"]["score"] == 100
+    assert validate_artifact_contract(audit, artifact_kind="unified_plane_audit")["ok"] is True
+
+    strict = audit_unified_plane(
+        capabilities=capabilities,
+        ownership_plan=build_native_integration_plan(),
+        context_index=context_index,
+        require_all_owned=True,
+    )
+    assert strict["ok"] is False
+    assert strict["status"] == "fail_unified_plane_audit"
+    assert any(row["id"] == "all_capabilities_fully_owned" for row in strict["errors"])
 
 
 def test_workflow_plan_sequences_bounded_agent_run(tmp_path: Path) -> None:

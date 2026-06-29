@@ -49,6 +49,7 @@ from deep_context_federation.target_review_gate import evaluate_target_review_ga
 from deep_context_federation.target_review_gate import load_target_review_gate_policy
 from deep_context_federation.target_review_gate import normalize_target_review_gate_policy
 from deep_context_federation.task_brief import build_task_brief
+from deep_context_federation.unified_plane_audit import audit_unified_plane
 from deep_context_federation.unified_index import build_unified_index
 from deep_context_federation.unified_index import build_unified_working_set
 from deep_context_federation.verifier import verify_federation
@@ -58,6 +59,7 @@ from deep_context_federation.workflow_run import build_workflow_run
 
 __all__ = [
     "adjudicate_target",
+    "audit_unified_plane",
     "bootstrap_federation",
     "build_federation",
     "build_agent_context",

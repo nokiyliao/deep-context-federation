@@ -55,6 +55,7 @@ from deep_context_federation.target_review import TARGET_REVIEW_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
+from deep_context_federation.unified_plane_audit import UNIFIED_PLANE_AUDIT_SCHEMA_VERSION
 from deep_context_federation.unified_index import UNIFIED_INDEX_SCHEMA_VERSION
 from deep_context_federation.unified_index import UNIFIED_WORKING_SET_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
@@ -579,6 +580,15 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "unified_plane_audit",
+            "schema_version": UNIFIED_PLANE_AUDIT_SCHEMA_VERSION,
+            "producer": "audit-unified-plane",
+            "consumer_commands": ["ci", "agent_router", "operator_context"],
+            "top_level_required": ["schema_version", "ok", "status", "summary", "checks", "errors", "warnings", "safety_boundaries"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "unified_working_set",
             "schema_version": UNIFIED_WORKING_SET_SCHEMA_VERSION,
             "producer": "pack-working-set",
@@ -820,6 +830,16 @@ def _commands() -> list[dict[str, Any]]:
             "output_schemas": [UNIFIED_INDEX_SCHEMA_VERSION],
             "input_schemas": [SCHEMA_VERSION, MEMORY_LEDGER_SCHEMA_VERSION, CAPABILITIES_SCHEMA_VERSION, NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION],
             "options": ["--input", "--reuse-index", "--ability-registry", "--ownership-plan", "--query", "--limit", "--output", "--format"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "audit-unified-plane",
+            "intent": "Audit whether DCF commands, ownership, context index, and working set are actually collapsed into one function-named read-only plane.",
+            "writes": ["optional unified plane audit JSON when --output is set"],
+            "output_schemas": [UNIFIED_PLANE_AUDIT_SCHEMA_VERSION],
+            "input_schemas": [CAPABILITIES_SCHEMA_VERSION, NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION, UNIFIED_INDEX_SCHEMA_VERSION, UNIFIED_WORKING_SET_SCHEMA_VERSION],
+            "options": ["--ability-registry", "--ownership-plan", "--context-index", "--working-set", "--require-all-owned", "--min-facets", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },

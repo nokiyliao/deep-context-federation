@@ -93,6 +93,8 @@ from deep_context_federation.target_review_gate import load_target_review_gate_p
 from deep_context_federation.target_review_gate import markdown_target_review_gate
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.task_brief import markdown_task_brief
+from deep_context_federation.unified_plane_audit import audit_unified_plane
+from deep_context_federation.unified_plane_audit import markdown_unified_plane_audit
 from deep_context_federation.unified_index import build_unified_index
 from deep_context_federation.unified_index import build_unified_working_set
 from deep_context_federation.unified_index import markdown_unified_index
@@ -352,6 +354,15 @@ def build_parser() -> argparse.ArgumentParser:
     unified_index.add_argument("--limit", type=int, default=200)
     unified_index.add_argument("--output", type=Path)
     unified_index.add_argument("--format", choices=["json", "markdown"], default="json")
+    unified_audit = sub.add_parser("audit-unified-plane", help="Audit whether DCF capabilities are collapsed into one function-named plane.")
+    unified_audit.add_argument("--ability-registry", dest="capabilities", metavar="ABILITY_REGISTRY", type=Path)
+    unified_audit.add_argument("--ownership-plan", type=Path)
+    unified_audit.add_argument("--context-index", type=Path)
+    unified_audit.add_argument("--working-set", type=Path)
+    unified_audit.add_argument("--require-all-owned", action="store_true")
+    unified_audit.add_argument("--min-facets", type=int, default=4)
+    unified_audit.add_argument("--output", type=Path)
+    unified_audit.add_argument("--format", choices=["json", "markdown"], default="json")
     selected_context = sub.add_parser("pack-working-set", help="Pack a compact task-scoped DCF working set from a context index.")
     selected_context.add_argument("--input", type=Path, default=Path(".dcf") / "deep_context_federation_unified_index.json", help="Unified context index JSON artifact.")
     selected_context.add_argument("--query", default="")
@@ -864,6 +875,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_unified_index(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "audit-unified-plane":
+        capabilities = read_required_json(args.capabilities) if args.capabilities else build_capabilities()
+        ownership_plan = read_required_json(args.ownership_plan) if args.ownership_plan else build_native_integration_plan()
+        context_index = read_required_json(args.context_index) if args.context_index else {}
+        working_set = read_required_json(args.working_set) if args.working_set else {}
+        result = audit_unified_plane(
+            capabilities=capabilities,
+            ownership_plan=ownership_plan,
+            context_index=context_index,
+            working_set=working_set,
+            require_all_owned=args.require_all_owned,
+            min_facets=args.min_facets,
+        )
+        if args.output:
+            result["outputs"] = {"unified_plane_audit_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_unified_plane_audit(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

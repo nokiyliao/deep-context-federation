@@ -59,6 +59,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - workflow plan artifact that sequences intake, validation, target review, gates, and bounded context reads
 - workflow run capsule that executes the read-only DCF chain and returns one compact handoff artifact
 - efficiency report that measures read-first and gate-pass token savings against generated baselines
+- efficiency gate that turns token-savings targets into CI or agent routing thresholds
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -162,6 +163,16 @@ python -m deep_context_federation.cli efficiency-report \
 ```
 
 The report compares the `read_first` and gate-pass artifact sets against available generated baselines such as the full federation JSON. This makes the context reduction measurable instead of merely advisory.
+
+Enforce token-efficiency thresholds before an agent continues:
+
+```bash
+python -m deep_context_federation.cli efficiency-gate \
+  --input .dcf/deep_context_federation_efficiency_report.json \
+  --min-read-first-savings-percent 50 \
+  --max-read-first-ratio 0.5 \
+  --output .dcf/deep_context_federation_efficiency_gate.json
+```
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -403,6 +414,22 @@ The run capsule summarizes each step, records pass/fail gates, and gives a compa
 - missing required artifacts and recommendations
 
 Use it when you need to prove that DCF is reducing model input cost. It is also read-only and `authority_effect: none`; it measures generated artifacts and does not inspect or mutate source authority.
+
+## Efficiency Gate
+
+`dcf efficiency-gate` turns that report into a deterministic pass/fail result. The default policy requires:
+
+- report status is OK
+- no missing required artifacts
+- no report warnings
+- full baseline tokens are available
+- `read_first` is at most half of baseline
+- `read_first` savings are at least 50 percent
+- required artifact roles include `read_first` and `baseline`
+
+Use a policy JSON or CLI overrides when a repo needs stricter context budgets. The gate is designed for CI and agent routing: if it fails, the agent should tighten the workflow handoff before expanding model context.
+
+A starter policy is available at `examples/efficiency_gate_policy.example.json`.
 
 ## Capabilities Manifest
 

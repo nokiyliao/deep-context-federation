@@ -18,6 +18,9 @@ from deep_context_federation.compose import compose_manifests
 from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
+from deep_context_federation.efficiency_gate import evaluate_efficiency_gate
+from deep_context_federation.efficiency_gate import load_efficiency_gate_policy
+from deep_context_federation.efficiency_gate import normalize_efficiency_gate_policy
 from deep_context_federation.efficiency_report import build_efficiency_report
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
@@ -45,6 +48,7 @@ from deep_context_federation.workflow_run import build_workflow_run
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_MANIFEST = REPO_ROOT / "examples/deep_context_federation.example.json"
 EXAMPLE_QUALITY_GATE_POLICY = REPO_ROOT / "examples/quality_gate_policy.example.json"
+EXAMPLE_EFFICIENCY_GATE_POLICY = REPO_ROOT / "examples/efficiency_gate_policy.example.json"
 
 
 def test_quality_gate_policy_example_loads() -> None:
@@ -59,6 +63,21 @@ def test_quality_gate_policy_example_loads() -> None:
     assert "repo_file_inventory" in policy["require_sources"]
 
 
+def test_efficiency_gate_policy_example_loads() -> None:
+    policy = load_efficiency_gate_policy(EXAMPLE_EFFICIENCY_GATE_POLICY)
+
+    assert policy["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
+    assert policy["policy_id"] == "example_context_efficiency_minimum"
+    assert policy["authority_effect"] == "none"
+    assert policy["no_apply"] is True
+    assert policy["schema_supported"] is True
+    assert policy["unknown_keys"] == []
+    assert policy["validation_errors"] == []
+    assert policy["min_read_first_savings_percent"] == 50.0
+    assert "read_first" in policy["require_artifact_roles"]
+    assert validate_artifact_contract(policy)["ok"] is True
+
+
 def test_capabilities_manifest_is_machine_readable() -> None:
     payload = build_capabilities()
 
@@ -67,7 +86,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.23.0"
+    assert payload["package"]["version"] == "0.24.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -76,6 +95,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "workflow-plan",
         "workflow-run",
         "efficiency-report",
+        "efficiency-gate",
         "intake",
         "build",
         "scan",
@@ -103,6 +123,8 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["quality_gate_policy"]["authority_effect"] == "none"
     assert by_kind["quality_gate_policy"]["no_apply"] is True
     assert by_kind["federation"]["schema_version"] == "deep_context_federation_v1"
+    assert by_kind["efficiency_gate"]["schema_version"] == "deep_context_federation_efficiency_gate_v1"
+    assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
@@ -127,6 +149,8 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["target_review"]["schema_version"] == "deep_context_federation_target_review_v1"
     assert by_kind["target_review_gate"]["schema_version"] == "deep_context_federation_target_review_gate_v1"
     assert by_kind["target_review_gate_policy"]["schema_version"] == "deep_context_federation_target_review_gate_policy_v1"
+    assert by_kind["efficiency_gate"]["schema_version"] == "deep_context_federation_efficiency_gate_v1"
+    assert by_kind["efficiency_gate_policy"]["schema_version"] == "deep_context_federation_efficiency_gate_policy_v1"
     assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
@@ -306,6 +330,56 @@ def test_efficiency_report_measures_workflow_run_token_savings(tmp_path: Path) -
     roles = {role for row in report["artifacts"] for role in row["roles"]}
     assert {"read_first", "read_next_if_gate_passes", "baseline"} <= roles
     assert validate_artifact_contract(report)["ok"] is True
+
+
+def test_efficiency_gate_enforces_token_savings_policy(tmp_path: Path) -> None:
+    review_policy = {
+        "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "max_warn": 1,
+        "max_priority_score": 120,
+    }
+    run = build_workflow_run(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "workflow_run",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        token_budget=900,
+        max_files=200,
+    )
+    report = build_efficiency_report(
+        run,
+        workflow_run_path=Path(run["outputs"]["workflow_run_json"]),
+    )
+
+    passed = evaluate_efficiency_gate(report)
+    assert passed["schema_version"] == "deep_context_federation_efficiency_gate_v1"
+    assert passed["authority_effect"] == "none"
+    assert passed["no_apply"] is True
+    assert passed["ok"] is True
+    assert passed["status"] == "pass_efficiency_gate"
+    assert passed["summary"]["read_first_savings_percent"] >= 50
+    assert validate_artifact_contract(passed)["ok"] is True
+
+    strict_policy = normalize_efficiency_gate_policy(
+        {
+            "schema_version": "deep_context_federation_efficiency_gate_policy_v1",
+            "authority_effect": "none",
+            "no_apply": True,
+            "policy_id": "unit_strict_efficiency_gate",
+            "min_read_first_savings_percent": 95,
+        }
+    )
+    failed = evaluate_efficiency_gate(report, policy=strict_policy)
+    assert failed["ok"] is False
+    assert failed["status"] == "fail_efficiency_gate"
+    failed_ids = {row["id"] for row in failed["errors"]}
+    assert "read_first_savings_minimum" in failed_ids
+    assert validate_artifact_contract(strict_policy)["ok"] is True
+    assert validate_artifact_contract(failed)["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

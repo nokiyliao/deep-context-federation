@@ -23,6 +23,9 @@ from deep_context_federation.diff import diff_federations
 from deep_context_federation.diff import markdown_diff
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.doctor import markdown_doctor
+from deep_context_federation.efficiency_gate import evaluate_efficiency_gate
+from deep_context_federation.efficiency_gate import load_efficiency_gate_policy
+from deep_context_federation.efficiency_gate import markdown_efficiency_gate
 from deep_context_federation.efficiency_report import build_efficiency_report
 from deep_context_federation.efficiency_report import markdown_efficiency_report
 from deep_context_federation.graph import markdown_trace
@@ -188,6 +191,18 @@ def build_parser() -> argparse.ArgumentParser:
     efficiency.add_argument("--baseline", type=Path, action="append", default=[])
     efficiency.add_argument("--output", type=Path)
     efficiency.add_argument("--format", choices=["json", "markdown"], default="json")
+    efficiency_gate = sub.add_parser("efficiency-gate", help="Evaluate an efficiency report against token-budget policy thresholds.")
+    efficiency_gate.add_argument("--input", type=Path, required=True)
+    efficiency_gate.add_argument("--policy", type=Path)
+    efficiency_gate.add_argument("--max-read-first-tokens", type=int)
+    efficiency_gate.add_argument("--max-gate-pass-tokens", type=int)
+    efficiency_gate.add_argument("--max-read-first-ratio", type=float)
+    efficiency_gate.add_argument("--max-gate-pass-ratio", type=float)
+    efficiency_gate.add_argument("--min-read-first-savings-percent", type=float)
+    efficiency_gate.add_argument("--min-gate-pass-savings-percent", type=float)
+    efficiency_gate.add_argument("--require-artifact-role", action="append")
+    efficiency_gate.add_argument("--output", type=Path)
+    efficiency_gate.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -518,6 +533,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_efficiency_report(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "efficiency-gate":
+        payload = read_required_json(args.input)
+        policy = load_efficiency_gate_policy(args.policy) if args.policy else None
+        result = evaluate_efficiency_gate(
+            payload,
+            policy=policy,
+            max_read_first_tokens=args.max_read_first_tokens,
+            max_gate_pass_tokens=args.max_gate_pass_tokens,
+            max_read_first_ratio=args.max_read_first_ratio,
+            max_gate_pass_ratio=args.max_gate_pass_ratio,
+            min_read_first_savings_percent=args.min_read_first_savings_percent,
+            min_gate_pass_savings_percent=args.min_gate_pass_savings_percent,
+            require_artifact_roles=args.require_artifact_role,
+        )
+        if args.output:
+            result["outputs"] = {"efficiency_gate_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_efficiency_gate(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

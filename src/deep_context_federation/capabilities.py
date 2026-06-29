@@ -18,6 +18,8 @@ from deep_context_federation.builder import QUERY_PRESETS
 from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
 from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
+from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_POLICY_SCHEMA_VERSION
+from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_SCHEMA_VERSION
 from deep_context_federation.efficiency_report import EFFICIENCY_REPORT_SCHEMA_VERSION
 from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_INPUT_SCHEMA
@@ -259,7 +261,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "efficiency_report",
             "schema_version": EFFICIENCY_REPORT_SCHEMA_VERSION,
             "producer": "efficiency-report",
-            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "consumer_commands": ["efficiency-gate", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -268,6 +270,32 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "artifacts",
                 "model_context_budget",
                 "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "efficiency_gate_policy",
+            "schema_version": EFFICIENCY_GATE_POLICY_SCHEMA_VERSION,
+            "producer": "human_or_ci",
+            "consumer_commands": ["efficiency-gate"],
+            "top_level_required": ["schema_version", "authority_effect", "no_apply"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "efficiency_gate",
+            "schema_version": EFFICIENCY_GATE_SCHEMA_VERSION,
+            "producer": "efficiency-gate",
+            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "policy",
+                "checks",
+                "errors",
+                "summary",
             ],
             "authority_effect": "none",
             "no_apply": True,
@@ -427,6 +455,25 @@ def _commands() -> list[dict[str, Any]]:
             "output_schemas": [EFFICIENCY_REPORT_SCHEMA_VERSION],
             "input_schemas": [WORKFLOW_RUN_SCHEMA_VERSION],
             "options": ["--input", "--baseline", "--output"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "efficiency-gate",
+            "intent": "Evaluate an efficiency report against policy thresholds for agent or CI continuation.",
+            "writes": ["optional efficiency gate JSON when --output is set"],
+            "output_schemas": [EFFICIENCY_GATE_SCHEMA_VERSION],
+            "input_schemas": [EFFICIENCY_REPORT_SCHEMA_VERSION, EFFICIENCY_GATE_POLICY_SCHEMA_VERSION],
+            "options": [
+                "--policy",
+                "--max-read-first-tokens",
+                "--max-gate-pass-tokens",
+                "--max-read-first-ratio",
+                "--max-gate-pass-ratio",
+                "--min-read-first-savings-percent",
+                "--min-gate-pass-savings-percent",
+                "--require-artifact-role",
+            ],
             "authority_effect": "none",
             "no_apply": True,
         },

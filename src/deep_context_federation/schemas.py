@@ -13,6 +13,8 @@ from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.capabilities import CAPABILITIES_SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
 from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
+from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_POLICY_SCHEMA_VERSION
+from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_SCHEMA_VERSION
 from deep_context_federation.efficiency_report import EFFICIENCY_REPORT_SCHEMA_VERSION
 from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
@@ -569,6 +571,43 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "recommendations": array_type,
                 "safety_boundaries": object_type,
                 "json_estimated_tokens": {"type": "integer"},
+            },
+        ),
+        "efficiency_gate_policy": _schema(
+            EFFICIENCY_GATE_POLICY_SCHEMA_VERSION,
+            "Deep Context Federation efficiency gate policy",
+            ["schema_version", "authority_effect", "no_apply"],
+            {
+                **_boundary_props(),
+                "policy_id": {"type": "string"},
+                "description": {"type": "string"},
+                "require_report_ok": {"type": "boolean"},
+                "max_missing_required": {"type": ["integer", "null"]},
+                "max_warnings": {"type": ["integer", "null"]},
+                "min_baseline_tokens": {"type": ["integer", "null"]},
+                "max_read_first_tokens": {"type": ["integer", "null"]},
+                "max_gate_pass_tokens": {"type": ["integer", "null"]},
+                "max_read_first_ratio": {"type": ["number", "null"]},
+                "max_gate_pass_ratio": {"type": ["number", "null"]},
+                "min_read_first_savings_percent": {"type": ["number", "null"]},
+                "min_gate_pass_savings_percent": {"type": ["number", "null"]},
+                "require_artifact_roles": array_type,
+            },
+        ),
+        "efficiency_gate": _schema(
+            EFFICIENCY_GATE_SCHEMA_VERSION,
+            "Deep Context Federation efficiency gate",
+            ["schema_version", "ok", "status", "authority_effect", "no_apply", "policy", "checks", "errors", "summary"],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_efficiency_gate", "fail_efficiency_gate"]},
+                **_boundary_props(),
+                "policy": object_type,
+                "check_count": {"type": "integer"},
+                "error_count": {"type": "integer"},
+                "checks": array_type,
+                "errors": array_type,
+                "summary": object_type,
             },
         ),
     }

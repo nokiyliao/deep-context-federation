@@ -8,6 +8,9 @@ from deep_context_federation.compose import compose_manifests
 from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
+from deep_context_federation.efficiency_gate import evaluate_efficiency_gate
+from deep_context_federation.efficiency_gate import load_efficiency_gate_policy
+from deep_context_federation.efficiency_gate import normalize_efficiency_gate_policy
 from deep_context_federation.efficiency_report import build_efficiency_report
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
@@ -47,10 +50,13 @@ __all__ = [
     "compose_manifests",
     "diff_federations",
     "doctor_federation",
+    "evaluate_efficiency_gate",
     "evaluate_quality_gate",
     "evaluate_target_review_gate",
+    "load_efficiency_gate_policy",
     "load_quality_gate_policy",
     "load_target_review_gate_policy",
+    "normalize_efficiency_gate_policy",
     "normalize_quality_gate_policy",
     "normalize_target_review_gate_policy",
     "pack_context",

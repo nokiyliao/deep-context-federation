@@ -1,0 +1,18 @@
+{
+  "schema_version": "deep_context_federation_efficiency_gate_policy_v1",
+  "policy_id": "example_context_efficiency_minimum",
+  "description": "Require a compact read-first model handoff before agent continuation.",
+  "authority_effect": "none",
+  "no_apply": true,
+  "require_report_ok": true,
+  "max_missing_required": 0,
+  "max_warnings": 0,
+  "min_baseline_tokens": 1,
+  "max_read_first_ratio": 0.5,
+  "max_gate_pass_ratio": 1.0,
+  "min_read_first_savings_percent": 50,
+  "require_artifact_roles": [
+    "read_first",
+    "baseline"
+  ]
+}

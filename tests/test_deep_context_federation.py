@@ -109,7 +109,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.29.0"
+    assert payload["package"]["version"] == "0.30.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -671,11 +671,19 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["decision"]["handoff_allowed"] is True
     assert result["agent_ci_summary"]["status"] == "pass_agent_ci"
     assert result["agent_context_gate_summary"]["status"] == "pass_agent_context_gate"
-    assert result["model_handoff"]["model_prompt_source"] == result["outputs"]["agent_context_json"]
+    prompt_path = Path(result["outputs"]["agent_model_prompt_markdown"])
+    context_path = Path(result["outputs"]["agent_context_json"])
+    assert result["model_handoff"]["model_prompt_source"] == result["outputs"]["agent_model_prompt_markdown"]
+    assert result["model_handoff"]["model_prompt_format"] == "markdown"
+    assert result["model_handoff"]["machine_context_source"] == result["outputs"]["agent_context_json"]
+    assert result["model_handoff"]["read_first"][-1] == result["outputs"]["agent_model_prompt_markdown"]
     assert result["model_handoff"]["model_prompt_estimated_tokens"] > 0
     assert Path(result["outputs"]["agent_handoff_json"]).exists()
     assert Path(result["outputs"]["agent_ci_json"]).exists()
-    assert Path(result["outputs"]["agent_context_json"]).exists()
+    assert context_path.exists()
+    assert prompt_path.exists()
+    assert prompt_path.read_text(encoding="utf-8").startswith("# Deep Context Federation Agent Context")
+    assert prompt_path.stat().st_size < context_path.stat().st_size
     assert Path(result["outputs"]["agent_context_gate_json"]).exists()
     assert validate_artifact_contract(result)["ok"] is True
 
@@ -709,6 +717,7 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert failed["decision"]["action"] == "stop"
     assert failed["decision"]["stop_reasons"][0]["id"] == "agent_context_gate_failed"
     assert failed["model_handoff"]["model_prompt_source"] == ""
+    assert failed["model_handoff"]["machine_context_source"] == failed["outputs"]["agent_context_json"]
     assert validate_artifact_contract(failed)["ok"] is True
 
 

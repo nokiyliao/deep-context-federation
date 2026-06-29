@@ -25,6 +25,7 @@ DEFAULT_AGENT_CONTEXT_JSON_NAME = "deep_context_federation_agent_context.json"
 DEFAULT_AGENT_CONTEXT_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_CONTEXT.md"
 DEFAULT_AGENT_CONTEXT_GATE_JSON_NAME = "deep_context_federation_agent_context_gate.json"
 DEFAULT_AGENT_CONTEXT_GATE_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_CONTEXT_GATE.md"
+DEFAULT_AGENT_MODEL_PROMPT_MD_NAME = "DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md"
 
 
 def _normalize_output_dir(root: Path, output_dir: Path) -> Path:
@@ -207,12 +208,17 @@ def build_agent_handoff(
     )
     agent_context_json = out_dir / DEFAULT_AGENT_CONTEXT_JSON_NAME
     agent_context_md = out_dir / DEFAULT_AGENT_CONTEXT_MD_NAME
+    agent_model_prompt_md = out_dir / DEFAULT_AGENT_MODEL_PROMPT_MD_NAME
     agent_context["outputs"] = {
         "agent_context_json": agent_context_json.as_posix(),
         "agent_context_markdown": agent_context_md.as_posix(),
+        "agent_model_prompt_markdown": agent_model_prompt_md.as_posix() if include_prompt else "",
     }
     write_json(agent_context_json, agent_context)
     write_markdown(agent_context_md, markdown_agent_context(agent_context).splitlines())
+    prompt_text = str(agent_context.get("prompt_text") or "")
+    if include_prompt and prompt_text:
+        write_markdown(agent_model_prompt_md, prompt_text.splitlines())
 
     agent_context_gate = evaluate_agent_context_gate(agent_context, policy=agent_context_gate_policy)
     agent_context_gate_json = out_dir / DEFAULT_AGENT_CONTEXT_GATE_JSON_NAME
@@ -237,15 +243,24 @@ def build_agent_handoff(
         "agent_handoff_markdown": handoff_md.as_posix(),
         "agent_ci_json": str(agent_ci.get("outputs", {}).get("agent_ci_json") or ""),
         "agent_context_json": agent_context_json.as_posix(),
+        "agent_model_prompt_markdown": agent_model_prompt_md.as_posix() if include_prompt and prompt_text else "",
         "agent_context_gate_json": agent_context_gate_json.as_posix(),
     }
+    model_prompt_source = agent_model_prompt_md.as_posix() if ok and include_prompt and prompt_text else ""
     model_handoff = {
-        "read_first": [handoff_json.as_posix(), agent_context_gate_json.as_posix(), agent_context_json.as_posix()],
-        "model_prompt_source": agent_context_json.as_posix() if ok else "",
+        "read_first": [
+            item
+            for item in (handoff_json.as_posix(), agent_context_gate_json.as_posix(), model_prompt_source)
+            if item
+        ],
+        "model_prompt_source": model_prompt_source,
+        "model_prompt_format": "markdown" if model_prompt_source else "",
         "model_prompt_estimated_tokens": agent_context.get("prompt_estimated_tokens") if ok else 0,
+        "machine_context_source": agent_context_json.as_posix(),
         "skip_by_default": [
             "full repository tree",
             "full federation artifact",
+            "machine context JSON unless debugging or auditing",
             "raw source files without target match",
             "ungated agent context",
         ],

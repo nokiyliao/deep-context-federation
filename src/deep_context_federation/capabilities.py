@@ -629,7 +629,11 @@ def _commands() -> list[dict[str, Any]]:
         {
             "command": "agent-handoff",
             "intent": "Run agent-ci, agent-context, and agent-context-gate into one gated model handoff artifact.",
-            "writes": ["output_dir generated artifacts", "optional agent handoff JSON when --output is set"],
+            "writes": [
+                "output_dir generated artifacts",
+                "agent model prompt markdown",
+                "optional agent handoff JSON when --output is set",
+            ],
             "output_schemas": [AGENT_HANDOFF_SCHEMA_VERSION, AGENT_CI_SCHEMA_VERSION, AGENT_CONTEXT_SCHEMA_VERSION, AGENT_CONTEXT_GATE_SCHEMA_VERSION],
             "input_schemas": [
                 QUALITY_GATE_POLICY_SCHEMA_VERSION,

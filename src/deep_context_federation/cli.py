@@ -10,7 +10,7 @@ from typing import Sequence
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.bootstrap import markdown_bootstrap
-from deep_context_federation.builder import DEFAULT_JSON_NAME, build_federation, read_json
+from deep_context_federation.builder import DEFAULT_JSON_NAME, build_federation, read_json, write_json
 from deep_context_federation.compose import compose_manifests
 from deep_context_federation.compose import markdown_compose
 from deep_context_federation.diff import diff_federations
@@ -20,6 +20,8 @@ from deep_context_federation.doctor import markdown_doctor
 from deep_context_federation.graph import markdown_trace
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
+from deep_context_federation.quality_gate import evaluate_quality_gate
+from deep_context_federation.quality_gate import markdown_quality_gate
 from deep_context_federation.query import markdown as query_markdown
 from deep_context_federation.query import query_federation
 from deep_context_federation.rank import markdown_rank
@@ -95,6 +97,22 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = sub.add_parser("doctor", help="Diagnose federation health and recommend next actions.")
     doctor.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     doctor.add_argument("--format", choices=["json", "markdown"], default="json")
+    gate = sub.add_parser("quality-gate", help="Evaluate CI/agent quality gates on a bootstrap or federation artifact.")
+    gate.add_argument("--input", type=Path, default=Path(".dcf") / "deep_context_federation_bootstrap.json")
+    gate.add_argument("--federation-input", type=Path)
+    gate.add_argument("--min-sources", type=int, default=1)
+    gate.add_argument("--min-entities", type=int, default=1)
+    gate.add_argument("--min-edges", type=int, default=1)
+    gate.add_argument("--max-errors", type=int, default=0)
+    gate.add_argument("--max-warnings", type=int, default=0)
+    gate.add_argument("--max-duration-seconds", type=float)
+    gate.add_argument("--max-scan-duration-seconds", type=float)
+    gate.add_argument("--require-role", action="append", default=[])
+    gate.add_argument("--require-source", action="append", default=[])
+    gate.add_argument("--require-query-preset", action="append", default=[])
+    gate.add_argument("--no-bootstrap-step-check", action="store_true")
+    gate.add_argument("--output", type=Path)
+    gate.add_argument("--format", choices=["json", "markdown"], default="json")
     rank = sub.add_parser("rank", help="Rank important entities or risky sources.")
     rank.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     rank.add_argument("--kind", choices=["entities", "sources"], default="entities")
@@ -237,6 +255,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = doctor_federation(payload)
         if args.format == "markdown":
             print(markdown_doctor(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "quality-gate":
+        payload = read_required_json(args.input)
+        federation_payload = read_required_json(args.federation_input) if args.federation_input else None
+        if federation_payload is None and payload.get("schema_version") == "deep_context_federation_bootstrap_v1":
+            outputs = payload.get("outputs") if isinstance(payload.get("outputs"), dict) else {}
+            federation_path = outputs.get("federation_json")
+            if federation_path:
+                candidate = Path(str(federation_path))
+                if candidate.exists():
+                    federation_payload = read_required_json(candidate)
+        result = evaluate_quality_gate(
+            payload,
+            federation_payload=federation_payload,
+            min_sources=args.min_sources,
+            min_entities=args.min_entities,
+            min_edges=args.min_edges,
+            max_errors=args.max_errors,
+            max_warnings=args.max_warnings,
+            max_duration_seconds=args.max_duration_seconds,
+            max_scan_duration_seconds=args.max_scan_duration_seconds,
+            require_roles=args.require_role,
+            require_sources=args.require_source,
+            require_query_presets=args.require_query_preset,
+            require_bootstrap_steps=not args.no_bootstrap_step_check,
+        )
+        if args.output:
+            result["outputs"] = {"quality_gate_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_quality_gate(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

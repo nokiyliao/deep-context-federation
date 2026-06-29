@@ -51,6 +51,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - graph trace from any matching entity
 - manifest composition for merging self-scan output with curated evidence/context sources
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
+- machine-readable quality gate for CI and agent routing
 - entity/source ranking for prioritization
 - doctor-style diagnostics with recommended actions
 - federation diff between two builds
@@ -88,6 +89,20 @@ python -m deep_context_federation.cli bootstrap \
   --output-dir .dcf \
   --manifest team_evidence/deep_context_federation.json \
   --format markdown
+```
+
+Then enforce a machine-readable quality policy:
+
+```bash
+python -m deep_context_federation.cli quality-gate \
+  --input .dcf/deep_context_federation_bootstrap.json \
+  --min-sources 5 \
+  --min-entities 50 \
+  --min-edges 50 \
+  --require-role project_surface \
+  --require-role evidence_index \
+  --require-query-preset code-to-authority \
+  --output .dcf/deep_context_federation_quality_gate.json
 ```
 
 Run only the repository scan when you want starter source snapshots without the full pipeline:
@@ -228,6 +243,30 @@ Every scan summary includes lightweight performance fields such as `duration_sec
 6. write `deep_context_federation_bootstrap.json` and `DEEP_CONTEXT_FEDERATION_BOOTSTRAP.md`
 
 This is the recommended entrypoint for coding agents and CI because it produces one compact status object with scan, compose, build, verify, and doctor sections while preserving `authority_effect: none` and `no_apply: true`.
+
+## Quality Gate
+
+`dcf quality-gate` turns a bootstrap or federation artifact into a strict machine-readable pass/fail report. It checks:
+
+- `authority_effect: none` and `no_apply: true`
+- max error/warning counts
+- minimum source/entity/edge counts
+- required source roles, source ids, and query presets
+- bootstrap step health when the input is `deep_context_federation_bootstrap.json`
+- optional duration and scan-duration ceilings
+
+The command exits `0` on pass and `2` on failure. Use `--output` to write stable JSON for CI, GitHub Actions, or another agent:
+
+```bash
+dcf quality-gate \
+  --input .dcf/deep_context_federation_bootstrap.json \
+  --require-source repo_file_inventory \
+  --require-source repo_code_symbols \
+  --require-source repo_dependency_graph \
+  --require-role project_surface \
+  --require-query-preset surface-splits \
+  --output .dcf/deep_context_federation_quality_gate.json
+```
 
 ## Manifest Composition
 

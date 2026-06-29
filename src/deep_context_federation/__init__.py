@@ -7,6 +7,7 @@ from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
+from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.query import query_federation
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
@@ -20,6 +21,7 @@ __all__ = [
     "compose_manifests",
     "diff_federations",
     "doctor_federation",
+    "evaluate_quality_gate",
     "query_federation",
     "query_sqlite",
     "rank_entities",
@@ -30,4 +32,4 @@ __all__ = [
     "verify_federation",
 ]
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"

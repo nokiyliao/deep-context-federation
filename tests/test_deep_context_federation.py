@@ -17,6 +17,7 @@ from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
+from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.query import query_federation
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
@@ -480,3 +481,35 @@ def test_bootstrap_runs_full_pipeline_with_curated_manifest(tmp_path: Path) -> N
     payload = json.loads(Path(result["outputs"]["federation_json"]).read_text(encoding="utf-8"))
     query = query_federation(payload, preset="claim-lineage", limit=20)
     assert any(row.get("value") == "bootstrap_curated_claim" for row in query["rows"])
+
+    gate = evaluate_quality_gate(
+        result,
+        federation_payload=payload,
+        min_sources=6,
+        min_entities=5,
+        min_edges=5,
+        require_roles=["claim_lineage", "project_surface", "evidence_index"],
+        require_sources=["curated_claims", "repo_file_inventory"],
+        require_query_presets=["claim-lineage", "code-to-authority"],
+        max_duration_seconds=10,
+        max_scan_duration_seconds=10,
+    )
+    assert gate["schema_version"] == "deep_context_federation_quality_gate_v1"
+    assert gate["ok"] is True
+    assert gate["status"] == "pass_quality_gate"
+    assert gate["policy"]["min_sources"] == 6
+    assert gate["policy"]["require_roles"] == ["claim_lineage", "project_surface", "evidence_index"]
+    assert gate["summary"]["failed_check_count"] == 0
+    assert gate["summary"]["check_count"] == len(gate["checks"])
+
+    failing_gate = evaluate_quality_gate(
+        result,
+        federation_payload=payload,
+        require_roles=["missing_role"],
+        require_sources=["missing_source"],
+    )
+    assert failing_gate["ok"] is False
+    assert failing_gate["status"] == "fail_quality_gate"
+    error_ids = {row["id"] for row in failing_gate["errors"]}
+    assert "required_role_present:missing_role" in error_ids
+    assert "required_source_present:missing_source" in error_ids

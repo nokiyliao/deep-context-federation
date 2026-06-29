@@ -22,6 +22,7 @@ from deep_context_federation.scanner import scan_repository
 from deep_context_federation.schemas import build_schema_registry
 from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import query_sqlite
+from deep_context_federation.target_review import review_targets
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.verifier import verify_federation
 from deep_context_federation.version import __version__
@@ -46,6 +47,7 @@ __all__ = [
     "rank_entities",
     "rank_sources",
     "resolve_target",
+    "review_targets",
     "scan_repository",
     "trace_federation",
     "validate_artifact_contract",

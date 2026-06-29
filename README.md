@@ -51,6 +51,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - graph trace from any matching entity
 - target resolver for claim/path/surface/symbol evidence cards
 - deterministic target adjudication across authority, evidence, and advisory tiers
+- batch target review for governance prioritization across many targets
 - manifest composition for merging self-scan output with curated evidence/context sources
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - one-command agent intake packet for bootstrap, quality gate, and task brief
@@ -228,6 +229,12 @@ python -m deep_context_federation.cli resolve \
 python -m deep_context_federation.cli adjudicate \
   --input .dcf/deep_context_federation_latest.json \
   --target dashboard_readiness_projection \
+  --format markdown
+
+python -m deep_context_federation.cli review-targets \
+  --input .dcf/deep_context_federation_latest.json \
+  --target dashboard_readiness_projection \
+  --target ui/dashboard/app.py \
   --format markdown
 
 python -m deep_context_federation.cli doctor \
@@ -409,6 +416,18 @@ Use it after `brief` when the agent needs to inspect one concrete assertion, fil
 - `no_match`: no relevant target evidence found
 
 It classifies related sources into authority, evidence, advisory, context, and unavailable buckets, computes a bounded confidence score, and reports whether the result is allowed for model context or requires human review. It never authorizes mutation; `safe_for_mutation` is always false.
+
+## Batch Target Review
+
+`dcf review-targets` runs target adjudication across a portfolio and returns a compact risk ranked table:
+
+- one summary row per target
+- verdict counts and risk flag counts
+- priority score for governance/agent routing
+- recommended next targets
+- optional full adjudication payloads with `--include-details`
+
+Targets can be passed repeatedly with `--target` or loaded from `--targets-file` as either a JSON list or newline-delimited text. This is the batch surface for large projects where an agent needs to decide which claims, paths, or surfaces deserve attention first.
 
 ## Quality Gate
 

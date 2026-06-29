@@ -30,6 +30,7 @@ from deep_context_federation.scanner import SCAN_SCHEMA_VERSION
 from deep_context_federation.scanner import SURFACE_MAP_SCHEMA_VERSION
 from deep_context_federation.scanner import SYMBOL_MAP_SCHEMA_VERSION
 from deep_context_federation.sqlite_query import SQL_PRESETS
+from deep_context_federation.target_review import TARGET_REVIEW_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 from deep_context_federation.version import __version__
@@ -57,7 +58,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "schema_version": SCHEMA_VERSION,
             "producer": "build",
             "default_outputs": [DEFAULT_JSON_NAME, DEFAULT_MD_NAME, DEFAULT_SQLITE_NAME],
-            "consumer_commands": ["verify", "query", "trace", "resolve", "adjudicate", "doctor", "rank", "diff", "quality-gate", "brief"],
+            "consumer_commands": ["verify", "query", "trace", "resolve", "adjudicate", "review-targets", "doctor", "rank", "diff", "quality-gate", "brief"],
             "top_level_required": ["schema_version", "sources", "entities", "edges", "conflicts", "query_presets"],
             "authority_effect": "none",
             "no_apply": True,
@@ -138,8 +139,17 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "adjudication",
             "schema_version": ADJUDICATE_SCHEMA_VERSION,
             "producer": "adjudicate",
-            "consumer_commands": ["agent_router", "agent_prompt", "operator_context"],
+            "consumer_commands": ["review-targets", "agent_router", "agent_prompt", "operator_context"],
             "top_level_required": ["schema_version", "status", "target", "verdict", "confidence_score", "support", "recommended_use"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "target_review",
+            "schema_version": TARGET_REVIEW_SCHEMA_VERSION,
+            "producer": "review-targets",
+            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "top_level_required": ["schema_version", "status", "target_count", "summary", "rows", "priority_order"],
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -353,6 +363,15 @@ def _commands() -> list[dict[str, Any]]:
             "writes": ["optional adjudication JSON when --output is set"],
             "output_schemas": [ADJUDICATE_SCHEMA_VERSION],
             "options": ["--target", "--limit", "--token-budget", "--no-prompt"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "review-targets",
+            "intent": "Batch adjudicate targets and rank governance/context risk.",
+            "writes": ["optional target review JSON when --output is set"],
+            "output_schemas": [TARGET_REVIEW_SCHEMA_VERSION],
+            "options": ["--target", "--targets-file", "--limit", "--token-budget", "--include-details", "--no-prompt"],
             "authority_effect": "none",
             "no_apply": True,
         },

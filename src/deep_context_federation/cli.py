@@ -50,6 +50,8 @@ from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import SQL_PRESETS
 from deep_context_federation.sqlite_query import markdown as sql_markdown
 from deep_context_federation.sqlite_query import query_sqlite
+from deep_context_federation.target_review import markdown_target_review
+from deep_context_federation.target_review import review_targets
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.task_brief import markdown_task_brief
 from deep_context_federation.verifier import read_json as read_required_json
@@ -60,6 +62,17 @@ def add_common_source_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+
+
+def read_targets_file(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    try:
+        data = json.loads(text)
+    except Exception:
+        data = None
+    if isinstance(data, list):
+        return [str(item) for item in data if str(item).strip()]
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -178,6 +191,16 @@ def build_parser() -> argparse.ArgumentParser:
     adjudicate.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     adjudicate.add_argument("--output", type=Path)
     adjudicate.add_argument("--format", choices=["json", "markdown"], default="json")
+    review_targets_parser = sub.add_parser("review-targets", help="Batch adjudicate targets and rank governance/context risk.")
+    review_targets_parser.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
+    review_targets_parser.add_argument("--target", action="append", default=[])
+    review_targets_parser.add_argument("--targets-file", type=Path)
+    review_targets_parser.add_argument("--limit", type=int, default=20)
+    review_targets_parser.add_argument("--token-budget", type=int, default=3000)
+    review_targets_parser.add_argument("--include-details", action="store_true", help="Include full per-target adjudication payloads.")
+    review_targets_parser.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
+    review_targets_parser.add_argument("--output", type=Path)
+    review_targets_parser.add_argument("--format", choices=["json", "markdown"], default="json")
     doctor = sub.add_parser("doctor", help="Diagnose federation health and recommend next actions.")
     doctor.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     doctor.add_argument("--format", choices=["json", "markdown"], default="json")
@@ -469,6 +492,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_adjudication(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "review-targets":
+        payload = read_required_json(args.input)
+        targets = list(args.target or [])
+        if args.targets_file:
+            targets.extend(read_targets_file(args.targets_file))
+        result = review_targets(
+            payload,
+            targets=targets,
+            limit=args.limit,
+            token_budget=args.token_budget,
+            include_details=args.include_details,
+            include_prompt=not args.no_prompt,
+        )
+        if args.output:
+            result["outputs"] = {"target_review_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_target_review(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0

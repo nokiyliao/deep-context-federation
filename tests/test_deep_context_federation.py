@@ -32,6 +32,7 @@ from deep_context_federation.scanner import scan_repository
 from deep_context_federation.schemas import build_schema_registry
 from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import query_sqlite
+from deep_context_federation.target_review import review_targets
 from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.verifier import verify_federation
 
@@ -61,7 +62,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.18.0"
+    assert payload["package"]["version"] == "0.19.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -78,6 +79,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "quality-gate",
         "query",
         "resolve",
+        "review-targets",
         "sql",
         "doctor",
     } <= command_names
@@ -110,6 +112,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_intake"]["schema_version"] == "deep_context_federation_agent_intake_v1"
     assert by_kind["resolve"]["schema_version"] == "deep_context_federation_resolve_v1"
     assert by_kind["adjudication"]["schema_version"] == "deep_context_federation_adjudicate_v1"
+    assert by_kind["target_review"]["schema_version"] == "deep_context_federation_target_review_v1"
 
     policy = json.loads(EXAMPLE_QUALITY_GATE_POLICY.read_text(encoding="utf-8"))
     valid = validate_artifact_contract(policy)
@@ -250,6 +253,37 @@ def test_adjudicate_target_classifies_support(tmp_path: Path) -> None:
     assert result["recommended_use"]["model_context_allowed"] is True
     assert result["recommended_use"]["safe_for_mutation"] is False
     assert result["prompt_text"].startswith("# Deep Context Federation Adjudication")
+    assert result["prompt_estimated_tokens"] <= 900
+    assert validate_artifact_contract(result)["ok"] is True
+
+
+def test_review_targets_prioritizes_target_portfolio(tmp_path: Path) -> None:
+    payload = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=False,
+    )
+
+    result = review_targets(
+        payload,
+        targets=[
+            "dashboard_readiness_projection",
+            "research_only_boundary",
+            "missing_target_for_review",
+        ],
+        token_budget=900,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_target_review_v1"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["target_count"] == 3
+    assert result["reviewed_count"] == 3
+    assert result["summary"]["verdict_counts"]["no_match"] == 1
+    assert result["priority_order"][0]["target"] == "missing_target_for_review"
+    assert result["recommended_next_targets"][0] == "missing_target_for_review"
+    assert result["prompt_text"].startswith("# Deep Context Federation Target Review")
     assert result["prompt_estimated_tokens"] <= 900
     assert validate_artifact_contract(result)["ok"] is True
 

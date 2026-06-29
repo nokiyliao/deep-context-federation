@@ -19,6 +19,7 @@ from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
 from deep_context_federation.resolve import RESOLVE_SCHEMA_VERSION
 from deep_context_federation.scanner import SCAN_SCHEMA_VERSION
+from deep_context_federation.target_review import TARGET_REVIEW_SCHEMA_VERSION
 from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 
@@ -296,6 +297,34 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "resolve_summary": object_type,
                 "resolve": object_type,
                 "recommended_use": object_type,
+                "prompt_text": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+            },
+        ),
+        "target_review": _schema(
+            TARGET_REVIEW_SCHEMA_VERSION,
+            "Deep Context Federation batch target review",
+            [
+                "schema_version",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "target_count",
+                "reviewed_count",
+                "summary",
+                "rows",
+                "priority_order",
+            ],
+            {
+                "status": {"type": "string", "enum": ["pass", "warn", "blocked"]},
+                **_boundary_props(),
+                "target_count": {"type": "integer"},
+                "reviewed_count": {"type": "integer"},
+                "summary": object_type,
+                "rows": array_type,
+                "priority_order": array_type,
+                "adjudications": array_type,
+                "recommended_next_targets": array_type,
                 "prompt_text": {"type": "string"},
                 "prompt_estimated_tokens": {"type": "integer"},
             },

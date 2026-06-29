@@ -224,6 +224,7 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "source_identity_policy",
                 "summary",
                 "rows",
+                "expansion_plan",
                 "safety_boundaries",
             ],
             {
@@ -238,6 +239,7 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "optimization_policy": object_type,
                 "source_identity_policy": object_type,
                 "rows": array_type,
+                "expansion_plan": object_type,
                 "warnings": array_type,
                 "safety_boundaries": object_type,
             },

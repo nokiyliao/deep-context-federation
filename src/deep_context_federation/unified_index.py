@@ -413,6 +413,10 @@ def _rank_key(row: Mapping[str, Any]) -> tuple[int, int, str, str]:
     )
 
 
+def _facet_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    return dict(sorted(Counter(str(row.get("facet") or "") for row in rows).items()))
+
+
 def _balanced_working_rows(
     primary_rows: Sequence[Mapping[str, Any]],
     fallback_rows: Sequence[Mapping[str, Any]],
@@ -506,12 +510,96 @@ def build_unified_working_set(
     candidates = [_compact_working_row(row, label_chars=label_chars, value_chars=value_chars) for row in ordered_rows[:limit]]
     warnings = []
 
+    def build_expansion_plan(selected_rows: Sequence[Mapping[str, Any]], selected_warnings: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+        selected_ids = {str(row.get("row_id") or "") for row in selected_rows}
+        omitted_rows = [row for row in candidates if str(row.get("row_id") or "") not in selected_ids]
+        selected_facets = _facet_counts(selected_rows)
+        omitted_facets = _facet_counts(omitted_rows)
+        facet_coverage_met = len(selected_facets) >= min_facets if facet_mode == "balanced" else True
+        token_budget_limited = token_budget is not None and len(selected_rows) < len(candidates)
+        next_limit = max(limit + 1, min(max(len(source_rows), limit * 2), max(limit, len(candidates)) + 24))
+        next_token_budget = max(token_budget * 2, token_budget + 500) if token_budget is not None else 1800
+        command_when = []
+        if token_budget_limited:
+            command_when.append("token_budget_limited")
+        if not facet_coverage_met:
+            command_when.append("facet_coverage_not_met")
+        if not command_when:
+            command_when.append("deeper_context_needed")
+        recommended_argv = [
+            "pack-working-set",
+            "--input",
+            unified_index_path,
+            "--query",
+            str(query or ""),
+            "--limit",
+            str(next_limit),
+            "--max-tokens",
+            str(next_token_budget),
+            "--facet-mode",
+            facet_mode,
+            "--min-facets",
+            str(min_facets if facet_mode == "balanced" else 0),
+            "--format",
+            "json",
+        ]
+        next_actions = []
+        if token_budget_limited:
+            next_actions.append(
+                {
+                    "id": "rerun_pack_working_set_with_more_tokens",
+                    "action": "run_recommended_command",
+                    "command_id": "expand_working_set_budget",
+                }
+            )
+        if not facet_coverage_met:
+            next_actions.append(
+                {
+                    "id": "increase_max_tokens_or_lower_min_facets",
+                    "action": "adjust_pack_working_set_budget_or_coverage",
+                }
+            )
+        next_actions.append(
+            {
+                "id": "read_full_context_index_audit",
+                "action": "read_artifact",
+                "artifact_ref": unified_index_path,
+            }
+        )
+        return {
+            "schema_version": "deep_context_federation_working_set_expansion_plan_v1",
+            "authority_effect": "none",
+            "no_apply": True,
+            "read_full_index_ref": unified_index_path,
+            "selected_facets": selected_facets,
+            "omitted_facets": omitted_facets,
+            "coverage": {
+                "covered_facet_count": len(selected_facets),
+                "target_min_facets": min_facets if facet_mode == "balanced" else 0,
+                "facet_coverage_met": facet_coverage_met,
+                "token_budget_limited": token_budget_limited,
+                "candidate_row_count": len(candidates),
+                "selected_row_count": len(selected_rows),
+                "omitted_candidate_row_count": len(omitted_rows),
+                "warning_ids": [str(row.get("id") or "") for row in selected_warnings if isinstance(row, Mapping)],
+            },
+            "recommended_commands": [
+                {
+                    "id": "expand_working_set_budget",
+                    "command": "pack-working-set",
+                    "argv": recommended_argv,
+                    "when": command_when,
+                }
+            ],
+            "next_actions": next_actions,
+        }
+
     def build_payload(selected_rows: Sequence[Mapping[str, Any]], selected_warnings: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-        facet_counts = Counter(str(row.get("facet") or "") for row in selected_rows)
+        facet_counts = _facet_counts(selected_rows)
         payload = {
             "schema_version": UNIFIED_WORKING_SET_SCHEMA_VERSION,
             "ok": True,
-            "status": "pass_unified_working_set" if selected_rows else "warn_unified_working_set",
+            "status": "pass_unified_working_set" if selected_rows and not selected_warnings else "warn_unified_working_set",
             "authority_effect": "none",
             "no_apply": True,
             "generated_at": utc_now(),
@@ -530,7 +618,7 @@ def build_unified_working_set(
                 "candidate_row_count": len(candidates),
                 "omitted_row_count": max(0, len(source_rows) - len(selected_rows)),
                 "omitted_by_token_budget_count": max(0, len(candidates) - len(selected_rows)) if token_budget is not None else 0,
-                "facet_counts": dict(sorted(facet_counts.items())),
+                "facet_counts": facet_counts,
                 "covered_facet_count": len(facet_counts),
                 "min_facets": min_facets if facet_mode == "balanced" else 0,
                 "facet_coverage_met": len(facet_counts) >= min_facets if facet_mode == "balanced" else True,
@@ -560,6 +648,7 @@ def build_unified_working_set(
                 "audit_provenance_location": "unified_index_source",
             },
             "rows": list(selected_rows),
+            "expansion_plan": build_expansion_plan(selected_rows, selected_warnings),
             "warnings": [dict(row) for row in selected_warnings],
             "safety_boundaries": {
                 "authority_effect": "none",
@@ -599,15 +688,15 @@ def build_unified_working_set(
         selected = selected[:-1]
         payload = build_payload(selected, warnings)
     if token_budget is not None and int(payload["summary"]["estimated_tokens"]) > token_budget:
-        payload["warnings"].append(
+        warnings.append(
             {
                 "id": "selected_context_minimum_exceeds_token_budget",
                 "detail": {"max_tokens": token_budget, "estimated_tokens": payload["summary"]["estimated_tokens"]},
             }
         )
-        payload["summary"]["warning_count"] = len(payload["warnings"])
+        payload = build_payload(selected, warnings)
     if facet_mode == "balanced" and payload["summary"]["covered_facet_count"] < min_facets and len({str(row.get("facet") or "") for row in candidates}) >= min_facets:
-        payload["warnings"].append(
+        warnings.append(
             {
                 "id": "selected_context_facet_coverage_below_target",
                 "detail": {
@@ -617,7 +706,7 @@ def build_unified_working_set(
                 },
             }
         )
-        payload["summary"]["warning_count"] = len(payload["warnings"])
+        payload = build_payload(selected, warnings)
     return payload
 
 

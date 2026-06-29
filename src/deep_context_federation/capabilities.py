@@ -592,6 +592,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "source_identity_policy",
                 "summary",
                 "rows",
+                "expansion_plan",
                 "safety_boundaries",
             ],
             "authority_effect": "none",

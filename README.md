@@ -773,6 +773,7 @@ dcf build-context-index \
 - supports `--max-tokens` so the selected JSON is packed to a model budget instead of a fixed row count
 - uses balanced facet selection by default, so surfaces, claims, conflicts, symbols, paths, commands, and capabilities do not silently collapse into one high-score row type
 - records `optimization_policy.full_index_role: audit_only`
+- records `expansion_plan` with `read_full_index_ref`, selected/omitted facet counts, recommended `pack-working-set` argv, and next actions for controlled expansion
 - preserves row ids, facets, scores, conflict attention, and command/capability hints
 
 `dcf prepare-model-handoff` runs this automatically and places the result in `model_handoff.selected_context_source`. The full unified index remains in `audit_artifacts`.
@@ -788,7 +789,7 @@ dcf pack-working-set \
   --format markdown
 ```
 
-Use `--facet-mode ranked` when strict score order is more important than broad system-surface coverage. In balanced mode, `summary.facet_coverage_met` and `selected_context_facet_coverage_below_target` make coverage loss explicit when the token budget is too small.
+Use `--facet-mode ranked` when strict score order is more important than broad system-surface coverage. In balanced mode, `summary.facet_coverage_met` and `selected_context_facet_coverage_below_target` make coverage loss explicit when the token budget is too small. Runners should follow `expansion_plan.recommended_commands` before opening the full context index; `read_full_index_ref` remains audit-only unless the compact working set is insufficient.
 
 ## Schema Registry And Contract Validation
 

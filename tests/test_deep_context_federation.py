@@ -239,7 +239,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.50.0"
+    assert payload["package"]["version"] == "0.51.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -307,6 +307,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
     assert by_kind["unified_working_set"]["schema_version"] == "deep_context_federation_unified_working_set_v1"
+    assert "expansion_plan" in by_kind["unified_working_set"]["top_level_required"]
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -354,6 +355,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
     assert by_kind["unified_working_set"]["schema_version"] == "deep_context_federation_unified_working_set_v1"
+    assert "expansion_plan" in by_kind["unified_working_set"]["json_schema"]["required"]
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -1080,6 +1082,9 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert selected_context["optimization_policy"]["max_tokens"] == 500
     assert selected_context["summary"]["max_tokens"] == 500
     assert selected_context["summary"]["selected_row_count"] <= 24
+    assert selected_context["expansion_plan"]["read_full_index_ref"] == result["outputs"]["unified_index_json"]
+    assert selected_context["expansion_plan"]["recommended_commands"][0]["command"] == "pack-working-set"
+    assert "--max-tokens" in selected_context["expansion_plan"]["recommended_commands"][0]["argv"]
     assert validate_artifact_contract(selected_context, artifact_kind="unified_working_set")["ok"] is True
 
     def assert_no_source_identity(value: object) -> None:
@@ -1094,6 +1099,7 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
 
     assert_no_source_identity(unified_index["rows"])
     assert_no_source_identity(selected_context["rows"])
+    assert_no_source_identity(selected_context["expansion_plan"])
     discovery = discover_agent_context(root=tmp_path, handoff_path=Path(result["outputs"]["agent_handoff_json"]))
     assert discovery["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert discovery["ok"] is True
@@ -1420,7 +1426,7 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
 
     selected = build_unified_working_set(
         unified_index=unified,
-        unified_index_path=federation["outputs"]["json"],
+        unified_index_path=(tmp_path / "unified_index.json").as_posix(),
         query="dashboard operator",
         limit=12,
     )
@@ -1435,12 +1441,23 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     assert 0 < selected["summary"]["selected_row_count"] <= 12
     assert selected["summary"]["source_row_count"] == len(unified["rows"])
     assert len(json.dumps(selected, sort_keys=True)) < len(json.dumps(unified, sort_keys=True))
+    expansion = selected["expansion_plan"]
+    assert expansion["schema_version"] == "deep_context_federation_working_set_expansion_plan_v1"
+    assert expansion["authority_effect"] == "none"
+    assert expansion["no_apply"] is True
+    assert expansion["read_full_index_ref"] == (tmp_path / "unified_index.json").as_posix()
+    assert expansion["selected_facets"] == selected["summary"]["facet_counts"]
+    assert expansion["coverage"]["facet_coverage_met"] is True
+    assert expansion["recommended_commands"][0]["command"] == "pack-working-set"
+    assert expansion["recommended_commands"][0]["argv"][0] == "pack-working-set"
+    assert "--max-tokens" in expansion["recommended_commands"][0]["argv"]
     assert_no_source_identity(selected["rows"])
+    assert_no_source_identity(selected["expansion_plan"])
     assert validate_artifact_contract(selected, artifact_kind="unified_working_set")["ok"] is True
 
     budgeted = build_unified_working_set(
         unified_index=unified,
-        unified_index_path=federation["outputs"]["json"],
+        unified_index_path=(tmp_path / "unified_index.json").as_posix(),
         query="dashboard operator",
         limit=12,
         max_tokens=900,
@@ -1451,11 +1468,13 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     assert budgeted["summary"]["estimated_tokens"] <= 900 or any(
         row["id"] == "selected_context_minimum_exceeds_token_budget" for row in budgeted["warnings"]
     )
+    assert budgeted["expansion_plan"]["coverage"]["token_budget_limited"] is True
+    assert "rerun_pack_working_set_with_more_tokens" in {row["id"] for row in budgeted["expansion_plan"]["next_actions"]}
     assert validate_artifact_contract(budgeted, artifact_kind="unified_working_set")["ok"] is True
 
     tight = build_unified_working_set(
         unified_index=unified,
-        unified_index_path=federation["outputs"]["json"],
+        unified_index_path=(tmp_path / "unified_index.json").as_posix(),
         query="dashboard operator",
         limit=12,
         max_tokens=500,
@@ -1465,10 +1484,11 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     assert tight["summary"]["covered_facet_count"] <= 4
     if tight["summary"]["facet_coverage_met"] is False:
         assert any(row["id"] == "selected_context_facet_coverage_below_target" for row in tight["warnings"])
+        assert "increase_max_tokens_or_lower_min_facets" in {row["id"] for row in tight["expansion_plan"]["next_actions"]}
 
     ranked = build_unified_working_set(
         unified_index=unified,
-        unified_index_path=federation["outputs"]["json"],
+        unified_index_path=(tmp_path / "unified_index.json").as_posix(),
         query="dashboard operator",
         limit=12,
         facet_mode="ranked",
@@ -1568,6 +1588,11 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
     assert selected_payload["summary"]["estimated_tokens"] <= 800 or any(
         row["id"] == "selected_context_minimum_exceeds_token_budget" for row in selected_payload["warnings"]
     )
+    cli_expansion = selected_payload["expansion_plan"]
+    assert cli_expansion["recommended_commands"][0]["command"] == "pack-working-set"
+    assert "--max-tokens" in cli_expansion["recommended_commands"][0]["argv"]
+    assert "select-context" not in json.dumps(cli_expansion, sort_keys=True)
+    assert cli_expansion["coverage"]["selected_row_count"] == selected_payload["summary"]["selected_row_count"]
     assert selected_path.exists()
     assert validate_artifact_contract(selected_payload, artifact_kind="unified_working_set")["ok"] is True
 

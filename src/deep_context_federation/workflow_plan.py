@@ -168,9 +168,9 @@ def build_workflow_plan(
     if include_hashes:
         intake_parts.append("--hash-files")
     if include_codebase_memory:
-        intake_parts.append("--include-codebase-memory")
+        intake_parts.append("--include-memory-import")
     if codebase_memory_cache_dir:
-        intake_parts.extend(["--codebase-memory-cache-dir", _quote(codebase_memory_cache_dir.expanduser())])
+        intake_parts.extend(["--memory-import-cache-dir", _quote(codebase_memory_cache_dir.expanduser())])
     if not include_prompt:
         intake_parts.append("--no-prompt")
 
@@ -295,7 +295,7 @@ def build_workflow_plan(
     if not target_rows:
         warnings.append("No targets supplied; target review and review gate are skipped.")
     if include_codebase_memory and codebase_memory_cache_dir is None:
-        warnings.append("codebase-memory adapter requested without explicit cache dir; keep cache outside the repo.")
+        warnings.append("memory import requested without explicit cache dir; keep cache outside the repo.")
 
     gates = [
         {

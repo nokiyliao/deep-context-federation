@@ -33,10 +33,10 @@
       "path": "fixtures/advisory_code_map.json"
     },
     {
-      "source_id": "codegraph_export",
+      "source_id": "symbol_graph_export",
       "role": "advisory_source_symbol_graph",
       "required": false,
-      "path": "fixtures/codegraph_export.json"
+      "path": "fixtures/symbol_graph_export.json"
     }
   ]
 }

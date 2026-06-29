@@ -678,7 +678,7 @@ def fusion_synthesis(sources: Mapping[str, Mapping[str, Any]], conflicts: Sequen
             "role": "source_graph_reviewer",
             "verdict": "warn" if sources.get("codebase_memory_mcp", {}).get("status") in {"optional_disabled", "optional_unavailable"} else "pass",
             "input_sources": ["codebase_memory_mcp"],
-            "findings": ["External source graphs remain advisory adapters."],
+            "findings": ["Graph observations are collapsed into DCF-native rows before agent use."],
         },
         {
             "role": "evidence_lineage_reviewer",
@@ -696,7 +696,7 @@ def fusion_synthesis(sources: Mapping[str, Mapping[str, Any]], conflicts: Sequen
             "role": "external_tool_adoption_reviewer",
             "verdict": "blocked" if "codebase_memory_policy_violation" in error_types else "pass",
             "input_sources": ["codebase_memory_mcp"],
-            "findings": ["codebase-memory-mcp is disabled by default and never installed or auto-indexed by this tool."],
+            "findings": ["Memory import is disabled by default and never installed or auto-indexed by this tool."],
         },
     ]
 

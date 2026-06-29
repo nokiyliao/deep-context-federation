@@ -42,6 +42,7 @@ from deep_context_federation.efficiency_report import build_efficiency_report
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.manifest import validate_manifest
+from deep_context_federation.native_integration import build_native_integration_plan
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
 from deep_context_federation.quality_gate import normalize_quality_gate_policy
@@ -190,6 +191,8 @@ def test_agent_profile_init_writes_valid_profile(tmp_path: Path) -> None:
     assert result["profile"]["root"] == ".."
     assert result["profile"]["output_dir"] == "."
     assert result["profile"]["manifests"] == ["../deep_context_federation.json"]
+    assert result["profile"]["include_memory_import"] is False
+    assert "include_codebase_memory" not in result["profile"]
     assert result["profile_validation_summary"]["status"] == "pass_agent_profile"
     assert Path(result["outputs"]["agent_profile_json"]).exists()
     assert validate_artifact_contract(result, artifact_kind="agent_profile_init")["ok"] is True
@@ -197,6 +200,8 @@ def test_agent_profile_init_writes_valid_profile(tmp_path: Path) -> None:
     profile = load_agent_profile(profile_path)
     assert profile["ok"] is True
     assert profile["normalized"]["root"] == profile_root.resolve().as_posix()
+    assert profile["normalized"]["include_memory_import"] is False
+    assert "include_codebase_memory" not in profile["normalized"]
     assert validate_artifact_contract(profile, artifact_kind="agent_profile_validation")["ok"] is True
 
 
@@ -230,7 +235,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.42.0"
+    assert payload["package"]["version"] == "0.43.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -257,6 +262,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "scan",
         "schema",
         "validate-artifact",
+        "native-integration-plan",
         "adjudicate",
         "brief",
         "pack",
@@ -290,6 +296,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
+    assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -333,6 +340,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
+    assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
     assert by_kind["agent_profile_validation"]["schema_version"] == "deep_context_federation_agent_profile_validation_v1"
     assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
@@ -357,6 +365,116 @@ def test_schema_registry_and_contract_validation() -> None:
     assert failed["ok"] is False
     error_ids = {row["id"] for row in failed["errors"]}
     assert "$.no_apply:required" in error_ids
+
+
+def test_native_integration_plan_collapses_upstream_identity() -> None:
+    plan = build_native_integration_plan(capabilities=["symbol-call-graph", "surface-map", "long-term-context-memory"])
+
+    assert plan["schema_version"] == "deep_context_federation_native_integration_plan_v1"
+    assert plan["ok"] is True
+    assert plan["authority_effect"] == "none"
+    assert plan["no_apply"] is True
+    assert plan["integration_policy"]["public_identity"] == "deep_context_federation"
+    assert plan["integration_policy"]["hide_upstream_tool_identity"] is True
+    assert plan["integration_policy"]["adapter_only_allowed"] is False
+    assert plan["integration_policy"]["consume_only_allowed"] is False
+    assert plan["safety_boundaries"]["user_facing_source_identity_collapsed_to_dcf"] is True
+    capability_ids = {row["capability_id"] for row in plan["capabilities"]}
+    assert capability_ids == {"symbol_call_graph", "surface_map", "long_term_context_memory"}
+    assert all(row["input_identity_collapsed"] is True for row in plan["capabilities"])
+    assert all("external_overlap" not in row for row in plan["capabilities"])
+    assert all("requested_as" not in row for row in plan["capabilities"])
+    assert validate_artifact_contract(plan, artifact_kind="native_integration_plan")["ok"] is True
+
+
+def test_native_integration_plan_cli_validates(tmp_path: Path) -> None:
+    output_path = tmp_path / "native_integration_plan.json"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "native-integration-plan",
+            "--function",
+            "symbol-call-graph",
+            "--function",
+            "operator-projection",
+            "--output",
+            str(output_path),
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "warn_native_integration_plan"
+    assert payload["outputs"]["native_integration_plan_json"] == output_path.resolve().as_posix()
+    assert output_path.exists()
+    assert {row["capability_id"] for row in payload["capabilities"]} == {"symbol_call_graph", "operator_projection"}
+    assert all("external_overlap" not in row for row in payload["capabilities"])
+    assert validate_artifact_contract(payload, artifact_kind="native_integration_plan")["ok"] is True
+
+
+def test_native_integration_plan_does_not_accept_source_names_as_functions() -> None:
+    plan = build_native_integration_plan(capabilities=["codegraph"])
+
+    assert plan["status"] == "warn_native_integration_plan"
+    assert plan["summary"]["manual_review_count"] == 1
+    assert plan["capabilities"][0]["capability_id"] == "codegraph"
+    assert plan["capabilities"][0]["known"] is False
+    assert plan["capabilities"][0]["integration_mode"] == "manual_native_design_required"
+
+
+def test_memory_import_cli_uses_function_names_in_help() -> None:
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "build",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert completed.returncode == 0
+    assert "--include-memory-import" in completed.stdout
+    assert "--memory-import-cache-dir" in completed.stdout
+    assert "--include-codebase-memory" not in completed.stdout
+    assert "--codebase-memory-cache-dir" not in completed.stdout
+
+    native = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "native-integration-plan",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert native.returncode == 0
+    assert "--function" in native.stdout
+    assert "--capability" not in native.stdout
 
 
 def test_workflow_plan_sequences_bounded_agent_run(tmp_path: Path) -> None:

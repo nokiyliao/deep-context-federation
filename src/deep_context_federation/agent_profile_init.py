@@ -101,7 +101,7 @@ def build_agent_profile_init(
         "target_review_policy": _resolve_from_root(root, target_review_policy_path),
         "efficiency_policy": _resolve_from_root(root, efficiency_policy_path),
         "context_gate_policy": _resolve_from_root(root, context_gate_policy_path),
-        "codebase_memory_cache_dir": _resolve_from_root(root, codebase_memory_cache_dir),
+        "memory_import_cache_dir": _resolve_from_root(root, codebase_memory_cache_dir),
     }
     checks: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
@@ -124,10 +124,10 @@ def build_agent_profile_init(
     if resolved_handoff:
         add("handoff_exists", resolved_handoff.exists() and resolved_handoff.is_file(), resolved_handoff.as_posix())
     for key, path in policy_paths.items():
-        if path and key != "codebase_memory_cache_dir":
+        if path and key != "memory_import_cache_dir":
             add(f"{key}_exists", path.exists() and path.is_file(), path.as_posix())
-        if path and key == "codebase_memory_cache_dir":
-            add("codebase_memory_cache_dir_exists", path.exists() and path.is_dir(), path.as_posix())
+        if path and key == "memory_import_cache_dir":
+            add("memory_import_cache_dir_exists", path.exists() and path.is_dir(), path.as_posix())
     for path in selected_baselines:
         add("baseline_exists", path.exists() and path.is_file(), path.as_posix())
 
@@ -151,7 +151,7 @@ def build_agent_profile_init(
         "max_files": int(max_files),
         "max_parse_bytes": int(max_parse_bytes),
         "hash_files": bool(include_hashes),
-        "include_codebase_memory": bool(include_codebase_memory),
+        "include_memory_import": bool(include_codebase_memory),
         "include_details": bool(include_details),
         "include_content": bool(include_content),
         "include_prompt": bool(include_prompt),

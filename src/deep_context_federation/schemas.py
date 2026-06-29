@@ -33,6 +33,7 @@ from deep_context_federation.efficiency_report import EFFICIENCY_REPORT_SCHEMA_V
 from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_VERSION
+from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
@@ -118,6 +119,33 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "commands": array_type,
                 "query_presets": array_type,
                 "sql_presets": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "native_integration_plan": _schema(
+            NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION,
+            "Deep Context Federation native capability integration plan",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "integration_policy",
+                "summary",
+                "capabilities",
+                "nativeization_sequence",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_native_integration_plan", "warn_native_integration_plan"]},
+                **_boundary_props(),
+                "generated_at": {"type": "string"},
+                "integration_policy": object_type,
+                "summary": object_type,
+                "capabilities": array_type,
+                "nativeization_sequence": array_type,
                 "safety_boundaries": object_type,
             },
         ),

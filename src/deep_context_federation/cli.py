@@ -59,6 +59,8 @@ from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.intake import markdown_agent_intake
 from deep_context_federation.manifest import validate_manifest
+from deep_context_federation.native_integration import build_native_integration_plan
+from deep_context_federation.native_integration import markdown_native_integration_plan
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
 from deep_context_federation.quality_gate import markdown_quality_gate
@@ -100,6 +102,13 @@ def add_common_source_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+
+
+def add_memory_import_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--include-memory-import", dest="include_codebase_memory", action="store_true")
+    parser.add_argument("--memory-import-cache-dir", dest="codebase_memory_cache_dir", metavar="MEMORY_IMPORT_CACHE_DIR", type=Path)
+    parser.add_argument("--include-codebase-memory", dest="include_codebase_memory", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--codebase-memory-cache-dir", dest="codebase_memory_cache_dir", type=Path, help=argparse.SUPPRESS)
 
 
 def read_targets_file(path: Path) -> list[str]:
@@ -227,7 +236,7 @@ def _resolve_agent_ready_args(args: argparse.Namespace, normalized: Mapping[str,
     target_review_policy = args.target_review_policy or _profile_path(normalized, "target_review_policy")
     efficiency_policy = args.efficiency_policy or _profile_path(normalized, "efficiency_policy")
     context_gate_policy = args.context_gate_policy or _profile_path(normalized, "context_gate_policy")
-    codebase_memory_cache_dir = args.codebase_memory_cache_dir or _profile_path(normalized, "codebase_memory_cache_dir")
+    codebase_memory_cache_dir = args.codebase_memory_cache_dir or _profile_path(normalized, "memory_import_cache_dir") or _profile_path(normalized, "codebase_memory_cache_dir")
     baselines = list(args.baseline or []) or _profile_path_list(normalized, "baselines")
     task = str(args.task or normalized.get("task") or "")
     include_content = bool(normalized.get("include_content")) if "include_content" in normalized else not args.no_content
@@ -257,7 +266,7 @@ def _resolve_agent_ready_args(args: argparse.Namespace, normalized: Mapping[str,
         "max_files": _profile_int(args, normalized, "max_files"),
         "max_parse_bytes": _profile_int(args, normalized, "max_parse_bytes"),
         "include_hashes": bool(args.hash_files or normalized.get("hash_files")),
-        "include_codebase_memory": bool(args.include_codebase_memory or normalized.get("include_codebase_memory")),
+        "include_codebase_memory": bool(args.include_codebase_memory or normalized.get("include_memory_import") or normalized.get("include_codebase_memory")),
         "codebase_memory_cache_dir": codebase_memory_cache_dir,
         "include_content": include_content,
         "include_prompt": include_prompt,
@@ -281,10 +290,15 @@ def build_parser() -> argparse.ArgumentParser:
     validate_artifact.add_argument("--artifact", choices=artifact_kinds())
     validate_artifact.add_argument("--output", type=Path)
     validate_artifact.add_argument("--format", choices=["json", "markdown"], default="json")
+    native_integration = sub.add_parser("native-integration-plan", help="Plan DCF-native ownership of overlapping context-tool functions.")
+    native_integration.set_defaults(capability=[])
+    native_integration.add_argument("--function", dest="capability", metavar="FUNCTION", action="append", help="DCF function name to inspect, such as symbol-call-graph or long-term-context-memory.")
+    native_integration.add_argument("--capability", dest="capability", action="append", help=argparse.SUPPRESS)
+    native_integration.add_argument("--output", type=Path)
+    native_integration.add_argument("--format", choices=["json", "markdown"], default="json")
     build = sub.add_parser("build", help="Build a federation artifact from a manifest.")
     add_common_source_args(build)
-    build.add_argument("--include-codebase-memory", action="store_true")
-    build.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(build)
     build.add_argument("--write", action="store_true")
     build.add_argument("--json", action="store_true")
     scan = sub.add_parser("scan", help="Read-only scan of a repo into starter federation sources.")
@@ -303,8 +317,7 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap.add_argument("--max-files", type=int, default=5000)
     bootstrap.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     bootstrap.add_argument("--hash-files", action="store_true")
-    bootstrap.add_argument("--include-codebase-memory", action="store_true")
-    bootstrap.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(bootstrap)
     bootstrap.add_argument("--format", choices=["json", "markdown"], default="json")
     intake = sub.add_parser("intake", help="Run bootstrap, quality gate, and task brief as one agent intake packet.")
     intake.add_argument("--root", type=Path, default=Path.cwd())
@@ -315,8 +328,7 @@ def build_parser() -> argparse.ArgumentParser:
     intake.add_argument("--max-files", type=int, default=5000)
     intake.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     intake.add_argument("--hash-files", action="store_true")
-    intake.add_argument("--include-codebase-memory", action="store_true")
-    intake.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(intake)
     intake.add_argument("--token-budget", type=int, default=4000)
     intake.add_argument("--query-limit", type=int, default=10)
     intake.add_argument("--max-presets", type=int, default=3)
@@ -338,8 +350,7 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_plan.add_argument("--max-files", type=int, default=5000)
     workflow_plan.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     workflow_plan.add_argument("--hash-files", action="store_true")
-    workflow_plan.add_argument("--include-codebase-memory", action="store_true")
-    workflow_plan.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(workflow_plan)
     workflow_plan.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     workflow_plan.add_argument("--output", type=Path)
     workflow_plan.add_argument("--format", choices=["json", "markdown"], default="json")
@@ -359,8 +370,7 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_run.add_argument("--max-files", type=int, default=5000)
     workflow_run.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     workflow_run.add_argument("--hash-files", action="store_true")
-    workflow_run.add_argument("--include-codebase-memory", action="store_true")
-    workflow_run.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(workflow_run)
     workflow_run.add_argument("--include-details", action="store_true", help="Include full target adjudication details inside target review.")
     workflow_run.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     workflow_run.add_argument("--output", type=Path)
@@ -400,8 +410,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_ci.add_argument("--max-files", type=int, default=5000)
     agent_ci.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     agent_ci.add_argument("--hash-files", action="store_true")
-    agent_ci.add_argument("--include-codebase-memory", action="store_true")
-    agent_ci.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(agent_ci)
     agent_ci.add_argument("--include-details", action="store_true", help="Include full target adjudication details inside target review.")
     agent_ci.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     agent_ci.add_argument("--output", type=Path)
@@ -448,8 +457,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_handoff.add_argument("--max-files", type=int, default=5000)
     agent_handoff.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     agent_handoff.add_argument("--hash-files", action="store_true")
-    agent_handoff.add_argument("--include-codebase-memory", action="store_true")
-    agent_handoff.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(agent_handoff)
     agent_handoff.add_argument("--include-details", action="store_true", help="Include full target adjudication details inside target review.")
     agent_handoff.add_argument("--no-content", action="store_true", help="Emit metadata-only context sections.")
     agent_handoff.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text fields.")
@@ -494,8 +502,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_profile_init.add_argument("--max-files", type=int, default=5000)
     agent_profile_init.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     agent_profile_init.add_argument("--hash-files", action="store_true")
-    agent_profile_init.add_argument("--include-codebase-memory", action="store_true")
-    agent_profile_init.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(agent_profile_init)
     agent_profile_init.add_argument("--include-details", action="store_true")
     agent_profile_init.add_argument("--no-content", action="store_true")
     agent_profile_init.add_argument("--no-prompt", action="store_true")
@@ -527,8 +534,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_onboard.add_argument("--max-files", type=int, default=5000)
     agent_onboard.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     agent_onboard.add_argument("--hash-files", action="store_true")
-    agent_onboard.add_argument("--include-codebase-memory", action="store_true")
-    agent_onboard.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(agent_onboard)
     agent_onboard.add_argument("--include-details", action="store_true")
     agent_onboard.add_argument("--no-content", action="store_true")
     agent_onboard.add_argument("--no-prompt", action="store_true")
@@ -570,8 +576,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_ready.add_argument("--max-files", type=int, default=5000)
     agent_ready.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     agent_ready.add_argument("--hash-files", action="store_true")
-    agent_ready.add_argument("--include-codebase-memory", action="store_true")
-    agent_ready.add_argument("--codebase-memory-cache-dir", type=Path)
+    add_memory_import_args(agent_ready)
     agent_ready.add_argument("--include-details", action="store_true", help="Include full target adjudication details inside target review.")
     agent_ready.add_argument("--no-content", action="store_true", help="Emit metadata-only context sections.")
     agent_ready.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
@@ -740,6 +745,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_contract_validation(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "native-integration-plan":
+        result = build_native_integration_plan(capabilities=args.capability)
+        if args.output:
+            result["outputs"] = {"native_integration_plan_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_native_integration_plan(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

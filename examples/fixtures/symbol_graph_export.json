@@ -1,5 +1,5 @@
 {
-  "schema_version": "codegraph_export_v1",
+  "schema_version": "symbol_graph_export_v1",
   "generated_at": "2026-01-01T00:00:04Z",
   "authority_effect": "none",
   "no_apply": true,

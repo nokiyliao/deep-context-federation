@@ -39,6 +39,7 @@ from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_VERSION
 from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_INPUT_SCHEMA
+from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
@@ -516,6 +517,26 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "native_integration_plan",
+            "schema_version": NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION,
+            "producer": "native-integration-plan",
+            "consumer_commands": ["capabilities", "agent_router", "ci", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "integration_policy",
+                "summary",
+                "capabilities",
+                "nativeization_sequence",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "agent_discovery",
             "schema_version": AGENT_DISCOVERY_SCHEMA_VERSION,
             "producer": "agent-discover",
@@ -708,6 +729,15 @@ def _commands() -> list[dict[str, Any]]:
             "intent": "Validate an artifact against the built-in top-level JSON Schema contract subset.",
             "writes": ["optional --output JSON"],
             "output_schemas": ["deep_context_federation_contract_validation_v1"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "native-integration-plan",
+            "intent": "Plan DCF-native ownership for overlapping context functions so adapter-only or consume-only remains non-final.",
+            "writes": ["optional native integration plan JSON when --output is set"],
+            "output_schemas": [NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION],
+            "options": ["--function", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -1254,7 +1284,8 @@ def build_capabilities() -> dict[str, Any]:
             ],
             "writes_only_generated_outputs": True,
             "external_tool_install": "never",
-            "codebase_memory_mcp": "optional_advisory_adapter_only",
+            "memory_import_mode": "collapsed_to_dcf_native_records",
+            "user_facing_source_identity": "deep_context_federation",
         },
     }
 

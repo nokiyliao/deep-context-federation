@@ -21,11 +21,12 @@ PATH_FIELDS = {
     "target_review_policy",
     "efficiency_policy",
     "context_gate_policy",
+    "memory_import_cache_dir",
     "codebase_memory_cache_dir",
 }
 PATH_LIST_FIELDS = {"manifests", "baselines"}
 STRING_LIST_FIELDS = {"targets"}
-BOOL_FIELDS = {"hash_files", "include_codebase_memory", "include_details", "include_content", "include_prompt"}
+BOOL_FIELDS = {"hash_files", "include_memory_import", "include_codebase_memory", "include_details", "include_content", "include_prompt"}
 INT_FIELDS = {"workflow_token_budget", "context_token_budget", "max_artifact_tokens", "query_limit", "max_presets", "max_rows", "max_files", "max_parse_bytes"}
 STRING_FIELDS = {"task", "context_mode"}
 
@@ -120,6 +121,13 @@ def load_agent_profile(path: Path) -> dict[str, Any]:
             add(f"{field}_string", isinstance(raw.get(field), str), raw.get(field))
             if isinstance(raw.get(field), str):
                 normalized[field] = str(raw.get(field) or "")
+
+    if "memory_import_cache_dir" not in normalized and "codebase_memory_cache_dir" in normalized:
+        normalized["memory_import_cache_dir"] = normalized["codebase_memory_cache_dir"]
+    normalized.pop("codebase_memory_cache_dir", None)
+    if "include_memory_import" not in normalized and "include_codebase_memory" in normalized:
+        normalized["include_memory_import"] = normalized["include_codebase_memory"]
+    normalized.pop("include_codebase_memory", None)
 
     failed = [row for row in checks if row.get("passed") is not True]
     return {

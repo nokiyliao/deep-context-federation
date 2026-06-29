@@ -1,16 +1,17 @@
 # Deep Context Federation
 
-Deep Context Federation is a small, read-only aggregation layer for large codebases and agent workflows.
+Deep Context Federation is a small, read-only unified context plane for large codebases and agent workflows.
 
-It joins local context surfaces such as:
+It collapses local context capabilities such as:
 
 - project truth snapshots
 - evidence and receipt indexes
 - operator or governance projections
-- advisory source maps
-- code graph or memory adapters
+- surface maps
+- symbol/call graphs
+- long-term context memory
 
-The output is a machine-readable federation graph of sources, entities, edges, conflicts, local "Codex Fusion" synthesis roles, and a SQLite read model. It is designed to help humans and coding agents ask, "Which surface says this, what evidence supports it, and is this source stale or advisory?"
+The output is a machine-readable DCF graph of entities, edges, conflicts, local "Codex Fusion" synthesis roles, and a SQLite read model. It is designed to help humans and coding agents ask, "What is the unified DCF view, what evidence supports it, and what is stale, conflicting, or unsafe to use?"
 
 ## Why It Exists
 
@@ -22,7 +23,7 @@ Most code-intelligence tools optimize one lane:
 - evidence receipt indexing
 - dashboard/operator projection
 
-Deep Context Federation is the integration layer across those lanes. It does not try to be the best symbol parser or the best long-term memory store. It makes those tools safer and more useful together by enforcing a common read-only boundary, ranking source health, joining claims to evidence, and exposing stale or conflicting context before agents act on it.
+Deep Context Federation is the native integration layer across those lanes. It owns the unified query, index, governance, and model-handoff plane; specialized upstream outputs can be ingested, but they are collapsed into DCF capability rows rather than exposed as competing user-facing source identities.
 
 ## Boundary
 
@@ -35,7 +36,7 @@ This tool is deliberately non-authoritative:
 - no external model calls
 - no automatic installer or watcher for optional tools
 
-It does not decide production truth. It only projects and checks consistency across existing truth surfaces.
+It does not decide production truth. It projects and checks consistency through one DCF read model while preserving auditability for the immutable evidence records underneath.
 
 ## Integrated Capabilities
 
@@ -43,7 +44,7 @@ Deep Context Federation now combines several capabilities that are usually split
 
 - generic JSON federation for arbitrary governance artifacts
 - self-bootstrap repo scan that emits starter inventory, surface, code-symbol, and dependency-graph sources
-- typed adapters for surface maps, symbol maps, and graph exports
+- native ingestion for surface maps, symbol maps, and graph exports
 - claim-to-evidence lineage extraction
 - source health scoring and freshness warnings
 - semantic edges such as `OWNS`, `SUPPORTS`, `DERIVES_FROM`, and `REFERENCES_SYMBOL`
@@ -69,6 +70,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - agent profile contract that lets global wrappers drive `agent-ready` from one validated JSON file
 - agent profile init command that generates that wrapper profile from repo-local manifest and policy paths
 - agent onboard command that generates the profile and runs the fail-closed ready path in one global-wrapper capsule
+- native integration plan that collapses overlapping tool identities into DCF-owned capabilities
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -113,6 +115,17 @@ python -m deep_context_federation.cli validate-artifact \
   --input .dcf/deep_context_federation_bootstrap.json \
   --artifact bootstrap \
   --output .dcf/deep_context_federation_contract_validation.json
+```
+
+Inspect how overlapping tools collapse into DCF-native capabilities:
+
+```bash
+python -m deep_context_federation.cli native-integration-plan \
+  --function symbol-call-graph \
+  --function surface-map \
+  --function long-term-context-memory \
+  --format json \
+  --output .dcf/deep_context_federation_native_integration_plan.json
 ```
 
 Self-bootstrap a fresh repository into a verified federation:
@@ -506,7 +519,7 @@ dcf scan --root . --output-dir .dcf --write --build
 
 For backward compatibility, the scanner also writes `repo_python_symbols.json` as an alias of the code-symbol snapshot during the early alpha period.
 
-The scanner is still read-only from an authority perspective: every generated source declares `authority_effect: none` and `no_apply: true`. It does not install external tools, start watchers, modify hooks, or replace project-specific authority manifests. JS/TS extraction is intentionally conservative and dependency-free; projects that need full semantic precision should feed a dedicated parser or codegraph export into the same federation manifest.
+The scanner is still read-only from an authority perspective: every generated source declares `authority_effect: none` and `no_apply: true`. It does not install external tools, start watchers, modify hooks, or replace project-specific authority manifests. JS/TS extraction is intentionally conservative and dependency-free; projects that need full semantic precision should feed a dedicated parser export into the same DCF manifest.
 
 Every scan summary includes lightweight performance fields such as `duration_seconds`, `files_per_second`, `symbols_per_second`, and `dependency_edges_per_second`. These are meant for CI and agent routing, not for absolute benchmarking.
 
@@ -668,6 +681,25 @@ Use it before dispatching DCF from CI, AGY, Codex, Claude, GitHub Actions, or an
 dcf capabilities \
   --format json \
   --output .dcf/deep_context_federation_capabilities.json
+```
+
+## Native Unified Integration
+
+`dcf native-integration-plan` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names such as `symbol-call-graph`, `surface-map`, `long-term-context-memory`, `evidence-lineage`, `operator-projection`, and `workflow-orchestration`; the emitted artifact is DCF-only:
+
+- `public_identity: deep_context_federation`
+- `hide_upstream_tool_identity: true`
+- `adapter_only_allowed: false`
+- `consume_only_allowed: false`
+- `user_facing_source_identity_collapsed_to_dcf: true`
+
+This lets DCF absorb symbol graphs, surface maps, long-term memory, evidence lineage, operator projection, and agent handoff into one query/index/governance plane. Any upstream provenance is retained only for internal audit and reproducibility, not as a competing source identity for agents or operators.
+
+```bash
+dcf native-integration-plan --format markdown
+dcf validate-artifact \
+  --input .dcf/deep_context_federation_native_integration_plan.json \
+  --artifact native_integration_plan
 ```
 
 ## Schema Registry And Contract Validation
@@ -905,9 +937,9 @@ dcf sql --sqlite .dcf/deep_context_federation_latest.sqlite --preset search --se
 
 ## Source Quality
 
-Each source row includes a `quality` object with a numeric score and reasons. The score penalizes stale sources, missing required sources, authority-boundary drift, missing verifiers, and optional unavailable adapters. This gives agents an immediate signal about which context is reliable enough to use and which needs refresh or owner review first.
+Each internal source row includes a `quality` object with a numeric score and reasons. The score penalizes stale inputs, missing required inputs, authority-boundary drift, missing verifiers, and optional unavailable imports. This gives agents an immediate signal about which context is reliable enough to use and which needs refresh or owner review first, while the user-facing identity remains DCF.
 
-## Semantic Adapters
+## Native Ingestion
 
 The builder recognizes common export shapes:
 
@@ -915,7 +947,7 @@ The builder recognizes common export shapes:
 - `symbols` or `code_map.symbols`: emits `symbol_fqn`, `path`, `surface_id`, and `REFERENCES_SYMBOL` edges.
 - `nodes` / `edges` or `graph.nodes` / `graph.edges`: maps generic graph exports into federation entities and edge types.
 
-This is the layer that lets the tool absorb advantages from codegraph-style symbol maps, Understand Anything-style surface maps, evidence/claim reports, and codebase-memory-style graph exports without letting any single source become production authority.
+This is the layer that lets DCF absorb symbol maps, surface maps, evidence/claim reports, and memory-style graph exports into one DCF graph without letting any upstream identity become a competing user-facing authority.
 
 ## Graph Trace
 
@@ -968,14 +1000,14 @@ Use `bench` to track local build performance:
 dcf bench --manifest examples/deep_context_federation.example.json --root examples --iterations 20 --json
 ```
 
-## Optional codebase-memory adapter
+## Optional Memory Import
 
-The optional `codebase-memory-mcp` adapter is disabled by default. When enabled, this tool only checks for a safe external cache configuration. It does not install, index, watch, or mutate agent configuration.
+The optional memory import path is disabled by default. When enabled, DCF only checks for a safe external cache configuration and collapses imported memory observations into DCF-native records. It does not install, index, watch, mutate agent configuration, or expose the memory tool as a separate user-facing identity.
 
 Safe mode requires:
 
-- `--include-codebase-memory`
-- `--codebase-memory-cache-dir` or `CBM_CACHE_DIR`
+- `--include-memory-import`
+- `--memory-import-cache-dir` or `CBM_CACHE_DIR`
 - cache directory outside the repository
 - no tracked `.codebase-memory/graph.db.zst`
 

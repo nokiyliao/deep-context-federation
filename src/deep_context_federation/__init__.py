@@ -31,6 +31,7 @@ from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.input_fingerprint import build_input_fingerprint
 from deep_context_federation.input_fingerprint import compare_input_fingerprint
 from deep_context_federation.manifest import validate_manifest
+from deep_context_federation.native_integration import build_native_integration_plan
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
 from deep_context_federation.quality_gate import normalize_quality_gate_policy
@@ -63,6 +64,7 @@ __all__ = [
     "build_agent_onboard",
     "build_agent_profile_init",
     "build_agent_ready",
+    "build_native_integration_plan",
     "discover_agent_context",
     "route_agent_context",
     "verify_agent_handoff",

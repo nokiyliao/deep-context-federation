@@ -50,7 +50,7 @@ def doctor_federation(payload: Mapping[str, Any]) -> dict[str, Any]:
     add("required_sources_available", not missing_required, "error", [item.get("source_id") for item in missing_required], "Refresh or remove missing required sources.")
     add("stale_sources_reviewed", not stale_sources, "warning", [item.get("source_id") for item in stale_sources], "Refresh stale sources or accept their advisory status.")
     add("low_quality_sources_reviewed", not low_quality, "warning", [item.get("source_id") for item in low_quality], "Inspect low-quality source rankings.")
-    add("graph_has_edges", int(graph_summary.get("edge_count") or summary.get("edge_count") or 0) > 0, "warning", graph_summary, "Add typed adapters or graph exports to connect entities.")
+    add("graph_has_edges", int(graph_summary.get("edge_count") or summary.get("edge_count") or 0) > 0, "warning", graph_summary, "Add native ingestion rows or graph exports to connect entities.")
     add("warning_conflicts_reviewed", not warning_conflicts, "warning", {"count": len(warning_conflicts)}, "Review warnings before agent automation.")
 
     failed_errors = [item for item in checks if not item["passed"] and item["severity"] == "error"]

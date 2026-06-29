@@ -18,6 +18,7 @@ from deep_context_federation.builder import QUERY_PRESETS
 from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
 from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
+from deep_context_federation.efficiency_report import EFFICIENCY_REPORT_SCHEMA_VERSION
 from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_INPUT_SCHEMA
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
@@ -240,7 +241,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "workflow_run",
             "schema_version": WORKFLOW_RUN_SCHEMA_VERSION,
             "producer": "workflow-run",
-            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "consumer_commands": ["efficiency-report", "agent_router", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -249,6 +250,23 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "step_results",
                 "model_handoff",
                 "outputs",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "efficiency_report",
+            "schema_version": EFFICIENCY_REPORT_SCHEMA_VERSION,
+            "producer": "efficiency-report",
+            "consumer_commands": ["agent_router", "ci", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "workflow_run_ref",
+                "artifacts",
+                "model_context_budget",
                 "safety_boundaries",
             ],
             "authority_effect": "none",
@@ -399,6 +417,16 @@ def _commands() -> list[dict[str, Any]]:
                 "--include-details",
                 "--no-prompt",
             ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "efficiency-report",
+            "intent": "Measure workflow-run token savings against full-federation and generated-output baselines.",
+            "writes": ["optional efficiency report JSON when --output is set"],
+            "output_schemas": [EFFICIENCY_REPORT_SCHEMA_VERSION],
+            "input_schemas": [WORKFLOW_RUN_SCHEMA_VERSION],
+            "options": ["--input", "--baseline", "--output"],
             "authority_effect": "none",
             "no_apply": True,
         },

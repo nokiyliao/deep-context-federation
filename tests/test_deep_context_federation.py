@@ -18,6 +18,7 @@ from deep_context_federation.compose import compose_manifests
 from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
+from deep_context_federation.efficiency_report import build_efficiency_report
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.manifest import validate_manifest
@@ -66,7 +67,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.22.0"
+    assert payload["package"]["version"] == "0.23.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -74,6 +75,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "bootstrap",
         "workflow-plan",
         "workflow-run",
+        "efficiency-report",
         "intake",
         "build",
         "scan",
@@ -101,6 +103,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["quality_gate_policy"]["authority_effect"] == "none"
     assert by_kind["quality_gate_policy"]["no_apply"] is True
     assert by_kind["federation"]["schema_version"] == "deep_context_federation_v1"
+    assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
     assert payload["safety_boundaries"]["external_tool_install"] == "never"
@@ -124,6 +127,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["target_review"]["schema_version"] == "deep_context_federation_target_review_v1"
     assert by_kind["target_review_gate"]["schema_version"] == "deep_context_federation_target_review_gate_v1"
     assert by_kind["target_review_gate_policy"]["schema_version"] == "deep_context_federation_target_review_gate_policy_v1"
+    assert by_kind["efficiency_report"]["schema_version"] == "deep_context_federation_efficiency_report_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
 
@@ -263,6 +267,45 @@ def test_workflow_run_without_targets_warns_and_skips_review(tmp_path: Path) -> 
     assert by_step["03_review_targets"]["ok"] is None
     assert result["outputs"]["target_review_json"] == ""
     assert validate_artifact_contract(result)["ok"] is True
+
+
+def test_efficiency_report_measures_workflow_run_token_savings(tmp_path: Path) -> None:
+    review_policy = {
+        "schema_version": "deep_context_federation_target_review_gate_policy_v1",
+        "authority_effect": "none",
+        "no_apply": True,
+        "max_warn": 1,
+        "max_priority_score": 120,
+    }
+    run = build_workflow_run(
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "workflow_run",
+        manifests=[EXAMPLE_MANIFEST],
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        target_review_gate_policy=review_policy,
+        token_budget=900,
+        max_files=200,
+    )
+    report = build_efficiency_report(
+        run,
+        workflow_run_path=Path(run["outputs"]["workflow_run_json"]),
+    )
+
+    assert report["schema_version"] == "deep_context_federation_efficiency_report_v1"
+    assert report["authority_effect"] == "none"
+    assert report["no_apply"] is True
+    assert report["ok"] is True
+    assert report["status"] == "pass_efficiency_report"
+    budget = report["model_context_budget"]
+    assert budget["read_first_estimated_tokens"] > 0
+    assert budget["full_federation_estimated_tokens"] > 0
+    assert budget["read_first_estimated_tokens"] < budget["full_federation_estimated_tokens"]
+    assert budget["read_first_token_savings"] > 0
+    assert budget["read_first_savings_percent"] > 0
+    roles = {role for row in report["artifacts"] for role in row["roles"]}
+    assert {"read_first", "read_next_if_gate_passes", "baseline"} <= roles
+    assert validate_artifact_contract(report)["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

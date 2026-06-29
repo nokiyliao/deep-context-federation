@@ -13,6 +13,7 @@ from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.capabilities import CAPABILITIES_SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
 from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
+from deep_context_federation.efficiency_report import EFFICIENCY_REPORT_SCHEMA_VERSION
 from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
@@ -536,6 +537,37 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "safety_boundaries": object_type,
                 "prompt_text": {"type": "string"},
                 "prompt_estimated_tokens": {"type": "integer"},
+                "json_estimated_tokens": {"type": "integer"},
+            },
+        ),
+        "efficiency_report": _schema(
+            EFFICIENCY_REPORT_SCHEMA_VERSION,
+            "Deep Context Federation efficiency report",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "workflow_run_ref",
+                "artifacts",
+                "model_context_budget",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_efficiency_report", "warn_efficiency_report", "fail_efficiency_report"]},
+                **_boundary_props(),
+                "workflow_run_ref": {"type": "string"},
+                "workflow_run_status": {"type": "string"},
+                "task": {"type": "string"},
+                "artifact_count": {"type": "integer"},
+                "artifacts": array_type,
+                "model_context_budget": object_type,
+                "missing_required_artifacts": array_type,
+                "warnings": array_type,
+                "recommendations": array_type,
+                "safety_boundaries": object_type,
                 "json_estimated_tokens": {"type": "integer"},
             },
         ),

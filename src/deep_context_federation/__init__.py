@@ -8,6 +8,7 @@ from deep_context_federation.compose import compose_manifests
 from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
+from deep_context_federation.efficiency_report import build_efficiency_report
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.manifest import validate_manifest
@@ -40,6 +41,7 @@ __all__ = [
     "build_workflow_run",
     "build_capabilities",
     "build_agent_intake",
+    "build_efficiency_report",
     "build_task_brief",
     "build_schema_registry",
     "compose_manifests",

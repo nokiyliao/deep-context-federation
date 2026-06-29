@@ -58,6 +58,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - one-command agent intake packet for bootstrap, quality gate, and task brief
 - workflow plan artifact that sequences intake, validation, target review, gates, and bounded context reads
 - workflow run capsule that executes the read-only DCF chain and returns one compact handoff artifact
+- efficiency report that measures read-first and gate-pass token savings against generated baselines
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -151,6 +152,16 @@ python -m deep_context_federation.cli workflow-run \
 ```
 
 `workflow-run` writes generated DCF artifacts only. It runs intake, contract validation, optional target review, review gate, and priority target resolution, then emits a compact `model_handoff` that tells an agent what to read first and what to skip by default.
+
+Measure the token savings from that run:
+
+```bash
+python -m deep_context_federation.cli efficiency-report \
+  --input .dcf/deep_context_federation_workflow_run.json \
+  --output .dcf/deep_context_federation_efficiency_report.json
+```
+
+The report compares the `read_first` and gate-pass artifact sets against available generated baselines such as the full federation JSON. This makes the context reduction measurable instead of merely advisory.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -379,6 +390,19 @@ This is the preferred first artifact for token-sensitive agents. It lets Codex, 
 - `deep_context_federation_workflow_run.json`
 
 The run capsule summarizes each step, records pass/fail gates, and gives a compact `model_handoff` with `read_first`, `read_next_if_gate_passes`, and `skip_by_default`. It still preserves `authority_effect: none` and `no_apply: true`; it does not mutate source code, authority, runtime state, broker paths, or promotion surfaces.
+
+## Efficiency Report
+
+`dcf efficiency-report` reads a `workflow_run` artifact and computes:
+
+- token estimates for `read_first`
+- token estimates for `read_next_if_gate_passes`
+- gate-pass total context size
+- full federation or generated-output baseline size
+- estimated token savings and compression ratios
+- missing required artifacts and recommendations
+
+Use it when you need to prove that DCF is reducing model input cost. It is also read-only and `authority_effect: none`; it measures generated artifacts and does not inspect or mutate source authority.
 
 ## Capabilities Manifest
 

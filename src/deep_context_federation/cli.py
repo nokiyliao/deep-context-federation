@@ -23,6 +23,8 @@ from deep_context_federation.diff import diff_federations
 from deep_context_federation.diff import markdown_diff
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.doctor import markdown_doctor
+from deep_context_federation.efficiency_report import build_efficiency_report
+from deep_context_federation.efficiency_report import markdown_efficiency_report
 from deep_context_federation.graph import markdown_trace
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
@@ -181,6 +183,11 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_run.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text.")
     workflow_run.add_argument("--output", type=Path)
     workflow_run.add_argument("--format", choices=["json", "markdown"], default="json")
+    efficiency = sub.add_parser("efficiency-report", help="Measure workflow-run token savings against available context baselines.")
+    efficiency.add_argument("--input", type=Path, required=True)
+    efficiency.add_argument("--baseline", type=Path, action="append", default=[])
+    efficiency.add_argument("--output", type=Path)
+    efficiency.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -496,6 +503,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_workflow_run(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "efficiency-report":
+        payload = read_required_json(args.input)
+        result = build_efficiency_report(
+            payload,
+            workflow_run_path=args.input,
+            extra_baselines=args.baseline,
+        )
+        if args.output:
+            result["outputs"] = {"efficiency_report_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_efficiency_report(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

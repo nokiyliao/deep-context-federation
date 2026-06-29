@@ -606,6 +606,8 @@ Use `dcf agent-ready --root <repo> --task '<task>' --format prompt` when the run
 
 Reused handoffs are freshness-aware when their original `input_fingerprint` is present. A changed manifest-declared source produces `input_fingerprint_mismatch`, so wrappers do not accidentally feed a model prompt built from stale evidence.
 
+Reused handoffs are also request-bound. If a wrapper supplies a task or targets when reusing a handoff, `agent-ready` compares them with the handoff's recorded `task` and `targets`; a mismatch returns `request_binding_mismatch` and emits no prompt.
+
 ## Capabilities Manifest
 
 `dcf capabilities` is the self-describing entrypoint for agent orchestration. It returns a stable JSON object with:

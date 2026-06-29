@@ -59,6 +59,57 @@ def _manifest_paths(route: Mapping[str, Any], manifests: Sequence[Path]) -> list
     return [Path(str(item)).expanduser().resolve() for item in discovered.get("manifests") or [] if str(item)]
 
 
+def _normalize_targets(targets: Sequence[Any]) -> list[str]:
+    return list(dict.fromkeys(str(item).strip() for item in targets if str(item).strip()))
+
+
+def _request_binding(handoff: Mapping[str, Any], *, task: str, targets: Sequence[str]) -> dict[str, Any]:
+    requested_task = str(task or "").strip()
+    handoff_task = str(handoff.get("task") or "").strip()
+    requested_targets = _normalize_targets(targets)
+    handoff_targets_raw = handoff.get("targets") if isinstance(handoff.get("targets"), Sequence) and not isinstance(handoff.get("targets"), (str, bytes)) else []
+    handoff_targets = _normalize_targets(handoff_targets_raw)
+    checks: list[dict[str, Any]] = []
+    if requested_task:
+        checks.append(
+            {
+                "id": "task_matches",
+                "passed": requested_task == handoff_task,
+                "requested_task": requested_task,
+                "handoff_task": handoff_task,
+            }
+        )
+    if requested_targets:
+        checks.append(
+            {
+                "id": "targets_match",
+                "passed": requested_targets == handoff_targets,
+                "requested_targets": requested_targets,
+                "handoff_targets": handoff_targets,
+            }
+        )
+    failed = [row for row in checks if row.get("passed") is not True]
+    if not checks:
+        status = "not_checked_no_request_binding"
+    elif failed:
+        status = "fail_request_binding"
+    else:
+        status = "pass_request_binding"
+    return {
+        "schema_version": "deep_context_federation_request_binding_v1",
+        "ok": not failed,
+        "status": status,
+        "authority_effect": "none",
+        "no_apply": True,
+        "requested_task": requested_task,
+        "handoff_task": handoff_task,
+        "requested_targets": requested_targets,
+        "handoff_targets": handoff_targets,
+        "checks": checks,
+        "errors": failed,
+    }
+
+
 def _failure(
     *,
     root: Path,
@@ -68,6 +119,7 @@ def _failure(
     action_taken: str,
     errors: Sequence[Mapping[str, Any]],
     input_freshness: Mapping[str, Any] | None = None,
+    request_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "schema_version": AGENT_READY_SCHEMA_VERSION,
@@ -84,6 +136,7 @@ def _failure(
         "handoff_summary": {},
         "model_input_summary": {},
         "input_freshness": dict(input_freshness or {}),
+        "request_binding": dict(request_binding or {}),
         "prompt_source": "",
         "prompt_format": "",
         "prompt_estimated_tokens": 0,
@@ -146,6 +199,7 @@ def build_agent_ready(
     handoff: dict[str, Any] = {}
     action_taken = "none"
     input_freshness: dict[str, Any] = {}
+    request_binding: dict[str, Any] = {}
 
     if route_status == "ready_agent_route":
         action_taken = "read_existing_handoff"
@@ -209,6 +263,18 @@ def build_agent_ready(
                 "comparable": False,
                 "matches": None,
             }
+        request_binding = _request_binding(handoff, task=task_text, targets=targets)
+        if request_binding.get("ok") is not True:
+            return _failure(
+                root=root,
+                task=task_text,
+                targets=targets,
+                route=route,
+                action_taken=action_taken,
+                input_freshness=input_freshness,
+                request_binding=request_binding,
+                errors=[{"id": "request_binding_mismatch", "status": request_binding.get("status")}],
+            )
     elif route_status == "needs_agent_handoff" or manifests:
         action_taken = "build_agent_handoff"
         manifest_paths = _manifest_paths(route, manifests)
@@ -270,6 +336,19 @@ def build_agent_ready(
             "matches": True,
             "current_digest": handoff.get("input_fingerprint", {}).get("digest") if isinstance(handoff.get("input_fingerprint"), Mapping) else "",
         }
+        request_binding = {
+            "schema_version": "deep_context_federation_request_binding_v1",
+            "ok": True,
+            "status": "freshly_built",
+            "authority_effect": "none",
+            "no_apply": True,
+            "requested_task": task_text,
+            "handoff_task": handoff.get("task"),
+            "requested_targets": _normalize_targets(targets),
+            "handoff_targets": _normalize_targets(handoff.get("targets") if isinstance(handoff.get("targets"), Sequence) and not isinstance(handoff.get("targets"), (str, bytes)) else []),
+            "checks": [],
+            "errors": [],
+        }
     elif route_status == "needs_task_agent_route":
         return _failure(
             root=root,
@@ -310,6 +389,7 @@ def build_agent_ready(
             "decision": handoff.get("decision") if isinstance(handoff.get("decision"), Mapping) else {},
         },
         "input_freshness": input_freshness,
+        "request_binding": request_binding,
         "model_input_summary": _summary(model_input),
         "prompt_source": model_input.get("prompt_source") if ok else "",
         "prompt_format": model_input.get("prompt_format") if ok else "",
@@ -332,6 +412,7 @@ def build_agent_ready(
 
 def markdown_agent_ready(result: Mapping[str, Any]) -> str:
     route = result.get("route_summary") if isinstance(result.get("route_summary"), Mapping) else {}
+    binding = result.get("request_binding") if isinstance(result.get("request_binding"), Mapping) else {}
     lines = [
         "# Deep Context Federation Agent Ready",
         "",
@@ -339,6 +420,7 @@ def markdown_agent_ready(result: Mapping[str, Any]) -> str:
         f"- OK: `{result.get('ok')}`",
         f"- Action taken: `{result.get('action_taken')}`",
         f"- Route status: `{route.get('status')}`",
+        f"- Request binding: `{binding.get('status')}`",
         f"- Prompt source: `{result.get('prompt_source')}`",
         f"- Prompt tokens: `{result.get('prompt_estimated_tokens')}`",
         "",

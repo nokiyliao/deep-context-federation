@@ -22,6 +22,7 @@ from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_profile import load_agent_profile
+from deep_context_federation.agent_profile_init import build_agent_profile_init
 from deep_context_federation.agent_ready import build_agent_ready
 from deep_context_federation.agent_route import route_agent_context
 from deep_context_federation.bench import benchmark_build
@@ -152,6 +153,71 @@ def test_agent_profile_rejects_wrong_field_types(tmp_path: Path) -> None:
     assert validate_artifact_contract(profile, artifact_kind="agent_profile")["ok"] is True
 
 
+def test_agent_profile_init_writes_valid_profile(tmp_path: Path) -> None:
+    profile_root = tmp_path / "profile_init"
+    profile_root.mkdir()
+    shutil.copytree(REPO_ROOT / "examples/fixtures", profile_root / "fixtures")
+    manifest_path = profile_root / "deep_context_federation.json"
+    manifest_path.write_text(EXAMPLE_MANIFEST.read_text(encoding="utf-8"), encoding="utf-8")
+    efficiency_policy = profile_root / "efficiency_policy.json"
+    efficiency_policy.write_text(EXAMPLE_EFFICIENCY_GATE_POLICY.read_text(encoding="utf-8"), encoding="utf-8")
+    context_policy = profile_root / "agent_context_policy.json"
+    context_policy.write_text(EXAMPLE_AGENT_CONTEXT_GATE_POLICY.read_text(encoding="utf-8"), encoding="utf-8")
+    profile_path = profile_root / ".dcf" / "agent_ready_profile.json"
+
+    result = build_agent_profile_init(
+        root=profile_root,
+        profile_path=profile_path,
+        task="dashboard operator evidence authority",
+        targets=["dashboard_readiness_projection"],
+        manifests=[manifest_path],
+        efficiency_policy_path=efficiency_policy,
+        context_gate_policy_path=context_policy,
+        workflow_token_budget=900,
+        context_token_budget=1800,
+        max_artifact_tokens=500,
+        write=True,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_agent_profile_init_v1"
+    assert result["ok"] is True
+    assert result["status"] == "pass_agent_profile_init"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["profile"]["root"] == ".."
+    assert result["profile"]["output_dir"] == "."
+    assert result["profile"]["manifests"] == ["../deep_context_federation.json"]
+    assert result["profile_validation_summary"]["status"] == "pass_agent_profile"
+    assert Path(result["outputs"]["agent_profile_json"]).exists()
+    assert validate_artifact_contract(result, artifact_kind="agent_profile_init")["ok"] is True
+    profile = load_agent_profile(profile_path)
+    assert profile["ok"] is True
+    assert profile["normalized"]["root"] == profile_root.resolve().as_posix()
+    assert validate_artifact_contract(profile, artifact_kind="agent_profile")["ok"] is True
+
+
+def test_agent_profile_init_does_not_write_when_inputs_fail(tmp_path: Path) -> None:
+    profile_root = tmp_path / "profile_init_fail"
+    profile_root.mkdir()
+    profile_path = profile_root / ".dcf" / "agent_ready_profile.json"
+
+    result = build_agent_profile_init(
+        root=profile_root,
+        profile_path=profile_path,
+        task="dashboard operator evidence authority",
+        manifests=[profile_root / "missing_manifest.json"],
+        write=True,
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "fail_agent_profile_init"
+    assert {row["id"] for row in result["errors"]} == {"manifest_exists"}
+    assert result["outputs"] == {}
+    assert result["safety_boundaries"]["writes_profile_only"] is False
+    assert not profile_path.exists()
+    assert validate_artifact_contract(result, artifact_kind="agent_profile_init")["ok"] is True
+
+
 def test_capabilities_manifest_is_machine_readable() -> None:
     payload = build_capabilities()
 
@@ -160,7 +226,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.40.0"
+    assert payload["package"]["version"] == "0.41.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -177,6 +243,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "agent-handoff",
         "agent-model-input",
         "agent-profile",
+        "agent-profile-init",
         "agent-ready",
         "agent-route",
         "verify-handoff",
@@ -218,6 +285,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
+    assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
     assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert by_kind["agent_ready"]["schema_version"] == "deep_context_federation_agent_ready_v1"
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
@@ -258,6 +326,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_profile"]["schema_version"] == "deep_context_federation_agent_profile_v1"
+    assert by_kind["agent_profile_init"]["schema_version"] == "deep_context_federation_agent_profile_init_v1"
     assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert by_kind["agent_ready"]["schema_version"] == "deep_context_federation_agent_ready_v1"
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
@@ -1129,6 +1198,85 @@ def test_agent_ready_cli_uses_profile(tmp_path: Path) -> None:
     assert ready["agent_profile_summary"]["status"] == "pass_agent_profile"
     assert ready["prompt_estimated_tokens"] > 0
     assert validate_artifact_contract(ready)["ok"] is True
+
+
+def test_agent_profile_init_cli_feeds_agent_ready(tmp_path: Path) -> None:
+    profile_root = tmp_path / "profile_init_cli"
+    profile_root.mkdir()
+    shutil.copytree(REPO_ROOT / "examples/fixtures", profile_root / "fixtures")
+    (profile_root / "deep_context_federation.json").write_text(EXAMPLE_MANIFEST.read_text(encoding="utf-8"), encoding="utf-8")
+    (profile_root / "efficiency_policy.json").write_text(EXAMPLE_EFFICIENCY_GATE_POLICY.read_text(encoding="utf-8"), encoding="utf-8")
+    (profile_root / "agent_context_policy.json").write_text(EXAMPLE_AGENT_CONTEXT_GATE_POLICY.read_text(encoding="utf-8"), encoding="utf-8")
+    profile_path = profile_root / ".dcf" / "agent_ready_profile.json"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    init = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "agent-profile-init",
+            "--root",
+            str(profile_root),
+            "--output",
+            str(profile_path),
+            "--task",
+            "dashboard operator evidence authority",
+            "--target",
+            "dashboard_readiness_projection",
+            "--manifest",
+            "deep_context_federation.json",
+            "--efficiency-policy",
+            "efficiency_policy.json",
+            "--context-gate-policy",
+            "agent_context_policy.json",
+            "--workflow-token-budget",
+            "900",
+            "--context-token-budget",
+            "1800",
+            "--max-artifact-tokens",
+            "500",
+            "--format",
+            "json",
+        ],
+        cwd=profile_root,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert init.returncode == 0, init.stderr + init.stdout
+    init_payload = json.loads(init.stdout)
+    assert init_payload["status"] == "pass_agent_profile_init"
+    assert init_payload["profile_validation_summary"]["status"] == "pass_agent_profile"
+    assert profile_path.exists()
+    assert validate_artifact_contract(init_payload, artifact_kind="agent_profile_init")["ok"] is True
+
+    ready = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "agent-ready",
+            "--profile",
+            str(profile_path),
+            "--format",
+            "json",
+        ],
+        cwd=profile_root,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert ready.returncode == 0, ready.stderr + ready.stdout
+    ready_payload = json.loads(ready.stdout)
+    assert ready_payload["status"] == "pass_agent_ready"
+    assert ready_payload["action_taken"] == "build_agent_handoff"
+    assert ready_payload["agent_profile_summary"]["status"] == "pass_agent_profile"
+    assert ready_payload["prompt_estimated_tokens"] > 0
+    assert validate_artifact_contract(ready_payload, artifact_kind="agent_ready")["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

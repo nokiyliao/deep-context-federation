@@ -67,6 +67,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - agent route command that normalizes discovery into a stable global-wrapper route decision
 - agent ready command that turns a safe handoff or manifest+task into verified model prompt input
 - agent profile contract that lets global wrappers drive `agent-ready` from one validated JSON file
+- agent profile init command that generates that wrapper profile from repo-local manifest and policy paths
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -258,19 +259,25 @@ python -m deep_context_federation.cli agent-ready \
 For global wrappers that should not hard-code a long command line, validate a profile first:
 
 ```bash
+python -m deep_context_federation.cli agent-profile-init \
+  --root . \
+  --output .dcf/agent_ready_profile.json \
+  --task "dashboard operator evidence authority" \
+  --target dashboard_readiness_projection
+
 python -m deep_context_federation.cli agent-profile \
-  --profile examples/agent_ready_profile.example.json
+  --profile .dcf/agent_ready_profile.json
 ```
 
 Then use the same profile as the single entrypoint:
 
 ```bash
 python -m deep_context_federation.cli agent-ready \
-  --profile examples/agent_ready_profile.example.json \
+  --profile .dcf/agent_ready_profile.json \
   --format prompt
 ```
 
-The profile schema is still read-only: `authority_effect: none` and `no_apply: true`. Relative paths resolve from the profile file, not from the caller's shell, so Codex, Claude, AGY, GitHub runners, or shell wrappers can share the same machine-readable launch contract without duplicating manifest, policy, target, and token-budget flags. Invalid profiles return `fail_agent_ready` with `action_taken: blocked_by_profile` and emit no prompt.
+The profile schema is still read-only: `authority_effect: none` and `no_apply: true`. `agent-profile-init` writes only the generated profile file, then validates it with the same loader used by `agent-ready`. Relative paths resolve from the profile file, not from the caller's shell, so Codex, Claude, AGY, GitHub runners, or shell wrappers can share the same machine-readable launch contract without duplicating manifest, policy, target, and token-budget flags. Invalid profiles return `fail_agent_ready` with `action_taken: blocked_by_profile` and emit no prompt.
 
 Fresh `agent-handoff` artifacts include an `input_fingerprint` digest over the manifest and explicitly listed source files. When `agent-ready` reuses an existing handoff and can see the current manifest, it compares that digest first; if a manifest-declared source changed, it returns `fail_agent_ready` and emits no prompt.
 
@@ -622,7 +629,7 @@ Use `dcf agent-route --root <repo> --task '<task>'` as the first global step. If
 
 Use `dcf agent-ready --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then emit prompt text only if the final model-input gate passes.
 
-Use `dcf agent-profile --profile <profile.json>` and then `dcf agent-ready --profile <profile.json> --format prompt` when the runner should consume one machine-readable launch contract. Profile fields act as defaults; explicit CLI arguments can still add or override the operational request without changing the profile file.
+Use `dcf agent-profile-init --root <repo> --output <profile.json> --task '<task>'` to generate one launch contract, `dcf agent-profile --profile <profile.json>` to validate it, and then `dcf agent-ready --profile <profile.json> --format prompt` when the runner should consume that contract. Profile fields act as defaults; explicit CLI arguments can still add or override the operational request without changing the profile file.
 
 Reused handoffs are freshness-aware when their original `input_fingerprint` is present. A changed manifest-declared source produces `input_fingerprint_mismatch`, so wrappers do not accidentally feed a model prompt built from stale evidence.
 

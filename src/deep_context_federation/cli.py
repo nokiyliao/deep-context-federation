@@ -26,6 +26,8 @@ from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_model_input import markdown_agent_model_input
 from deep_context_federation.agent_profile import load_agent_profile
 from deep_context_federation.agent_profile import markdown_agent_profile
+from deep_context_federation.agent_profile_init import build_agent_profile_init
+from deep_context_federation.agent_profile_init import markdown_agent_profile_init
 from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_ready import build_agent_ready
 from deep_context_federation.agent_ready import markdown_agent_ready
@@ -464,6 +466,38 @@ def build_parser() -> argparse.ArgumentParser:
     agent_profile.add_argument("--profile", type=Path, required=True)
     agent_profile.add_argument("--output", type=Path)
     agent_profile.add_argument("--format", choices=["json", "markdown"], default="json")
+    agent_profile_init = sub.add_parser("agent-profile-init", help="Generate a validated agent-ready profile for global wrappers.")
+    agent_profile_init.add_argument("--root", type=Path, default=Path.cwd())
+    agent_profile_init.add_argument("--output", type=Path, default=Path(".dcf") / "agent_ready_profile.json", help="Profile JSON path to write.")
+    agent_profile_init.add_argument("--profile-id", default="")
+    agent_profile_init.add_argument("--description", default="")
+    agent_profile_init.add_argument("--task", required=True)
+    agent_profile_init.add_argument("--target", action="append", default=[])
+    agent_profile_init.add_argument("--targets-file", type=Path)
+    agent_profile_init.add_argument("--manifest", type=Path, action="append", default=[])
+    agent_profile_init.add_argument("--handoff", type=Path)
+    agent_profile_init.add_argument("--output-dir", type=Path)
+    agent_profile_init.add_argument("--quality-policy", type=Path)
+    agent_profile_init.add_argument("--target-review-policy", type=Path)
+    agent_profile_init.add_argument("--efficiency-policy", type=Path)
+    agent_profile_init.add_argument("--context-gate-policy", type=Path)
+    agent_profile_init.add_argument("--baseline", type=Path, action="append", default=[])
+    agent_profile_init.add_argument("--workflow-token-budget", type=int, default=4000)
+    agent_profile_init.add_argument("--context-token-budget", type=int, default=4000)
+    agent_profile_init.add_argument("--context-mode", choices=["read-first", "decision-allowed", "all"], default="read-first")
+    agent_profile_init.add_argument("--max-artifact-tokens", type=int, default=1200)
+    agent_profile_init.add_argument("--query-limit", type=int, default=10)
+    agent_profile_init.add_argument("--max-presets", type=int, default=3)
+    agent_profile_init.add_argument("--max-rows", type=int, default=80)
+    agent_profile_init.add_argument("--max-files", type=int, default=5000)
+    agent_profile_init.add_argument("--max-parse-bytes", type=int, default=1_000_000)
+    agent_profile_init.add_argument("--hash-files", action="store_true")
+    agent_profile_init.add_argument("--include-codebase-memory", action="store_true")
+    agent_profile_init.add_argument("--codebase-memory-cache-dir", type=Path)
+    agent_profile_init.add_argument("--include-details", action="store_true")
+    agent_profile_init.add_argument("--no-content", action="store_true")
+    agent_profile_init.add_argument("--no-prompt", action="store_true")
+    agent_profile_init.add_argument("--format", choices=["json", "markdown"], default="json")
     agent_discover = sub.add_parser("agent-discover", help="Discover repo-local DCF handoff readiness for global wrappers.")
     agent_discover.add_argument("--root", type=Path, default=Path.cwd())
     agent_discover.add_argument("--handoff", type=Path)
@@ -1050,6 +1084,47 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_profile(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "agent-profile-init":
+        targets = list(args.target or [])
+        if args.targets_file:
+            targets.extend(read_targets_file(args.targets_file))
+        result = build_agent_profile_init(
+            root=args.root,
+            profile_path=args.output,
+            profile_id=args.profile_id,
+            description=args.description,
+            task=args.task,
+            targets=targets,
+            manifests=args.manifest,
+            handoff_path=args.handoff,
+            output_dir=args.output_dir,
+            quality_policy_path=args.quality_policy,
+            target_review_policy_path=args.target_review_policy,
+            efficiency_policy_path=args.efficiency_policy,
+            context_gate_policy_path=args.context_gate_policy,
+            workflow_token_budget=args.workflow_token_budget,
+            context_token_budget=args.context_token_budget,
+            context_mode=args.context_mode,
+            max_artifact_tokens=args.max_artifact_tokens,
+            query_limit=args.query_limit,
+            max_presets=args.max_presets,
+            max_rows=args.max_rows,
+            max_files=args.max_files,
+            max_parse_bytes=args.max_parse_bytes,
+            include_hashes=args.hash_files,
+            include_codebase_memory=args.include_codebase_memory,
+            codebase_memory_cache_dir=args.codebase_memory_cache_dir,
+            include_details=args.include_details,
+            include_content=not args.no_content,
+            include_prompt=not args.no_prompt,
+            extra_baselines=args.baseline,
+            write=True,
+        )
+        if args.format == "markdown":
+            print(markdown_agent_profile_init(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

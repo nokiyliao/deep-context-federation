@@ -11,6 +11,7 @@ from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_profile import load_agent_profile
+from deep_context_federation.agent_profile_init import build_agent_profile_init
 from deep_context_federation.agent_ready import build_agent_ready
 from deep_context_federation.agent_route import route_agent_context
 from deep_context_federation.bootstrap import bootstrap_federation
@@ -58,6 +59,7 @@ __all__ = [
     "build_agent_ci",
     "build_agent_handoff",
     "build_agent_model_input",
+    "build_agent_profile_init",
     "build_agent_ready",
     "discover_agent_context",
     "route_agent_context",

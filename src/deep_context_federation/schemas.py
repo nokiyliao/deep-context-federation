@@ -16,6 +16,7 @@ from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
 from deep_context_federation.agent_profile import AGENT_PROFILE_SCHEMA_VERSION
+from deep_context_federation.agent_profile_init import AGENT_PROFILE_INIT_SCHEMA_VERSION
 from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_route import AGENT_ROUTE_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
@@ -955,6 +956,38 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "checks": array_type,
                 "errors": array_type,
                 "summary": object_type,
+            },
+        ),
+        "agent_profile_init": _schema(
+            AGENT_PROFILE_INIT_SCHEMA_VERSION,
+            "Deep Context Federation agent profile init",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "profile_path",
+                "profile",
+                "profile_validation_summary",
+                "checks",
+                "errors",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_profile_init", "fail_agent_profile_init"]},
+                **_boundary_props(),
+                "root": {"type": "string"},
+                "profile_path": {"type": "string"},
+                "profile": object_type,
+                "profile_validation_summary": object_type,
+                "checks": array_type,
+                "warnings": array_type,
+                "errors": array_type,
+                "outputs": object_type,
+                "summary": object_type,
+                "safety_boundaries": object_type,
             },
         ),
         "input_fingerprint": _schema(

@@ -16,6 +16,7 @@ from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
 from deep_context_federation.agent_profile import AGENT_PROFILE_SCHEMA_VERSION
+from deep_context_federation.agent_profile_init import AGENT_PROFILE_INIT_SCHEMA_VERSION
 from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_route import AGENT_ROUTE_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
@@ -458,6 +459,27 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "agent_profile_init",
+            "schema_version": AGENT_PROFILE_INIT_SCHEMA_VERSION,
+            "producer": "agent-profile-init",
+            "consumer_commands": ["agent-profile", "agent-ready", "global_wrapper", "ci"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "profile_path",
+                "profile",
+                "profile_validation_summary",
+                "checks",
+                "errors",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "agent_discovery",
             "schema_version": AGENT_DISCOVERY_SCHEMA_VERSION,
             "producer": "agent-discover",
@@ -880,6 +902,32 @@ def _commands() -> list[dict[str, Any]]:
             "output_schemas": [AGENT_PROFILE_SCHEMA_VERSION],
             "input_schemas": [AGENT_PROFILE_SCHEMA_VERSION],
             "options": ["--profile", "--output", "--format"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "agent-profile-init",
+            "intent": "Generate a validated machine-readable agent-ready profile from repo-local manifests and policies.",
+            "writes": ["agent-ready profile JSON at --output"],
+            "output_schemas": [AGENT_PROFILE_INIT_SCHEMA_VERSION, AGENT_PROFILE_SCHEMA_VERSION],
+            "input_schemas": [MANIFEST_SCHEMA],
+            "options": [
+                "--root",
+                "--output",
+                "--profile-id",
+                "--task",
+                "--target",
+                "--targets-file",
+                "--manifest",
+                "--handoff",
+                "--quality-policy",
+                "--target-review-policy",
+                "--efficiency-policy",
+                "--context-gate-policy",
+                "--workflow-token-budget",
+                "--context-token-budget",
+                "--format",
+            ],
             "authority_effect": "none",
             "no_apply": True,
         },

@@ -1063,6 +1063,8 @@ Paths are resolved relative to the manifest directory first, then relative to `-
 
 ## Query Presets
 
+`dcf query-context` returns DCF-collapsed rows by default. Public query output includes `source_identity_policy.source_ids_exposed: false`; upstream source identity remains available in the original federation artifact for audit, not as the default agent-facing query surface.
+
 - `surface-splits`: surface ownership and advisory split hints
 - `claim-lineage`: claim to authority/evidence/verifier lineage
 - `stale-sources`: missing, stale, or unavailable sources
@@ -1072,7 +1074,7 @@ Paths are resolved relative to the manifest directory first, then relative to `-
 
 ## SQLite Read Model
 
-The generated SQLite file is intended for agent and automation use. It contains:
+The generated SQLite file is intended for agent and automation use. The stored tables keep raw provenance for reproducible audit, while `dcf query-context-store` returns DCF-collapsed rows by default. It contains:
 
 - `sources`
 - `entities`

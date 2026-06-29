@@ -242,7 +242,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.56.0"
+    assert payload["package"]["version"] == "0.57.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -311,6 +311,9 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["top_level_required"]
     assert by_kind["operator_context"]["schema_version"] == "deep_context_federation_operator_context_v1"
+    assert by_kind["query"]["source_identity_policy"]["source_ids_exposed"] is False
+    assert by_kind["read_model_query"]["schema_version"] == "deep_context_federation_sql_query_v1"
+    assert by_kind["read_model_query"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
@@ -365,6 +368,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["json_schema"]["required"]
     assert by_kind["operator_context"]["schema_version"] == "deep_context_federation_operator_context_v1"
+    assert by_kind["read_model_query"]["schema_version"] == "deep_context_federation_sql_query_v1"
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
@@ -597,6 +601,24 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert brief.returncode == 0
     assert "--read-model" in brief.stdout
 
+    query = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "query-context",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert query.returncode == 0
+    assert "--preset" in query.stdout
+    assert "--include-source-identity" not in query.stdout
+
     read_model = subprocess.run(
         [
             sys.executable,
@@ -614,6 +636,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert read_model.returncode == 0
     assert "--read-model" in read_model.stdout
     assert "--sqlite" not in read_model.stdout
+    assert "--include-source-identity" not in read_model.stdout
 
     operator_context = subprocess.run(
         [
@@ -2641,15 +2664,35 @@ def test_build_verify_and_query_example(tmp_path: Path) -> None:
 
     query = query_federation(payload, preset="claim-lineage", limit=10)
     assert query["schema_version"] == "deep_context_federation_query_v1"
+    assert query["authority_effect"] == "none"
+    assert query["no_apply"] is True
     assert query["row_count"] > 0
+    assert query["source_identity_policy"]["source_ids_exposed"] is False
+    assert "source_id" not in json.dumps(query["rows"], sort_keys=True)
+    assert "source_ids" not in json.dumps(query["rows"], sort_keys=True)
+
+    raw_query = query_federation(payload, preset="claim-lineage", limit=10, include_source_identity=True)
+    assert raw_query["source_identity_policy"]["source_ids_exposed"] is True
+    assert "source_id" in json.dumps(raw_query["rows"], sort_keys=True)
 
     sqlite_query = query_sqlite(tmp_path / "deep_context_federation_latest.sqlite", preset="search", search="dashboard", limit=10)
     assert sqlite_query["schema_version"] == "deep_context_federation_sql_query_v1"
+    assert sqlite_query["authority_effect"] == "none"
+    assert sqlite_query["no_apply"] is True
     assert sqlite_query["row_count"] > 0
+    assert sqlite_query["source_identity_policy"]["source_ids_exposed"] is False
+    assert "source_id" not in json.dumps(sqlite_query["rows"], sort_keys=True)
+    assert "source_ids" not in json.dumps(sqlite_query["rows"], sort_keys=True)
+    assert validate_artifact_contract(sqlite_query, artifact_kind="read_model_query")["ok"] is True
 
     source_health = query_sqlite(tmp_path / "deep_context_federation_latest.sqlite", preset="source-health", limit=10)
     assert source_health["row_count"] > 0
     assert "quality_score" in source_health["rows"][0]
+    assert "source_id" not in source_health["rows"][0]
+
+    raw_source_health = query_sqlite(tmp_path / "deep_context_federation_latest.sqlite", preset="source-health", limit=10, include_source_identity=True)
+    assert raw_source_health["source_identity_policy"]["source_ids_exposed"] is True
+    assert "source_id" in raw_source_health["rows"][0]
 
     trace = trace_federation(payload, match="dashboard", depth=2, limit=20)
     assert trace["schema_version"] == "deep_context_federation_trace_v1"

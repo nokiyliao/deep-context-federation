@@ -745,6 +745,7 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     query.add_argument("--preset", required=True)
     query.add_argument("--limit", type=int, default=50)
+    query.add_argument("--include-source-identity", action="store_true", help=argparse.SUPPRESS)
     query.add_argument("--format", choices=["json", "markdown"], default="json")
     pack = sub.add_parser("pack-task-context", help="Build a token-aware bounded context pack for a task.")
     pack.set_defaults(command="pack")
@@ -857,6 +858,7 @@ def build_parser() -> argparse.ArgumentParser:
     sql.add_argument("--preset", choices=sorted(SQL_PRESETS), required=True)
     sql.add_argument("--limit", type=int, default=50)
     sql.add_argument("--search", default="")
+    sql.add_argument("--include-source-identity", action="store_true", help=argparse.SUPPRESS)
     sql.add_argument("--format", choices=["json", "markdown"], default="json")
     bench = sub.add_parser("benchmark-context-build", help="Benchmark in-memory federation build time.")
     bench.set_defaults(command="bench")
@@ -1629,7 +1631,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if result["ok"] else 2
     if args.command == "query":
         payload = read_required_json(args.input)
-        result = query_federation(payload, preset=args.preset, limit=args.limit)
+        result = query_federation(payload, preset=args.preset, limit=args.limit, include_source_identity=args.include_source_identity)
         if args.format == "markdown":
             print(query_markdown(result))
         else:
@@ -1821,7 +1823,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0
     if args.command == "query-read-model":
-        result = query_sqlite(args.sqlite, preset=args.preset, limit=args.limit, search=args.search)
+        result = query_sqlite(args.sqlite, preset=args.preset, limit=args.limit, search=args.search, include_source_identity=args.include_source_identity)
         if args.format == "markdown":
             print(sql_markdown(result))
         else:

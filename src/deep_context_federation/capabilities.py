@@ -53,6 +53,7 @@ from deep_context_federation.scanner import SCAN_SCHEMA_VERSION
 from deep_context_federation.scanner import SURFACE_MAP_SCHEMA_VERSION
 from deep_context_federation.scanner import SYMBOL_MAP_SCHEMA_VERSION
 from deep_context_federation.sqlite_query import SQL_PRESETS
+from deep_context_federation.sqlite_query import SQL_QUERY_SCHEMA_VERSION
 from deep_context_federation.target_review import TARGET_REVIEW_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA_VERSION
@@ -164,7 +165,18 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "schema_version": QUERY_SCHEMA_VERSION,
             "producer": "query-context",
             "consumer_commands": ["agent_router", "operator_context"],
-            "top_level_required": ["schema_version", "preset", "status", "rows"],
+            "top_level_required": ["schema_version", "preset", "status", "authority_effect", "no_apply", "rows", "source_identity_policy"],
+            "source_identity_policy": {"public_identity": "deep_context_federation", "source_ids_exposed": False},
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "read_model_query",
+            "schema_version": SQL_QUERY_SCHEMA_VERSION,
+            "producer": "query-context-store",
+            "consumer_commands": ["agent_router", "operator_context", "ci"],
+            "top_level_required": ["schema_version", "preset", "authority_effect", "no_apply", "rows", "source_identity_policy"],
+            "source_identity_policy": {"public_identity": "deep_context_federation", "source_ids_exposed": False},
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -1305,7 +1317,7 @@ def _commands() -> list[dict[str, Any]]:
         },
         {
             "command": "query-context",
-            "intent": "Run named JSON artifact query presets.",
+            "intent": "Run named JSON artifact query presets with source-collapsed DCF rows by default.",
             "writes": [],
             "output_schemas": [QUERY_SCHEMA_VERSION],
             "presets": list(QUERY_PRESETS),
@@ -1379,9 +1391,9 @@ def _commands() -> list[dict[str, Any]]:
         },
         {
             "command": "query-context-store",
-            "intent": "Run named read-only generated read-model query presets.",
+            "intent": "Run named read-only generated read-model query presets with source-collapsed DCF rows by default.",
             "writes": [],
-            "output_schemas": ["deep_context_federation_sql_query_v1"],
+            "output_schemas": [SQL_QUERY_SCHEMA_VERSION],
             "presets": sorted(SQL_PRESETS),
             "authority_effect": "none",
             "no_apply": True,

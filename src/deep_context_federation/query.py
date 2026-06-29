@@ -9,6 +9,7 @@ from typing import Any
 from deep_context_federation.builder import QUERY_PRESETS
 
 QUERY_SCHEMA_VERSION = "deep_context_federation_query_v1"
+SOURCE_IDENTITY_KEYS = {"source_id", "source_ids", "sources", "input_sources", "related_sources"}
 
 
 def as_text(value: Any) -> str:
@@ -26,7 +27,39 @@ def rows(payload: Mapping[str, Any], key: str) -> list[dict[str, Any]]:
     return [dict(item) for item in payload.get(key) or [] if isinstance(item, Mapping)]
 
 
-def query_federation(payload: Mapping[str, Any], *, preset: str, limit: int = 50) -> dict[str, Any]:
+def strip_source_identity(value: Any) -> Any:
+    """Return a public DCF row with upstream source identity removed."""
+
+    if isinstance(value, Mapping):
+        result: dict[str, Any] = {}
+        for key, child in value.items():
+            if str(key) in SOURCE_IDENTITY_KEYS:
+                continue
+            result[str(key)] = strip_source_identity(child)
+        return result
+    if isinstance(value, list):
+        return [strip_source_identity(item) for item in value]
+    return value
+
+
+def source_identity_policy(*, include_source_identity: bool) -> dict[str, Any]:
+    return {
+        "public_identity": "deep_context_federation",
+        "source_identity_collapsed": not include_source_identity,
+        "source_ids_exposed": bool(include_source_identity),
+        "source_table_exposed": bool(include_source_identity),
+        "audit_provenance_location": "original_input_artifacts",
+        "raw_source_identity_requires_explicit_opt_in": True,
+    }
+
+
+def query_federation(
+    payload: Mapping[str, Any],
+    *,
+    preset: str,
+    limit: int = 50,
+    include_source_identity: bool = False,
+) -> dict[str, Any]:
     if preset not in QUERY_PRESETS:
         raise ValueError(f"unknown preset {preset!r}")
     limit = max(1, int(limit))
@@ -50,13 +83,17 @@ def query_federation(payload: Mapping[str, Any], *, preset: str, limit: int = 50
         result_rows = [item for item in [*sources, *entities, *edges, *conflicts] if contains(item, "r19")][:limit]
     elif preset == "operator-projection":
         result_rows = [item for item in [*sources, *entities, *edges, *conflicts] if contains(item, "operator") or contains(item, "dashboard") or contains(item, "governance")][:limit]
+    public_rows = result_rows if include_source_identity else [strip_source_identity(row) for row in result_rows]
     return {
         "schema_version": QUERY_SCHEMA_VERSION,
         "preset": preset,
         "status": "ok",
-        "row_count": len(result_rows),
+        "authority_effect": "none",
+        "no_apply": True,
+        "row_count": len(public_rows),
         "limit": limit,
-        "rows": result_rows,
+        "rows": public_rows,
+        "source_identity_policy": source_identity_policy(include_source_identity=include_source_identity),
         "source_snapshot": {
             "federation_schema": payload.get("schema_version"),
             "generated_at": payload.get("generated_at"),
@@ -80,9 +117,9 @@ def markdown(result: Mapping[str, Any]) -> str:
         lines.append("- no rows")
         return "\n".join(lines) + "\n"
     for index, item in enumerate(items, start=1):
-        title = item.get("source_id") or item.get("entity_id") or item.get("edge_id") or item.get("conflict_id") or f"row-{index}"
+        title = item.get("entity_id") or item.get("edge_id") or item.get("conflict_id") or item.get("path") or item.get("role") or f"row-{index}"
         lines.append(f"## {index}. `{title}`")
-        for key in ("role", "status", "required", "path", "entity_type", "value", "edge_type", "severity", "conflict_type", "source_id"):
+        for key in ("role", "status", "required", "path", "entity_type", "value", "edge_type", "severity", "conflict_type"):
             if key in item:
                 lines.append(f"- `{key}`: `{item.get(key)}`")
         lines.append("")

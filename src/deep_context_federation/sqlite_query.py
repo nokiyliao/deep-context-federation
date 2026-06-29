@@ -7,6 +7,12 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from deep_context_federation.query import SOURCE_IDENTITY_KEYS
+from deep_context_federation.query import source_identity_policy
+from deep_context_federation.query import strip_source_identity
+
+SQL_QUERY_SCHEMA_VERSION = "deep_context_federation_sql_query_v1"
+
 SQL_PRESETS: dict[str, dict[str, str]] = {
     "source-health": {
         "description": "Source status, required flag, and summary JSON.",
@@ -101,7 +107,41 @@ def rows_from_cursor(cursor: sqlite3.Cursor) -> list[dict[str, Any]]:
     return [dict(zip(columns, row, strict=False)) for row in cursor.fetchall()]
 
 
-def query_sqlite(sqlite_path: Path, *, preset: str, limit: int = 50, search: str = "") -> dict[str, Any]:
+def _strip_json_text(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    stripped = value.strip()
+    if not stripped or stripped[0] not in "[{":
+        return value
+    try:
+        parsed = json.loads(stripped)
+    except Exception:
+        return value
+    return json.dumps(strip_source_identity(parsed), ensure_ascii=True, sort_keys=True)
+
+
+def _public_sql_row(row: dict[str, Any]) -> dict[str, Any]:
+    public = {}
+    kind = str(row.get("kind") or "")
+    for key, value in row.items():
+        if key in SOURCE_IDENTITY_KEYS or key == "source_ids_json":
+            continue
+        if key == "id" and kind == "source":
+            continue
+        if key == "detail" and kind == "edge":
+            continue
+        public[key] = _strip_json_text(value)
+    return public
+
+
+def query_sqlite(
+    sqlite_path: Path,
+    *,
+    preset: str,
+    limit: int = 50,
+    search: str = "",
+    include_source_identity: bool = False,
+) -> dict[str, Any]:
     if preset not in SQL_PRESETS:
         raise ValueError(f"unknown SQL preset {preset!r}")
     limit = max(1, int(limit))
@@ -122,15 +162,19 @@ def query_sqlite(sqlite_path: Path, *, preset: str, limit: int = 50, search: str
             )
         cursor = conn.execute(spec["sql"], params)
         rows = rows_from_cursor(cursor)
+    public_rows = rows if include_source_identity else [_public_sql_row(row) for row in rows]
     return {
-        "schema_version": "deep_context_federation_sql_query_v1",
+        "schema_version": SQL_QUERY_SCHEMA_VERSION,
         "preset": preset,
         "description": spec["description"],
+        "authority_effect": "none",
+        "no_apply": True,
         "sqlite_path": sqlite_path.as_posix(),
         "limit": limit,
         "search": search,
-        "row_count": len(rows),
-        "rows": rows,
+        "row_count": len(public_rows),
+        "rows": public_rows,
+        "source_identity_policy": source_identity_policy(include_source_identity=include_source_identity),
     }
 
 
@@ -139,12 +183,13 @@ def markdown(result: dict[str, Any]) -> str:
         f"# Deep Context Federation SQL Query: {result.get('preset')}",
         "",
         f"- Rows: `{result.get('row_count')}`",
+        f"- Source ids exposed: `{(result.get('source_identity_policy') or {}).get('source_ids_exposed')}`",
     ]
     if result.get("search"):
         lines.append(f"- Search: `{result.get('search')}`")
     lines.append("")
     for index, row in enumerate(result.get("rows") or [], start=1):
-        title = row.get("id") or row.get("source_id") or row.get("entity_id") or f"row-{index}"
+        title = row.get("id") or row.get("entity_id") or row.get("path") or row.get("role") or f"row-{index}"
         lines.append(f"## {index}. `{title}`")
         for key, value in row.items():
             if key == "id":

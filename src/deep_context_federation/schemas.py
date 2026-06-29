@@ -42,6 +42,7 @@ from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
 from deep_context_federation.resolve import RESOLVE_SCHEMA_VERSION
 from deep_context_federation.scanner import SCAN_SCHEMA_VERSION
+from deep_context_federation.sqlite_query import SQL_QUERY_SCHEMA_VERSION
 from deep_context_federation.target_review import TARGET_REVIEW_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.target_review_gate import TARGET_REVIEW_GATE_SCHEMA_VERSION
@@ -466,13 +467,27 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
         "query": _schema(
             QUERY_SCHEMA_VERSION,
             "Deep Context Federation query result",
-            ["schema_version", "preset", "status", "row_count", "rows"],
+            ["schema_version", "preset", "status", "authority_effect", "no_apply", "row_count", "rows", "source_identity_policy"],
             {
                 "preset": {"type": "string"},
                 "status": {"type": "string"},
+                **_boundary_props(),
                 "row_count": {"type": "integer"},
                 "rows": array_type,
+                "source_identity_policy": object_type,
                 "source_snapshot": object_type,
+            },
+        ),
+        "read_model_query": _schema(
+            SQL_QUERY_SCHEMA_VERSION,
+            "Deep Context Federation read-model query result",
+            ["schema_version", "preset", "authority_effect", "no_apply", "row_count", "rows", "source_identity_policy"],
+            {
+                "preset": {"type": "string"},
+                **_boundary_props(),
+                "row_count": {"type": "integer"},
+                "rows": array_type,
+                "source_identity_policy": object_type,
             },
         ),
         "resolve": _schema(

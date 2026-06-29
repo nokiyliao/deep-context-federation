@@ -21,6 +21,7 @@ from deep_context_federation.graph import markdown_trace
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.quality_gate import evaluate_quality_gate
+from deep_context_federation.quality_gate import load_quality_gate_policy
 from deep_context_federation.quality_gate import markdown_quality_gate
 from deep_context_federation.query import markdown as query_markdown
 from deep_context_federation.query import query_federation
@@ -100,16 +101,17 @@ def build_parser() -> argparse.ArgumentParser:
     gate = sub.add_parser("quality-gate", help="Evaluate CI/agent quality gates on a bootstrap or federation artifact.")
     gate.add_argument("--input", type=Path, default=Path(".dcf") / "deep_context_federation_bootstrap.json")
     gate.add_argument("--federation-input", type=Path)
-    gate.add_argument("--min-sources", type=int, default=1)
-    gate.add_argument("--min-entities", type=int, default=1)
-    gate.add_argument("--min-edges", type=int, default=1)
-    gate.add_argument("--max-errors", type=int, default=0)
-    gate.add_argument("--max-warnings", type=int, default=0)
+    gate.add_argument("--policy", type=Path, help="JSON policy-as-code file for repeatable quality gates.")
+    gate.add_argument("--min-sources", type=int)
+    gate.add_argument("--min-entities", type=int)
+    gate.add_argument("--min-edges", type=int)
+    gate.add_argument("--max-errors", type=int)
+    gate.add_argument("--max-warnings", type=int)
     gate.add_argument("--max-duration-seconds", type=float)
     gate.add_argument("--max-scan-duration-seconds", type=float)
-    gate.add_argument("--require-role", action="append", default=[])
-    gate.add_argument("--require-source", action="append", default=[])
-    gate.add_argument("--require-query-preset", action="append", default=[])
+    gate.add_argument("--require-role", action="append")
+    gate.add_argument("--require-source", action="append")
+    gate.add_argument("--require-query-preset", action="append")
     gate.add_argument("--no-bootstrap-step-check", action="store_true")
     gate.add_argument("--output", type=Path)
     gate.add_argument("--format", choices=["json", "markdown"], default="json")
@@ -260,6 +262,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if result["ok"] else 2
     if args.command == "quality-gate":
         payload = read_required_json(args.input)
+        policy = load_quality_gate_policy(args.policy) if args.policy else None
         federation_payload = read_required_json(args.federation_input) if args.federation_input else None
         if federation_payload is None and payload.get("schema_version") == "deep_context_federation_bootstrap_v1":
             outputs = payload.get("outputs") if isinstance(payload.get("outputs"), dict) else {}
@@ -271,6 +274,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = evaluate_quality_gate(
             payload,
             federation_payload=federation_payload,
+            policy=policy,
             min_sources=args.min_sources,
             min_entities=args.min_entities,
             min_edges=args.min_edges,
@@ -281,7 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             require_roles=args.require_role,
             require_sources=args.require_source,
             require_query_presets=args.require_query_preset,
-            require_bootstrap_steps=not args.no_bootstrap_step_check,
+            require_bootstrap_steps=False if args.no_bootstrap_step_check else None,
         )
         if args.output:
             result["outputs"] = {"quality_gate_json": args.output.expanduser().resolve().as_posix()}

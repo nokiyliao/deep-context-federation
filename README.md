@@ -96,12 +96,7 @@ Then enforce a machine-readable quality policy:
 ```bash
 python -m deep_context_federation.cli quality-gate \
   --input .dcf/deep_context_federation_bootstrap.json \
-  --min-sources 5 \
-  --min-entities 50 \
-  --min-edges 50 \
-  --require-role project_surface \
-  --require-role evidence_index \
-  --require-query-preset code-to-authority \
+  --policy .dcf/quality_gate_policy.json \
   --output .dcf/deep_context_federation_quality_gate.json
 ```
 
@@ -249,17 +244,50 @@ This is the recommended entrypoint for coding agents and CI because it produces 
 `dcf quality-gate` turns a bootstrap or federation artifact into a strict machine-readable pass/fail report. It checks:
 
 - `authority_effect: none` and `no_apply: true`
+- quality policy schema, unknown keys, validation errors, and policy authority boundary
 - max error/warning counts
 - minimum source/entity/edge counts
 - required source roles, source ids, and query presets
 - bootstrap step health when the input is `deep_context_federation_bootstrap.json`
 - optional duration and scan-duration ceilings
 
-The command exits `0` on pass and `2` on failure. Use `--output` to write stable JSON for CI, GitHub Actions, or another agent:
+The preferred CI shape is policy-as-code. Store the threshold policy in JSON, commit it with the repo that owns the context contract, and pass it with `--policy`:
+
+```json
+{
+  "schema_version": "deep_context_federation_quality_gate_policy_v1",
+  "policy_id": "ci_context_minimum",
+  "authority_effect": "none",
+  "no_apply": true,
+  "min_sources": 5,
+  "min_entities": 50,
+  "min_edges": 50,
+  "max_errors": 0,
+  "max_warnings": 0,
+  "max_duration_seconds": 10,
+  "max_scan_duration_seconds": 10,
+  "require_roles": ["project_surface", "evidence_index"],
+  "require_sources": ["repo_file_inventory", "repo_code_symbols", "repo_dependency_graph"],
+  "require_query_presets": ["surface-splits", "code-to-authority"],
+  "require_bootstrap_steps": true
+}
+```
+
+A starter copy is available at `examples/quality_gate_policy.example.json`.
 
 ```bash
 dcf quality-gate \
   --input .dcf/deep_context_federation_bootstrap.json \
+  --policy .dcf/quality_gate_policy.json \
+  --output .dcf/deep_context_federation_quality_gate.json
+```
+
+The command exits `0` on pass and `2` on failure. Use `--output` to write stable JSON for CI, GitHub Actions, or another agent. Individual CLI threshold flags can still override policy fields for ad hoc local checks:
+
+```bash
+dcf quality-gate \
+  --input .dcf/deep_context_federation_bootstrap.json \
+  --policy .dcf/quality_gate_policy.json \
   --require-source repo_file_inventory \
   --require-source repo_code_symbols \
   --require-source repo_dependency_graph \

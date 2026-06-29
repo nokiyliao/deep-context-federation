@@ -1,0 +1,30 @@
+{
+  "schema_version": "deep_context_federation_quality_gate_policy_v1",
+  "policy_id": "example_context_minimum",
+  "description": "Example read-only context quality gate for CI and coding agents.",
+  "authority_effect": "none",
+  "no_apply": true,
+  "min_sources": 5,
+  "min_entities": 50,
+  "min_edges": 50,
+  "max_errors": 0,
+  "max_warnings": 0,
+  "max_duration_seconds": 10,
+  "max_scan_duration_seconds": 10,
+  "require_roles": [
+    "project_surface",
+    "evidence_index",
+    "advisory_source_symbol_graph",
+    "advisory_dependency_graph"
+  ],
+  "require_sources": [
+    "repo_file_inventory",
+    "repo_code_symbols",
+    "repo_dependency_graph"
+  ],
+  "require_query_presets": [
+    "surface-splits",
+    "code-to-authority"
+  ],
+  "require_bootstrap_steps": true
+}

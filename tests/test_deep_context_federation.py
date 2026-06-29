@@ -18,6 +18,8 @@ from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.quality_gate import evaluate_quality_gate
+from deep_context_federation.quality_gate import load_quality_gate_policy
+from deep_context_federation.quality_gate import normalize_quality_gate_policy
 from deep_context_federation.query import query_federation
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
@@ -28,6 +30,19 @@ from deep_context_federation.verifier import verify_federation
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_MANIFEST = REPO_ROOT / "examples/deep_context_federation.example.json"
+EXAMPLE_QUALITY_GATE_POLICY = REPO_ROOT / "examples/quality_gate_policy.example.json"
+
+
+def test_quality_gate_policy_example_loads() -> None:
+    policy = load_quality_gate_policy(EXAMPLE_QUALITY_GATE_POLICY)
+
+    assert policy["schema_version"] == "deep_context_federation_quality_gate_policy_v1"
+    assert policy["policy_id"] == "example_context_minimum"
+    assert policy["authority_effect"] == "none"
+    assert policy["no_apply"] is True
+    assert policy["unknown_keys"] == []
+    assert policy["validation_errors"] == []
+    assert "repo_file_inventory" in policy["require_sources"]
 
 
 def test_build_verify_and_query_example(tmp_path: Path) -> None:
@@ -482,23 +497,38 @@ def test_bootstrap_runs_full_pipeline_with_curated_manifest(tmp_path: Path) -> N
     query = query_federation(payload, preset="claim-lineage", limit=20)
     assert any(row.get("value") == "bootstrap_curated_claim" for row in query["rows"])
 
-    gate = evaluate_quality_gate(
-        result,
-        federation_payload=payload,
-        min_sources=6,
-        min_entities=5,
-        min_edges=5,
-        require_roles=["claim_lineage", "project_surface", "evidence_index"],
-        require_sources=["curated_claims", "repo_file_inventory"],
-        require_query_presets=["claim-lineage", "code-to-authority"],
-        max_duration_seconds=10,
-        max_scan_duration_seconds=10,
+    policy_path = output_dir / "quality_gate_policy.json"
+    policy_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "deep_context_federation_quality_gate_policy_v1",
+                "policy_id": "unit_bootstrap_policy",
+                "authority_effect": "none",
+                "no_apply": True,
+                "min_sources": 6,
+                "min_entities": 5,
+                "min_edges": 5,
+                "require_roles": ["claim_lineage", "project_surface", "evidence_index"],
+                "require_sources": ["curated_claims", "repo_file_inventory"],
+                "require_query_presets": ["claim-lineage", "code-to-authority"],
+                "max_duration_seconds": 10,
+                "max_scan_duration_seconds": 10,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
     )
+    gate = evaluate_quality_gate(result, federation_payload=payload, policy=load_quality_gate_policy(policy_path))
     assert gate["schema_version"] == "deep_context_federation_quality_gate_v1"
     assert gate["ok"] is True
     assert gate["status"] == "pass_quality_gate"
+    assert gate["policy"]["schema_version"] == "deep_context_federation_quality_gate_policy_v1"
+    assert gate["policy"]["policy_id"] == "unit_bootstrap_policy"
     assert gate["policy"]["min_sources"] == 6
     assert gate["policy"]["require_roles"] == ["claim_lineage", "project_surface", "evidence_index"]
+    assert gate["policy"]["unknown_keys"] == []
+    assert gate["policy"]["validation_errors"] == []
     assert gate["summary"]["failed_check_count"] == 0
     assert gate["summary"]["check_count"] == len(gate["checks"])
 
@@ -513,3 +543,19 @@ def test_bootstrap_runs_full_pipeline_with_curated_manifest(tmp_path: Path) -> N
     error_ids = {row["id"] for row in failing_gate["errors"]}
     assert "required_role_present:missing_role" in error_ids
     assert "required_source_present:missing_source" in error_ids
+
+    malformed_policy = normalize_quality_gate_policy(
+        {
+            "schema_version": "deep_context_federation_quality_gate_policy_v1",
+            "authority_effect": "apply",
+            "no_apply": False,
+            "unknown_gate": True,
+            "min_sources": -1,
+        }
+    )
+    malformed_gate = evaluate_quality_gate(result, federation_payload=payload, policy=malformed_policy)
+    malformed_error_ids = {row["id"] for row in malformed_gate["errors"]}
+    assert "policy_authority_effect_none" in malformed_error_ids
+    assert "policy_no_apply_true" in malformed_error_ids
+    assert "policy_unknown_keys_absent" in malformed_error_ids
+    assert "policy_validation_errors_absent" in malformed_error_ids

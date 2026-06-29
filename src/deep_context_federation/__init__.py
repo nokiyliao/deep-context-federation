@@ -8,6 +8,8 @@ from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.quality_gate import evaluate_quality_gate
+from deep_context_federation.quality_gate import load_quality_gate_policy
+from deep_context_federation.quality_gate import normalize_quality_gate_policy
 from deep_context_federation.query import query_federation
 from deep_context_federation.rank import rank_entities
 from deep_context_federation.rank import rank_sources
@@ -22,6 +24,8 @@ __all__ = [
     "diff_federations",
     "doctor_federation",
     "evaluate_quality_gate",
+    "load_quality_gate_policy",
+    "normalize_quality_gate_policy",
     "query_federation",
     "query_sqlite",
     "rank_entities",
@@ -32,4 +36,4 @@ __all__ = [
     "verify_federation",
 ]
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"

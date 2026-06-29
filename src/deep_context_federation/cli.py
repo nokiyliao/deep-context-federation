@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Sequence
 
 from deep_context_federation.bench import benchmark_build
+from deep_context_federation.bootstrap import bootstrap_federation
+from deep_context_federation.bootstrap import markdown_bootstrap
 from deep_context_federation.builder import DEFAULT_JSON_NAME, build_federation, read_json
 from deep_context_federation.compose import compose_manifests
 from deep_context_federation.compose import markdown_compose
@@ -56,6 +58,16 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--max-parse-bytes", type=int, default=1_000_000)
     scan.add_argument("--hash-files", action="store_true")
     scan.add_argument("--format", choices=["json", "markdown"], default="json")
+    bootstrap = sub.add_parser("bootstrap", help="Run scan, optional compose, build, verify, and doctor in one pipeline.")
+    bootstrap.add_argument("--root", type=Path, default=Path.cwd())
+    bootstrap.add_argument("--output-dir", type=Path, default=Path(".dcf"))
+    bootstrap.add_argument("--manifest", type=Path, action="append", default=[])
+    bootstrap.add_argument("--max-files", type=int, default=5000)
+    bootstrap.add_argument("--max-parse-bytes", type=int, default=1_000_000)
+    bootstrap.add_argument("--hash-files", action="store_true")
+    bootstrap.add_argument("--include-codebase-memory", action="store_true")
+    bootstrap.add_argument("--codebase-memory-cache-dir", type=Path)
+    bootstrap.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -146,6 +158,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         return 0 if payload["ok"] else 2
+    if args.command == "bootstrap":
+        result = bootstrap_federation(
+            root=args.root,
+            output_dir=args.output_dir,
+            manifests=args.manifest,
+            max_files=args.max_files,
+            max_parse_bytes=args.max_parse_bytes,
+            include_hashes=args.hash_files,
+            include_codebase_memory=args.include_codebase_memory,
+            codebase_memory_cache_dir=args.codebase_memory_cache_dir,
+            write=True,
+        )
+        if args.format == "markdown":
+            print(markdown_bootstrap(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
     if args.command == "scan":
         if args.build and not args.write:
             print("scan --build requires --write so the generated manifest exists", flush=True)

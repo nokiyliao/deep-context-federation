@@ -1,5 +1,6 @@
 """Deep Context Federation public API."""
 
+from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation
 from deep_context_federation.compose import compose_manifests
 from deep_context_federation.diff import diff_federations
@@ -14,6 +15,7 @@ from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.verifier import verify_federation
 
 __all__ = [
+    "bootstrap_federation",
     "build_federation",
     "compose_manifests",
     "diff_federations",
@@ -28,4 +30,4 @@ __all__ = [
     "verify_federation",
 ]
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"

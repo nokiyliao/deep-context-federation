@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from deep_context_federation.bench import benchmark_build
+from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation, codebase_memory_source
 from deep_context_federation.cache import DEFAULT_CACHE_NAME
 from deep_context_federation.compose import compose_manifests
@@ -400,3 +401,82 @@ def test_compose_manifests_rebases_and_renames_conflicting_sources(tmp_path: Pat
 
     query = query_federation(payload, preset="claim-lineage", limit=20)
     assert any(row.get("value") == "curated_claim" for row in query["rows"])
+
+
+def test_bootstrap_runs_full_pipeline_with_curated_manifest(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    curated = repo / "curated"
+    output_dir = repo / ".dcf-bootstrap"
+    (repo / "src").mkdir(parents=True)
+    curated.mkdir(parents=True)
+    (repo / "src/main.py").write_text(
+        "\n".join(
+            [
+                "import json",
+                "",
+                "def main():",
+                "    return json.dumps({'ok': True})",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (curated / "claims.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "curated_claims_v1",
+                "authority_effect": "none",
+                "no_apply": True,
+                "summary": {"status": "pass"},
+                "claims": [
+                    {
+                        "claim_id": "bootstrap_curated_claim",
+                        "label": "Bootstrap keeps curated claims in the same federation.",
+                        "supporting_artifacts": ["claims.json"],
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    manifest = curated / "deep_context_federation.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "deep_context_federation_manifest_v1",
+                "authority_boundary": {"authority_effect": "none", "no_apply": True},
+                "sources": [
+                    {
+                        "source_id": "curated_claims",
+                        "role": "claim_lineage",
+                        "required": True,
+                        "path": "claims.json",
+                        "verifier": "unit-test",
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = bootstrap_federation(root=repo, output_dir=output_dir, manifests=[manifest], max_files=100)
+
+    assert result["schema_version"] == "deep_context_federation_bootstrap_v1"
+    assert result["ok"] is True
+    assert result["status"] == "pass_bootstrap"
+    assert result["scan"]["status"] == "pass"
+    assert result["compose"]["status"] == "pass_manifest_compose"
+    assert result["build"]["status"] == "pass_deep_context_federation"
+    assert result["verify"]["status"] == "pass_deep_context_federation"
+    assert result["doctor"]["status"] == "pass"
+    assert result["build"]["summary"]["error_count"] == 0
+    assert result["build"]["summary"]["source_count"] == 6
+    assert Path(result["outputs"]["bootstrap_json"]).exists()
+    assert Path(result["outputs"]["bootstrap_markdown"]).exists()
+    assert Path(result["outputs"]["federation_sqlite"]).exists()
+
+    payload = json.loads(Path(result["outputs"]["federation_json"]).read_text(encoding="utf-8"))
+    query = query_federation(payload, preset="claim-lineage", limit=20)
+    assert any(row.get("value") == "bootstrap_curated_claim" for row in query["rows"])

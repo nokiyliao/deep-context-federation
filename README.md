@@ -50,6 +50,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - SQLite read model with search presets
 - graph trace from any matching entity
 - manifest composition for merging self-scan output with curated evidence/context sources
+- one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - entity/source ranking for prioritization
 - doctor-style diagnostics with recommended actions
 - federation diff between two builds
@@ -70,7 +71,26 @@ python -m pip install -e ".[dev]"
 
 ## Quickstart
 
-Self-bootstrap a fresh repository into a starter federation:
+Self-bootstrap a fresh repository into a verified federation:
+
+```bash
+python -m deep_context_federation.cli bootstrap \
+  --root . \
+  --output-dir .dcf \
+  --format markdown
+```
+
+Bootstrap can also merge curated manifests into the same graph:
+
+```bash
+python -m deep_context_federation.cli bootstrap \
+  --root . \
+  --output-dir .dcf \
+  --manifest team_evidence/deep_context_federation.json \
+  --format markdown
+```
+
+Run only the repository scan when you want starter source snapshots without the full pipeline:
 
 ```bash
 python -m deep_context_federation.cli scan \
@@ -195,6 +215,19 @@ For backward compatibility, the scanner also writes `repo_python_symbols.json` a
 The scanner is still read-only from an authority perspective: every generated source declares `authority_effect: none` and `no_apply: true`. It does not install external tools, start watchers, modify hooks, or replace project-specific authority manifests. JS/TS extraction is intentionally conservative and dependency-free; projects that need full semantic precision should feed a dedicated parser or codegraph export into the same federation manifest.
 
 Every scan summary includes lightweight performance fields such as `duration_seconds`, `files_per_second`, `symbols_per_second`, and `dependency_edges_per_second`. These are meant for CI and agent routing, not for absolute benchmarking.
+
+## Bootstrap Pipeline
+
+`dcf bootstrap` is the highest-level local workflow:
+
+1. run `dcf scan` into the output directory
+2. optionally compose the generated manifest with one or more curated manifests
+3. build the federation JSON, Markdown, and SQLite read model
+4. run the verifier
+5. run doctor diagnostics
+6. write `deep_context_federation_bootstrap.json` and `DEEP_CONTEXT_FEDERATION_BOOTSTRAP.md`
+
+This is the recommended entrypoint for coding agents and CI because it produces one compact status object with scan, compose, build, verify, and doctor sections while preserving `authority_effect: none` and `no_apply: true`.
 
 ## Manifest Composition
 

@@ -11,8 +11,11 @@ from deep_context_federation.agent_profile_init import build_agent_profile_init
 from deep_context_federation.agent_ready import build_agent_ready
 from deep_context_federation.agent_ready import markdown_agent_ready
 from deep_context_federation.builder import utc_now
+from deep_context_federation.entrypoint_decision import build_entrypoint_decision
 from deep_context_federation.efficiency_gate import load_efficiency_gate_policy
 from deep_context_federation.quality_gate import load_quality_gate_policy
+from deep_context_federation.source_identity import public_prompt_pack
+from deep_context_federation.source_identity import public_source_identity_policy
 from deep_context_federation.target_review_gate import load_target_review_gate_policy
 from deep_context_federation.agent_context_gate import load_agent_context_gate_policy
 
@@ -80,6 +83,18 @@ def _failure(
     profile: Mapping[str, Any],
     errors: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
+    entrypoint_decision = build_entrypoint_decision(
+        ok=False,
+        prompt_source="",
+        prompt_format="",
+        source_identity_policy=public_source_identity_policy(audit_provenance_location="onboard_profile_and_agent_ready_artifacts"),
+        verification_summary={},
+        context_advantage_summary={},
+        token_economics={},
+        prompt_pack=public_prompt_pack(),
+        errors=errors,
+        blocked_reason="onboard_profile_or_validation_failed",
+    )
     return {
         "schema_version": AGENT_ONBOARD_SCHEMA_VERSION,
         "ok": False,
@@ -93,6 +108,7 @@ def _failure(
         "profile_validation_summary": _summary(profile),
         "agent_ready_summary": {},
         "model_input_ready": False,
+        "entrypoint_decision": entrypoint_decision,
         "prompt_source": "",
         "prompt_estimated_tokens": 0,
         "recommended_next_command": "",
@@ -244,6 +260,7 @@ def build_agent_onboard(
     ready_outputs = dict(agent_ready.get("outputs") if isinstance(agent_ready.get("outputs"), Mapping) else {})
     outputs = {"agent_profile_json": resolved_profile_path.as_posix(), **ready_outputs}
     ok = agent_ready.get("ok") is True
+    entrypoint_decision = agent_ready.get("entrypoint_decision") if isinstance(agent_ready.get("entrypoint_decision"), Mapping) else {}
     return {
         "schema_version": AGENT_ONBOARD_SCHEMA_VERSION,
         "ok": ok,
@@ -257,6 +274,7 @@ def build_agent_onboard(
         "profile_validation_summary": _summary(profile),
         "agent_ready_summary": _summary(agent_ready),
         "model_input_ready": ok,
+        "entrypoint_decision": dict(entrypoint_decision),
         "prompt_source": agent_ready.get("prompt_source") if ok else "",
         "prompt_estimated_tokens": agent_ready.get("prompt_estimated_tokens") if ok else 0,
         "recommended_next_command": f"dcf prepare-model-input --profile '{resolved_profile_path.as_posix()}' --format prompt",
@@ -285,6 +303,7 @@ def markdown_agent_onboard(result: Mapping[str, Any]) -> str:
         f"- Profile: `{result.get('profile_path')}`",
         f"- Prompt source: `{result.get('prompt_source')}`",
         f"- Prompt tokens: `{result.get('prompt_estimated_tokens')}`",
+        f"- Entrypoint decision: `{(result.get('entrypoint_decision') if isinstance(result.get('entrypoint_decision'), Mapping) else {}).get('decision')}`",
         f"- Recommended next command: `{result.get('recommended_next_command')}`",
         "",
     ]

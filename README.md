@@ -307,7 +307,7 @@ python -m deep_context_federation.cli onboard-runner \
   --output .dcf/deep_context_federation_agent_onboard.json
 ```
 
-`onboard-runner` is the one-command path for Codex, Claude, AGY, GitHub runners, or shell wrappers. It generates a profile, validates it, runs the fail-closed `prepare-model-input` path, and returns one machine-readable capsule with `profile_init_summary`, `profile_validation_summary`, `agent_ready_summary`, `model_input_ready`, prompt token counts, and output paths.
+`onboard-runner` is the one-command path for Codex, Claude, AGY, GitHub runners, or shell wrappers. It generates a profile, validates it, runs the fail-closed `prepare-model-input` path, and returns one machine-readable capsule with `profile_init_summary`, `profile_validation_summary`, `agent_ready_summary`, `model_input_ready`, top-level `entrypoint_decision`, prompt token counts, and output paths.
 
 When the wrapper wants to split generation and execution into separate audited steps:
 
@@ -683,7 +683,7 @@ Use `dcf decide-model-start --root <repo> --task '<task>'` as the first global s
 
 Use `dcf prepare-model-input --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then release prompt text only if the final model-input gate passes.
 
-Use `dcf onboard-runner --root <repo> --profile-output <profile.json> --task '<task>' --format json` when the runner wants one onboarding capsule that creates the profile and immediately runs the safe ready path. The result is still read-only with respect to source and authority surfaces; it only writes generated DCF outputs.
+Use `dcf onboard-runner --root <repo> --profile-output <profile.json> --task '<task>' --format json` when the runner wants one onboarding capsule that creates the profile and immediately runs the safe ready path. The top-level `entrypoint_decision` is the direct wrapper adoption gate. The result is still read-only with respect to source and authority surfaces; it only writes generated DCF outputs.
 
 Use `dcf init-run-profile --root <repo> --output <profile.json> --task '<task>'` to generate one launch contract, `dcf validate-run-profile --profile <profile.json>` to validate it, and then `dcf prepare-model-input --profile <profile.json> --format prompt` when the runner should consume that contract. Profile fields act as defaults; explicit CLI arguments can still add or override the operational request without changing the profile file.
 

@@ -573,6 +573,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "profile_validation_summary",
                 "agent_ready_summary",
                 "model_input_ready",
+                "entrypoint_decision",
                 "safety_boundaries",
             ],
             "authority_effect": "none",

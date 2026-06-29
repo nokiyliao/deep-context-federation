@@ -243,7 +243,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.66.0"
+    assert payload["package"]["version"] == "0.67.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -330,6 +330,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert "entrypoint_decision" in by_kind["agent_model_input"]["top_level_required"]
     assert by_kind["agent_model_input"]["source_identity_policy"]["source_ids_exposed"] is False
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
+    assert "entrypoint_decision" in by_kind["agent_onboard"]["top_level_required"]
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
@@ -398,6 +399,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert "context_advantage_summary" in by_kind["agent_model_input"]["json_schema"]["required"]
     assert "entrypoint_decision" in by_kind["agent_model_input"]["json_schema"]["required"]
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
+    assert "entrypoint_decision" in by_kind["agent_onboard"]["json_schema"]["required"]
     assert by_kind["native_integration_plan"]["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert by_kind["memory_ledger"]["schema_version"] == "deep_context_federation_memory_ledger_v1"
     assert by_kind["unified_index"]["schema_version"] == "deep_context_federation_unified_index_v1"
@@ -2505,6 +2507,8 @@ def test_agent_onboard_builds_profile_and_ready(tmp_path: Path) -> None:
     assert result["profile_validation_summary"]["status"] == "pass_agent_profile"
     assert result["agent_ready_summary"]["status"] == "pass_agent_ready"
     assert result["model_input_ready"] is True
+    assert result["entrypoint_decision"]["status"] == "pass_entrypoint_decision"
+    assert result["entrypoint_decision"]["decision"] == "use_dcf_model_input"
     assert result["prompt_estimated_tokens"] > 0
     assert Path(result["outputs"]["agent_profile_json"]).exists()
     assert Path(result["outputs"]["agent_handoff_json"]).exists()
@@ -2568,6 +2572,8 @@ def test_agent_onboard_cli_single_command(tmp_path: Path) -> None:
     assert payload["status"] == "pass_agent_onboard"
     assert payload["profile_validation_summary"]["status"] == "pass_agent_profile"
     assert payload["agent_ready_summary"]["status"] == "pass_agent_ready"
+    assert payload["entrypoint_decision"]["status"] == "pass_entrypoint_decision"
+    assert payload["entrypoint_decision"]["decision"] == "use_dcf_model_input"
     assert payload["outputs"]["agent_onboard_json"] == onboard_path.resolve().as_posix()
     assert profile_path.exists()
     assert onboard_path.exists()

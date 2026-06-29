@@ -15,6 +15,7 @@ from deep_context_federation.agent_discover import AGENT_DISCOVERY_SCHEMA_VERSIO
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
+from deep_context_federation.agent_profile import AGENT_PROFILE_SCHEMA_VERSION
 from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_route import AGENT_ROUTE_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
@@ -438,6 +439,25 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "agent_profile",
+            "schema_version": AGENT_PROFILE_SCHEMA_VERSION,
+            "producer": "agent-profile",
+            "consumer_commands": ["agent-ready", "global_wrapper", "ci", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "profile_path",
+                "normalized",
+                "checks",
+                "errors",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "agent_discovery",
             "schema_version": AGENT_DISCOVERY_SCHEMA_VERSION,
             "producer": "agent-discover",
@@ -854,6 +874,16 @@ def _commands() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "command": "agent-profile",
+            "intent": "Validate and normalize a machine-readable agent-ready profile for global wrappers.",
+            "writes": ["optional agent profile JSON when --output is set"],
+            "output_schemas": [AGENT_PROFILE_SCHEMA_VERSION],
+            "input_schemas": [AGENT_PROFILE_SCHEMA_VERSION],
+            "options": ["--profile", "--output", "--format"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "command": "agent-discover",
             "intent": "Discover repo-local DCF handoff readiness and recommend the next fail-closed agent command for global wrappers.",
             "writes": ["optional discovery JSON when --output is set"],
@@ -878,9 +908,10 @@ def _commands() -> list[dict[str, Any]]:
             "intent": "Fail-closed DCF pipeline that turns an existing safe handoff or manifest+task into verified model prompt input.",
             "writes": ["output_dir generated DCF artifacts when handoff build is required", "optional ready JSON when --output is set"],
             "output_schemas": [AGENT_READY_SCHEMA_VERSION],
-            "input_schemas": [],
+            "input_schemas": [AGENT_PROFILE_SCHEMA_VERSION],
             "options": [
                 "--root",
+                "--profile",
                 "--manifest",
                 "--task",
                 "--target",

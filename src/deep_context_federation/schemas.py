@@ -15,6 +15,7 @@ from deep_context_federation.agent_discover import AGENT_DISCOVERY_SCHEMA_VERSIO
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
+from deep_context_federation.agent_profile import AGENT_PROFILE_SCHEMA_VERSION
 from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_route import AGENT_ROUTE_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
@@ -917,6 +918,7 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "handoff_summary": object_type,
                 "input_freshness": object_type,
                 "request_binding": object_type,
+                "agent_profile_summary": object_type,
                 "model_input_summary": object_type,
                 "prompt_source": {"type": "string"},
                 "prompt_format": {"type": "string"},
@@ -926,6 +928,33 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "errors": array_type,
                 "outputs": object_type,
                 "safety_boundaries": object_type,
+            },
+        ),
+        "agent_profile": _schema(
+            AGENT_PROFILE_SCHEMA_VERSION,
+            "Deep Context Federation agent profile",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "profile_path",
+                "normalized",
+                "checks",
+                "errors",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_profile", "fail_agent_profile"]},
+                **_boundary_props(),
+                "profile_path": {"type": "string"},
+                "profile_id": {"type": "string"},
+                "description": {"type": "string"},
+                "normalized": object_type,
+                "checks": array_type,
+                "errors": array_type,
+                "summary": object_type,
             },
         ),
         "input_fingerprint": _schema(

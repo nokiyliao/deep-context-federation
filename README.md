@@ -66,6 +66,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - agent handoff command that runs the CI decision, bounded context bundle, and context gate in one pipeline
 - agent route command that normalizes discovery into a stable global-wrapper route decision
 - agent ready command that turns a safe handoff or manifest+task into verified model prompt input
+- agent profile contract that lets global wrappers drive `agent-ready` from one validated JSON file
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
 - task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
@@ -253,6 +254,23 @@ python -m deep_context_federation.cli agent-ready \
 ```
 
 `agent-ready` is fail-closed. It emits prompt text only after an existing handoff passes `agent-model-input`, or after a manifest plus task builds a gated handoff that then passes `agent-model-input`. It does not auto-install tools, call external models, mutate source files, or claim project authority.
+
+For global wrappers that should not hard-code a long command line, validate a profile first:
+
+```bash
+python -m deep_context_federation.cli agent-profile \
+  --profile examples/agent_ready_profile.example.json
+```
+
+Then use the same profile as the single entrypoint:
+
+```bash
+python -m deep_context_federation.cli agent-ready \
+  --profile examples/agent_ready_profile.example.json \
+  --format prompt
+```
+
+The profile schema is still read-only: `authority_effect: none` and `no_apply: true`. Relative paths resolve from the profile file, not from the caller's shell, so Codex, Claude, AGY, GitHub runners, or shell wrappers can share the same machine-readable launch contract without duplicating manifest, policy, target, and token-budget flags. Invalid profiles return `fail_agent_ready` with `action_taken: blocked_by_profile` and emit no prompt.
 
 Fresh `agent-handoff` artifacts include an `input_fingerprint` digest over the manifest and explicitly listed source files. When `agent-ready` reuses an existing handoff and can see the current manifest, it compares that digest first; if a manifest-declared source changed, it returns `fail_agent_ready` and emits no prompt.
 
@@ -603,6 +621,8 @@ For global wrappers, prefer `dcf agent-model-input --input <handoff.json> --form
 Use `dcf agent-route --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `agent-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
 
 Use `dcf agent-ready --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then emit prompt text only if the final model-input gate passes.
+
+Use `dcf agent-profile --profile <profile.json>` and then `dcf agent-ready --profile <profile.json> --format prompt` when the runner should consume one machine-readable launch contract. Profile fields act as defaults; explicit CLI arguments can still add or override the operational request without changing the profile file.
 
 Reused handoffs are freshness-aware when their original `input_fingerprint` is present. A changed manifest-declared source produces `input_fingerprint_mismatch`, so wrappers do not accidentally feed a model prompt built from stale evidence.
 

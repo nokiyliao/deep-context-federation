@@ -413,12 +413,14 @@ def build_agent_ready(
 def markdown_agent_ready(result: Mapping[str, Any]) -> str:
     route = result.get("route_summary") if isinstance(result.get("route_summary"), Mapping) else {}
     binding = result.get("request_binding") if isinstance(result.get("request_binding"), Mapping) else {}
+    profile = result.get("agent_profile_summary") if isinstance(result.get("agent_profile_summary"), Mapping) else {}
     lines = [
         "# Deep Context Federation Agent Ready",
         "",
         f"- Status: `{result.get('status')}`",
         f"- OK: `{result.get('ok')}`",
         f"- Action taken: `{result.get('action_taken')}`",
+        f"- Agent profile: `{profile.get('status') or 'not_used'}`",
         f"- Route status: `{route.get('status')}`",
         f"- Request binding: `{binding.get('status')}`",
         f"- Prompt source: `{result.get('prompt_source')}`",

@@ -10,6 +10,7 @@ from deep_context_federation.agent_discover import discover_agent_context
 from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
+from deep_context_federation.agent_profile import load_agent_profile
 from deep_context_federation.agent_ready import build_agent_ready
 from deep_context_federation.agent_route import route_agent_context
 from deep_context_federation.bootstrap import bootstrap_federation
@@ -79,6 +80,7 @@ __all__ = [
     "evaluate_target_review_gate",
     "load_efficiency_gate_policy",
     "load_agent_context_gate_policy",
+    "load_agent_profile",
     "load_quality_gate_policy",
     "load_target_review_gate_policy",
     "normalize_efficiency_gate_policy",

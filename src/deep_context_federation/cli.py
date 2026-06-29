@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Mapping, Sequence
 
 from deep_context_federation.adjudicate import adjudicate_target
 from deep_context_federation.adjudicate import markdown_adjudication
@@ -24,6 +24,9 @@ from deep_context_federation.agent_handoff_verify import markdown_agent_handoff_
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_model_input import markdown_agent_model_input
+from deep_context_federation.agent_profile import load_agent_profile
+from deep_context_federation.agent_profile import markdown_agent_profile
+from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_ready import build_agent_ready
 from deep_context_federation.agent_ready import markdown_agent_ready
 from deep_context_federation.agent_route import markdown_agent_route
@@ -104,6 +107,159 @@ def read_targets_file(path: Path) -> list[str]:
     if isinstance(data, list):
         return [str(item) for item in data if str(item).strip()]
     return [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
+
+
+AGENT_READY_DEFAULTS = {
+    "output_dir": Path(".dcf"),
+    "workflow_token_budget": 4000,
+    "context_token_budget": 4000,
+    "context_mode": "read-first",
+    "max_artifact_tokens": 1200,
+    "query_limit": 10,
+    "max_presets": 3,
+    "max_rows": 80,
+    "max_files": 5000,
+    "max_parse_bytes": 1_000_000,
+}
+
+
+def _profile_summary(profile: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": profile.get("schema_version"),
+        "ok": profile.get("ok"),
+        "status": profile.get("status"),
+        "profile_path": profile.get("profile_path"),
+        "profile_id": profile.get("profile_id"),
+        "summary": dict(profile.get("summary") if isinstance(profile.get("summary"), Mapping) else {}),
+    }
+
+
+def _profile_path(normalized: Mapping[str, Any], key: str) -> Path | None:
+    if key not in normalized:
+        return None
+    value = str(normalized.get(key) or "").strip()
+    return Path(value) if value else None
+
+
+def _profile_path_list(normalized: Mapping[str, Any], key: str) -> list[Path]:
+    values = normalized.get(key)
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        return []
+    return [Path(str(value)) for value in values if str(value).strip()]
+
+
+def _profile_int(args: argparse.Namespace, normalized: Mapping[str, Any], field: str) -> int:
+    value = getattr(args, field)
+    default = AGENT_READY_DEFAULTS[field]
+    if value == default and field in normalized:
+        return int(normalized[field])
+    return int(value)
+
+
+def _profile_string(args: argparse.Namespace, normalized: Mapping[str, Any], field: str) -> str:
+    value = str(getattr(args, field) or "")
+    default = str(AGENT_READY_DEFAULTS[field])
+    if value == default and field in normalized:
+        return str(normalized[field] or "")
+    return value
+
+
+def _agent_ready_profile_failure(*, args: argparse.Namespace, profile: Mapping[str, Any]) -> dict[str, Any]:
+    root = Path.cwd()
+    normalized = profile.get("normalized") if isinstance(profile.get("normalized"), Mapping) else {}
+    profile_root = _profile_path(normalized, "root")
+    if profile_root:
+        root = profile_root.expanduser().resolve()
+    elif getattr(args, "root", None):
+        root = args.root.expanduser().resolve()
+    return {
+        "schema_version": AGENT_READY_SCHEMA_VERSION,
+        "ok": False,
+        "status": "fail_agent_ready",
+        "authority_effect": "none",
+        "no_apply": True,
+        "root": root.as_posix(),
+        "task": str(normalized.get("task") or getattr(args, "task", "") or ""),
+        "targets": list(normalized.get("targets") or getattr(args, "target", []) or []),
+        "action_taken": "blocked_by_profile",
+        "agent_profile_summary": _profile_summary(profile),
+        "route_summary": {},
+        "handoff_summary": {},
+        "input_freshness": {},
+        "request_binding": {},
+        "model_input_summary": {},
+        "prompt_source": "",
+        "prompt_format": "",
+        "prompt_estimated_tokens": 0,
+        "prompt_text": "",
+        "token_economics": {},
+        "errors": [{"id": "agent_profile_invalid", "status": profile.get("status"), "profile_errors": list(profile.get("errors") or [])}],
+        "outputs": {},
+        "safety_boundaries": {
+            "authority_effect": "none",
+            "no_apply": True,
+            "mutation_allowed": False,
+            "writes_only_output_dir": True,
+            "external_model_calls": False,
+            "source_or_authority_mutation": False,
+            "prompt_emitted_only_after_model_input_pass": True,
+        },
+    }
+
+
+def _resolve_agent_ready_args(args: argparse.Namespace, normalized: Mapping[str, Any]) -> dict[str, Any]:
+    root = args.root
+    if args.root == Path.cwd():
+        root = _profile_path(normalized, "root") or args.root
+    output_dir = args.output_dir
+    if args.output_dir == AGENT_READY_DEFAULTS["output_dir"]:
+        output_dir = _profile_path(normalized, "output_dir") or args.output_dir
+    manifests = list(args.manifest or []) or _profile_path_list(normalized, "manifests")
+    targets = list(args.target or []) or list(normalized.get("targets") or [])
+    if args.targets_file:
+        targets.extend(read_targets_file(args.targets_file))
+    handoff = args.handoff or _profile_path(normalized, "handoff")
+    quality_policy = args.quality_policy or _profile_path(normalized, "quality_policy")
+    target_review_policy = args.target_review_policy or _profile_path(normalized, "target_review_policy")
+    efficiency_policy = args.efficiency_policy or _profile_path(normalized, "efficiency_policy")
+    context_gate_policy = args.context_gate_policy or _profile_path(normalized, "context_gate_policy")
+    codebase_memory_cache_dir = args.codebase_memory_cache_dir or _profile_path(normalized, "codebase_memory_cache_dir")
+    baselines = list(args.baseline or []) or _profile_path_list(normalized, "baselines")
+    task = str(args.task or normalized.get("task") or "")
+    include_content = bool(normalized.get("include_content")) if "include_content" in normalized else not args.no_content
+    if args.no_content:
+        include_content = False
+    include_prompt = bool(normalized.get("include_prompt")) if "include_prompt" in normalized else not args.no_prompt
+    if args.no_prompt:
+        include_prompt = False
+    return {
+        "root": root,
+        "output_dir": output_dir,
+        "manifests": manifests,
+        "task": task,
+        "targets": targets,
+        "handoff_path": handoff,
+        "quality_policy_path": quality_policy,
+        "target_review_policy_path": target_review_policy,
+        "efficiency_policy_path": efficiency_policy,
+        "context_gate_policy_path": context_gate_policy,
+        "workflow_token_budget": _profile_int(args, normalized, "workflow_token_budget"),
+        "context_token_budget": _profile_int(args, normalized, "context_token_budget"),
+        "context_mode": _profile_string(args, normalized, "context_mode"),
+        "max_artifact_tokens": _profile_int(args, normalized, "max_artifact_tokens"),
+        "query_limit": _profile_int(args, normalized, "query_limit"),
+        "max_presets": _profile_int(args, normalized, "max_presets"),
+        "max_rows": _profile_int(args, normalized, "max_rows"),
+        "max_files": _profile_int(args, normalized, "max_files"),
+        "max_parse_bytes": _profile_int(args, normalized, "max_parse_bytes"),
+        "include_hashes": bool(args.hash_files or normalized.get("hash_files")),
+        "include_codebase_memory": bool(args.include_codebase_memory or normalized.get("include_codebase_memory")),
+        "codebase_memory_cache_dir": codebase_memory_cache_dir,
+        "include_content": include_content,
+        "include_prompt": include_prompt,
+        "include_details": bool(args.include_details or normalized.get("include_details")),
+        "extra_baselines": baselines,
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -304,6 +460,10 @@ def build_parser() -> argparse.ArgumentParser:
     agent_model_input.add_argument("--output", type=Path)
     agent_model_input.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
     agent_model_input.add_argument("--format", choices=["json", "markdown", "prompt"], default="json")
+    agent_profile = sub.add_parser("agent-profile", help="Validate and normalize an agent-ready profile for global wrappers.")
+    agent_profile.add_argument("--profile", type=Path, required=True)
+    agent_profile.add_argument("--output", type=Path)
+    agent_profile.add_argument("--format", choices=["json", "markdown"], default="json")
     agent_discover = sub.add_parser("agent-discover", help="Discover repo-local DCF handoff readiness for global wrappers.")
     agent_discover.add_argument("--root", type=Path, default=Path.cwd())
     agent_discover.add_argument("--handoff", type=Path)
@@ -318,6 +478,7 @@ def build_parser() -> argparse.ArgumentParser:
     agent_route.add_argument("--output", type=Path)
     agent_route.add_argument("--format", choices=["json", "markdown"], default="json")
     agent_ready = sub.add_parser("agent-ready", help="Fail-closed DCF pipeline that emits model prompt text only when gates pass.")
+    agent_ready.add_argument("--profile", type=Path, help="Optional machine-readable defaults for global wrappers.")
     agent_ready.add_argument("--root", type=Path, default=Path.cwd())
     agent_ready.add_argument("--output-dir", type=Path, default=Path(".dcf"))
     agent_ready.add_argument("--manifest", type=Path, action="append", default=[])
@@ -882,6 +1043,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2
+    if args.command == "agent-profile":
+        result = load_agent_profile(args.profile)
+        if args.output:
+            result["outputs"] = {"agent_profile_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_agent_profile(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
     if args.command == "agent-discover":
         result = discover_agent_context(root=args.root, handoff_path=args.handoff)
         if args.output:
@@ -909,43 +1080,57 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0
     if args.command == "agent-ready":
-        targets = list(args.target or [])
-        if args.targets_file:
-            targets.extend(read_targets_file(args.targets_file))
-        quality_policy = load_quality_gate_policy(args.quality_policy) if args.quality_policy else None
-        target_policy = load_target_review_gate_policy(args.target_review_policy) if args.target_review_policy else None
-        efficiency_policy = load_efficiency_gate_policy(args.efficiency_policy) if args.efficiency_policy else None
-        context_gate_policy = load_agent_context_gate_policy(args.context_gate_policy) if args.context_gate_policy else None
+        profile = load_agent_profile(args.profile) if args.profile else {}
+        if profile and profile.get("ok") is not True:
+            result = _agent_ready_profile_failure(args=args, profile=profile)
+            if args.output:
+                result["outputs"] = {"agent_ready_json": args.output.expanduser().resolve().as_posix()}
+                write_json(args.output, result)
+            if args.format == "prompt":
+                pass
+            elif args.format == "markdown":
+                print(markdown_agent_ready(result))
+            else:
+                print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+            return 2
+        normalized = profile.get("normalized") if isinstance(profile.get("normalized"), Mapping) else {}
+        ready_args = _resolve_agent_ready_args(args, normalized)
+        quality_policy = load_quality_gate_policy(ready_args["quality_policy_path"]) if ready_args["quality_policy_path"] else None
+        target_policy = load_target_review_gate_policy(ready_args["target_review_policy_path"]) if ready_args["target_review_policy_path"] else None
+        efficiency_policy = load_efficiency_gate_policy(ready_args["efficiency_policy_path"]) if ready_args["efficiency_policy_path"] else None
+        context_gate_policy = load_agent_context_gate_policy(ready_args["context_gate_policy_path"]) if ready_args["context_gate_policy_path"] else None
         result = build_agent_ready(
-            root=args.root,
-            output_dir=args.output_dir,
-            manifests=args.manifest,
-            task=args.task,
-            targets=targets,
-            handoff_path=args.handoff,
+            root=ready_args["root"],
+            output_dir=ready_args["output_dir"],
+            manifests=ready_args["manifests"],
+            task=ready_args["task"],
+            targets=ready_args["targets"],
+            handoff_path=ready_args["handoff_path"],
             quality_gate_policy=quality_policy,
             target_review_gate_policy=target_policy,
             efficiency_gate_policy=efficiency_policy,
             agent_context_gate_policy=context_gate_policy,
-            quality_policy_path=args.quality_policy,
-            target_review_policy_path=args.target_review_policy,
-            workflow_token_budget=args.workflow_token_budget,
-            context_token_budget=args.context_token_budget,
-            context_mode=args.context_mode,
-            max_artifact_tokens=args.max_artifact_tokens,
-            query_limit=args.query_limit,
-            max_presets=args.max_presets,
-            max_rows=args.max_rows,
-            max_files=args.max_files,
-            max_parse_bytes=args.max_parse_bytes,
-            include_hashes=args.hash_files,
-            include_codebase_memory=args.include_codebase_memory,
-            codebase_memory_cache_dir=args.codebase_memory_cache_dir,
-            include_content=not args.no_content,
-            include_prompt=not args.no_prompt,
-            include_details=args.include_details,
-            extra_baselines=args.baseline,
+            quality_policy_path=ready_args["quality_policy_path"],
+            target_review_policy_path=ready_args["target_review_policy_path"],
+            workflow_token_budget=ready_args["workflow_token_budget"],
+            context_token_budget=ready_args["context_token_budget"],
+            context_mode=ready_args["context_mode"],
+            max_artifact_tokens=ready_args["max_artifact_tokens"],
+            query_limit=ready_args["query_limit"],
+            max_presets=ready_args["max_presets"],
+            max_rows=ready_args["max_rows"],
+            max_files=ready_args["max_files"],
+            max_parse_bytes=ready_args["max_parse_bytes"],
+            include_hashes=ready_args["include_hashes"],
+            include_codebase_memory=ready_args["include_codebase_memory"],
+            codebase_memory_cache_dir=ready_args["codebase_memory_cache_dir"],
+            include_content=ready_args["include_content"],
+            include_prompt=ready_args["include_prompt"],
+            include_details=ready_args["include_details"],
+            extra_baselines=ready_args["extra_baselines"],
         )
+        if profile:
+            result["agent_profile_summary"] = _profile_summary(profile)
         if args.output:
             result["outputs"] = dict(result.get("outputs") if isinstance(result.get("outputs"), dict) else {})
             result["outputs"]["agent_ready_json"] = args.output.expanduser().resolve().as_posix()

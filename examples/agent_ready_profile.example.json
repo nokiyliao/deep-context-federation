@@ -1,0 +1,21 @@
+{
+  "schema_version": "deep_context_federation_agent_profile_v1",
+  "profile_id": "example_agent_ready_profile",
+  "description": "Example agent-ready profile for global wrappers.",
+  "authority_effect": "none",
+  "no_apply": true,
+  "root": ".",
+  "output_dir": ".dcf-profile",
+  "manifests": [
+    "deep_context_federation.example.json"
+  ],
+  "task": "dashboard operator evidence authority",
+  "targets": [
+    "dashboard_readiness_projection"
+  ],
+  "efficiency_policy": "efficiency_gate_policy.example.json",
+  "context_gate_policy": "agent_context_gate_policy.example.json",
+  "workflow_token_budget": 900,
+  "context_token_budget": 1800,
+  "max_artifact_tokens": 500
+}

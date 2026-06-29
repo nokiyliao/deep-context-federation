@@ -243,7 +243,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.61.0"
+    assert payload["package"]["version"] == "0.62.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -1477,7 +1477,9 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["authority_effect"] == "none"
     assert result["no_apply"] is True
     assert result["ok"] is True
-    assert result["status"] in {"pass_agent_handoff", "warn_agent_handoff"}
+    assert result["status"] == "pass_agent_handoff"
+    assert result["decision"]["action"] == "handoff"
+    assert result["decision"]["cautions"] == []
     assert result["decision"]["handoff_allowed"] is True
     assert result["agent_ci_summary"]["status"] == "pass_agent_ci"
     assert result["agent_context_gate_summary"]["status"] == "pass_agent_context_gate"

@@ -232,6 +232,8 @@ def _handoff_decision(
         ("context_advantage", context_advantage),
         ("public_boundary_audit", public_boundary_audit),
     ):
+        if name == "agent_context" and agent_context.get("ok") is True and agent_context_gate.get("ok") is True:
+            continue
         if str(payload.get("status") or "").startswith("warn"):
             cautions.append({"id": f"{name}_warn", "status": payload.get("status")})
 

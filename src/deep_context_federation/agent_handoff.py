@@ -128,6 +128,7 @@ def _build_unified_context_for_handoff(
     out_dir: Path,
     limit: int,
     query: str,
+    max_tokens: int,
 ) -> tuple[dict[str, Any], Path, Path, dict[str, Any], Path, Path]:
     intake_outputs = _workflow_intake_outputs(agent_ci)
     federation_path = Path(str(intake_outputs.get("federation_json") or ""))
@@ -149,6 +150,7 @@ def _build_unified_context_for_handoff(
         unified_index_path=unified_index_json.as_posix(),
         query=query,
         limit=min(24, max(1, int(limit))),
+        max_tokens=max(1, int(max_tokens)),
     )
     write_json(selected_context_json, selected_context)
     write_markdown(selected_context_md, markdown_unified_working_set(selected_context).splitlines())
@@ -320,6 +322,7 @@ def build_agent_handoff(
         out_dir=out_dir,
         limit=max_rows,
         query=task,
+        max_tokens=max_artifact_tokens,
     )
 
     agent_context_gate = evaluate_agent_context_gate(agent_context, policy=agent_context_gate_policy)

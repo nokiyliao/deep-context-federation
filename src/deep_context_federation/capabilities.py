@@ -827,7 +827,7 @@ def _commands() -> list[dict[str, Any]]:
             "writes": ["optional selected context JSON when --output is set"],
             "output_schemas": [UNIFIED_WORKING_SET_SCHEMA_VERSION],
             "input_schemas": [UNIFIED_INDEX_SCHEMA_VERSION],
-            "options": ["--input", "--query", "--limit", "--label-chars", "--value-chars", "--output", "--format"],
+            "options": ["--input", "--query", "--limit", "--label-chars", "--value-chars", "--max-tokens", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },

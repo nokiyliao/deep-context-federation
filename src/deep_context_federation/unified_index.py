@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from deep_context_federation.builder import utc_now
+from deep_context_federation.context_pack import estimate_tokens
 
 UNIFIED_INDEX_SCHEMA_VERSION = "deep_context_federation_unified_index_v1"
 UNIFIED_WORKING_SET_SCHEMA_VERSION = "deep_context_federation_unified_working_set_v1"
@@ -61,6 +62,10 @@ def _json_text(value: Any) -> str:
         return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     except Exception:
         return str(value)
+
+
+def _pretty_json_text(value: Mapping[str, Any]) -> str:
+    return json.dumps(dict(value), ensure_ascii=True, indent=2, sort_keys=True) + "\n"
 
 
 def _count_terms(row: Mapping[str, Any], terms: Sequence[str]) -> int:
@@ -392,10 +397,14 @@ def build_unified_working_set(
     limit: int = 24,
     label_chars: int = 96,
     value_chars: int = 160,
+    max_tokens: int | None = None,
 ) -> dict[str, Any]:
     """Build a compact, task-scoped machine working set from a unified index."""
 
     limit = max(1, int(limit))
+    token_budget = int(max_tokens) if max_tokens is not None else None
+    if token_budget is not None:
+        token_budget = max(1, token_budget)
     terms = _terms(query)
     source_rows = _rows(unified_index.get("rows"))
     rows: list[dict[str, Any]] = []
@@ -409,61 +418,104 @@ def build_unified_working_set(
         if matched:
             rows = matched
     rows.sort(key=lambda item: (-int(item.get("query_match_score") or 0), -int(item.get("score") or 0), str(item.get("facet") or ""), str(item.get("label") or "")))
-    selected = [_compact_working_row(row, label_chars=label_chars, value_chars=value_chars) for row in rows[:limit]]
-    facet_counts = Counter(str(row.get("facet") or "") for row in selected)
+    candidates = [_compact_working_row(row, label_chars=label_chars, value_chars=value_chars) for row in rows[:limit]]
     warnings = []
-    if not selected:
-        warnings.append({"id": "no_selected_context_rows", "detail": "No rows were available for the compact working set."})
-    return {
-        "schema_version": UNIFIED_WORKING_SET_SCHEMA_VERSION,
-        "ok": True,
-        "status": "pass_unified_working_set" if selected else "warn_unified_working_set",
-        "authority_effect": "none",
-        "no_apply": True,
-        "generated_at": utc_now(),
-        "query": str(query or ""),
-        "limit": limit,
-        "inputs": {
-            "unified_index": {
-                "path": unified_index_path,
-                "schema_version": unified_index.get("schema_version"),
-                "row_count": len(source_rows),
-            }
-        },
-        "summary": {
-            "selected_row_count": len(selected),
-            "source_row_count": len(source_rows),
-            "omitted_row_count": max(0, len(source_rows) - len(selected)),
-            "facet_counts": dict(sorted(facet_counts.items())),
-            "query_filtered": bool(terms),
-            "warning_count": len(warnings),
-        },
-        "optimization_policy": {
-            "purpose": "task_scoped_machine_read_first",
-            "full_index_role": "audit_only",
-            "label_chars": max(8, int(label_chars)),
-            "value_chars": max(8, int(value_chars)),
-            "source_identity_collapsed": True,
-        },
-        "source_identity_policy": {
-            "public_identity": "deep_context_federation",
-            "user_facing_source_identity_collapsed": True,
-            "source_ids_exposed": False,
-            "source_table_exposed": False,
-            "upstream_identity_fields_stripped": True,
-            "audit_provenance_location": "unified_index_source",
-        },
-        "rows": selected,
-        "warnings": warnings,
-        "safety_boundaries": {
+
+    def build_payload(selected_rows: Sequence[Mapping[str, Any]], selected_warnings: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+        facet_counts = Counter(str(row.get("facet") or "") for row in selected_rows)
+        payload = {
+            "schema_version": UNIFIED_WORKING_SET_SCHEMA_VERSION,
+            "ok": True,
+            "status": "pass_unified_working_set" if selected_rows else "warn_unified_working_set",
             "authority_effect": "none",
             "no_apply": True,
-            "mutation_allowed": False,
-            "external_model_calls": False,
-            "source_or_authority_mutation": False,
-            "user_facing_source_identity_collapsed_to_dcf": True,
-        },
-    }
+            "generated_at": utc_now(),
+            "query": str(query or ""),
+            "limit": limit,
+            "inputs": {
+                "unified_index": {
+                    "path": unified_index_path,
+                    "schema_version": unified_index.get("schema_version"),
+                    "row_count": len(source_rows),
+                }
+            },
+            "summary": {
+                "selected_row_count": len(selected_rows),
+                "source_row_count": len(source_rows),
+                "candidate_row_count": len(candidates),
+                "omitted_row_count": max(0, len(source_rows) - len(selected_rows)),
+                "omitted_by_token_budget_count": max(0, len(candidates) - len(selected_rows)) if token_budget is not None else 0,
+                "facet_counts": dict(sorted(facet_counts.items())),
+                "query_filtered": bool(terms),
+                "estimated_tokens": 0,
+                "max_tokens": token_budget,
+                "token_budget_limited": token_budget is not None and len(selected_rows) < len(candidates),
+                "warning_count": len(selected_warnings),
+            },
+            "optimization_policy": {
+                "purpose": "task_scoped_machine_read_first",
+                "full_index_role": "audit_only",
+                "label_chars": max(8, int(label_chars)),
+                "value_chars": max(8, int(value_chars)),
+                "max_tokens": token_budget,
+                "source_identity_collapsed": True,
+            },
+            "source_identity_policy": {
+                "public_identity": "deep_context_federation",
+                "user_facing_source_identity_collapsed": True,
+                "source_ids_exposed": False,
+                "source_table_exposed": False,
+                "upstream_identity_fields_stripped": True,
+                "audit_provenance_location": "unified_index_source",
+            },
+            "rows": list(selected_rows),
+            "warnings": [dict(row) for row in selected_warnings],
+            "safety_boundaries": {
+                "authority_effect": "none",
+                "no_apply": True,
+                "mutation_allowed": False,
+                "external_model_calls": False,
+                "source_or_authority_mutation": False,
+                "user_facing_source_identity_collapsed_to_dcf": True,
+            },
+        }
+        payload["summary"]["estimated_tokens"] = estimate_tokens(_pretty_json_text(payload))
+        return payload
+
+    if token_budget is None:
+        selected = candidates
+    else:
+        selected = []
+        for row in candidates:
+            trial = [*selected, row]
+            if estimate_tokens(_pretty_json_text(build_payload(trial, warnings))) <= token_budget or not selected:
+                selected = trial
+        if len(selected) < len(candidates):
+            warnings.append(
+                {
+                    "id": "selected_context_token_budget_applied",
+                    "detail": {
+                        "max_tokens": token_budget,
+                        "candidate_row_count": len(candidates),
+                        "selected_row_count": len(selected),
+                    },
+                }
+            )
+    if not selected:
+        warnings.append({"id": "no_selected_context_rows", "detail": "No rows were available for the compact working set."})
+    payload = build_payload(selected, warnings)
+    while token_budget is not None and int(payload["summary"]["estimated_tokens"]) > token_budget and len(selected) > 1:
+        selected = selected[:-1]
+        payload = build_payload(selected, warnings)
+    if token_budget is not None and int(payload["summary"]["estimated_tokens"]) > token_budget:
+        payload["warnings"].append(
+            {
+                "id": "selected_context_minimum_exceeds_token_budget",
+                "detail": {"max_tokens": token_budget, "estimated_tokens": payload["summary"]["estimated_tokens"]},
+            }
+        )
+        payload["summary"]["warning_count"] = len(payload["warnings"])
+    return payload
 
 
 def markdown_unified_index(payload: Mapping[str, Any]) -> str:

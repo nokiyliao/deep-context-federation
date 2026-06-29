@@ -239,7 +239,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.47.0"
+    assert payload["package"]["version"] == "0.48.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -1052,6 +1052,8 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert selected_context["source_identity_policy"]["public_identity"] == "deep_context_federation"
     assert selected_context["source_identity_policy"]["source_ids_exposed"] is False
     assert selected_context["optimization_policy"]["full_index_role"] == "audit_only"
+    assert selected_context["optimization_policy"]["max_tokens"] == 500
+    assert selected_context["summary"]["max_tokens"] == 500
     assert selected_context["summary"]["selected_row_count"] <= 24
     assert validate_artifact_contract(selected_context, artifact_kind="unified_working_set")["ok"] is True
 
@@ -1407,6 +1409,21 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     assert_no_source_identity(selected["rows"])
     assert validate_artifact_contract(selected, artifact_kind="unified_working_set")["ok"] is True
 
+    budgeted = build_unified_working_set(
+        unified_index=unified,
+        unified_index_path=federation["outputs"]["json"],
+        query="dashboard operator",
+        limit=12,
+        max_tokens=900,
+    )
+    assert budgeted["optimization_policy"]["max_tokens"] == 900
+    assert budgeted["summary"]["max_tokens"] == 900
+    assert budgeted["summary"]["selected_row_count"] <= selected["summary"]["selected_row_count"]
+    assert budgeted["summary"]["estimated_tokens"] <= 900 or any(
+        row["id"] == "selected_context_minimum_exceeds_token_budget" for row in budgeted["warnings"]
+    )
+    assert validate_artifact_contract(budgeted, artifact_kind="unified_working_set")["ok"] is True
+
 
 def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
     federation = build_federation(
@@ -1470,6 +1487,8 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
             "dashboard",
             "--limit",
             "8",
+            "--max-tokens",
+            "800",
             "--output",
             str(selected_path),
             "--format",
@@ -1488,6 +1507,10 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
     assert selected_payload["outputs"]["selected_context_json"] == selected_path.resolve().as_posix()
     assert selected_payload["source_identity_policy"]["source_ids_exposed"] is False
     assert selected_payload["summary"]["selected_row_count"] <= 8
+    assert selected_payload["summary"]["max_tokens"] == 800
+    assert selected_payload["summary"]["estimated_tokens"] <= 800 or any(
+        row["id"] == "selected_context_minimum_exceeds_token_budget" for row in selected_payload["warnings"]
+    )
     assert selected_path.exists()
     assert validate_artifact_contract(selected_payload, artifact_kind="unified_working_set")["ok"] is True
 

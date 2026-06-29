@@ -770,6 +770,7 @@ dcf unify-context \
 
 - keeps `source_identity_policy.source_ids_exposed: false`
 - truncates long labels/values for predictable token use
+- supports `--max-tokens` so the selected JSON is packed to a model budget instead of a fixed row count
 - records `optimization_policy.full_index_role: audit_only`
 - preserves row ids, facets, scores, conflict attention, and command/capability hints
 
@@ -780,6 +781,7 @@ dcf select-context \
   --input .dcf/deep_context_federation_unified_index.json \
   --query "dashboard operator" \
   --limit 24 \
+  --max-tokens 900 \
   --format markdown
 ```
 

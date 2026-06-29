@@ -42,7 +42,7 @@ It does not decide production truth. It only projects and checks consistency acr
 Deep Context Federation now combines several capabilities that are usually split across separate tools:
 
 - generic JSON federation for arbitrary governance artifacts
-- self-bootstrap repo scan that emits starter inventory, surface, and symbol sources
+- self-bootstrap repo scan that emits starter inventory, surface, code-symbol, and dependency-graph sources
 - typed adapters for surface maps, symbol maps, and graph exports
 - claim-to-evidence lineage extraction
 - source health scoring and freshness warnings
@@ -161,7 +161,8 @@ PYTHONPATH=src python -m deep_context_federation.cli build \
 `dcf scan` gives the tool a self-starting path on unfamiliar codebases. It walks the repository with safe default excludes (`.git`, `.venv`, `node_modules`, `output`, `data`, `.codebase-memory`, and generated `.dcf*` folders), then writes:
 
 - `repo_file_inventory.json`: file/path/artifact inventory with surface hints
-- `repo_python_symbols.json`: Python AST symbol map with path and surface links
+- `repo_code_symbols.json`: Python AST plus conservative JS/TS symbol map with path and surface links
+- `repo_dependency_graph.json`: Python import plus JS/TS import/require dependency graph
 - `repo_surface_map.json`: starter surface map with owner placeholders
 - `deep_context_federation.generated.json`: manifest that can be fed into `dcf build`
 
@@ -171,7 +172,9 @@ One command can scan and build:
 dcf scan --root . --output-dir .dcf --write --build
 ```
 
-The scanner is still read-only from an authority perspective: every generated source declares `authority_effect: none` and `no_apply: true`. It does not install external tools, start watchers, modify hooks, or replace project-specific authority manifests.
+For backward compatibility, the scanner also writes `repo_python_symbols.json` as an alias of the code-symbol snapshot during the early alpha period.
+
+The scanner is still read-only from an authority perspective: every generated source declares `authority_effect: none` and `no_apply: true`. It does not install external tools, start watchers, modify hooks, or replace project-specific authority manifests. JS/TS extraction is intentionally conservative and dependency-free; projects that need full semantic precision should feed a dedicated parser or codegraph export into the same federation manifest.
 
 ## Manifest
 

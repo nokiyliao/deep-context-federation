@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import os
+import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -17,13 +18,16 @@ from deep_context_federation.manifest import MANIFEST_SCHEMA
 
 SCAN_SCHEMA_VERSION = "deep_context_federation_repo_scan_v1"
 FILE_INVENTORY_SCHEMA_VERSION = "deep_context_federation_repo_file_inventory_v1"
-SYMBOL_MAP_SCHEMA_VERSION = "deep_context_federation_repo_python_symbols_v1"
+SYMBOL_MAP_SCHEMA_VERSION = "deep_context_federation_repo_code_symbols_v1"
 SURFACE_MAP_SCHEMA_VERSION = "deep_context_federation_repo_surface_map_v1"
+DEPENDENCY_GRAPH_SCHEMA_VERSION = "deep_context_federation_repo_dependency_graph_v1"
 
 DEFAULT_MANIFEST_NAME = "deep_context_federation.generated.json"
 DEFAULT_INVENTORY_NAME = "repo_file_inventory.json"
-DEFAULT_SYMBOLS_NAME = "repo_python_symbols.json"
+DEFAULT_SYMBOLS_NAME = "repo_code_symbols.json"
+DEFAULT_LEGACY_SYMBOLS_NAME = "repo_python_symbols.json"
 DEFAULT_SURFACES_NAME = "repo_surface_map.json"
+DEFAULT_DEPENDENCIES_NAME = "repo_dependency_graph.json"
 
 DEFAULT_EXCLUDE_DIRS = {
     ".codebase-memory",
@@ -51,7 +55,9 @@ TEXT_SUFFIXES = {
     ".html",
     ".ini",
     ".js",
+    ".jsx",
     ".json",
+    ".mjs",
     ".md",
     ".py",
     ".toml",
@@ -61,6 +67,19 @@ TEXT_SUFFIXES = {
     ".yaml",
     ".yml",
 }
+
+CODE_SUFFIXES = {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}
+JS_TS_SUFFIXES = {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}
+
+JS_CLASS_RE = re.compile(r"^\s*(?:export\s+default\s+|export\s+)?class\s+([A-Za-z_$][\w$]*)\b", re.MULTILINE)
+JS_FUNCTION_RE = re.compile(r"^\s*(?:export\s+default\s+|export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(", re.MULTILINE)
+JS_ARROW_RE = re.compile(
+    r"^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>",
+    re.MULTILINE,
+)
+JS_IMPORT_FROM_RE = re.compile(r"\bimport\s+(?:type\s+)?[\s\S]{0,300}?\s+from\s+['\"]([^'\"]+)['\"]", re.MULTILINE)
+JS_IMPORT_SIDE_EFFECT_RE = re.compile(r"^\s*import\s+['\"]([^'\"]+)['\"]", re.MULTILINE)
+JS_REQUIRE_RE = re.compile(r"\brequire\(\s*['\"]([^'\"]+)['\"]\s*\)")
 
 
 def _relative(path: Path, root: Path) -> str:
@@ -105,17 +124,29 @@ def _module_name(rel_path: str) -> str:
     return ".".join(part for part in parts if part) or path.stem
 
 
-def _python_symbols(path: Path, root: Path, rel_path: str, *, max_parse_bytes: int) -> tuple[list[dict[str, Any]], str]:
+def _line_for_offset(text: str, offset: int) -> int:
+    return text.count("\n", 0, max(0, offset)) + 1
+
+
+def _read_text_for_parse(path: Path, *, max_parse_bytes: int) -> tuple[str, str]:
     try:
         if path.stat().st_size > max_parse_bytes:
-            return [], "too_large"
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+            return "", "too_large"
+        return path.read_text(encoding="utf-8"), ""
     except UnicodeDecodeError:
-        return [], "decode_error"
+        return "", "decode_error"
+    except OSError:
+        return "", "read_error"
+
+
+def _python_symbols(path: Path, rel_path: str, *, max_parse_bytes: int) -> tuple[list[dict[str, Any]], str]:
+    text, failure = _read_text_for_parse(path, max_parse_bytes=max_parse_bytes)
+    if failure:
+        return [], failure
+    try:
+        tree = ast.parse(text)
     except SyntaxError:
         return [], "syntax_error"
-    except OSError:
-        return [], "read_error"
 
     module = _module_name(rel_path)
     surface_id, _owner = _surface_for(rel_path)
@@ -156,6 +187,146 @@ def _python_symbols(path: Path, root: Path, rel_path: str, *, max_parse_bytes: i
                         }
                     )
     return rows, ""
+
+
+def _js_ts_symbols(path: Path, rel_path: str, *, max_parse_bytes: int) -> tuple[list[dict[str, Any]], str]:
+    text, failure = _read_text_for_parse(path, max_parse_bytes=max_parse_bytes)
+    if failure:
+        return [], failure
+    module = _module_name(rel_path)
+    surface_id, _owner = _surface_for(rel_path)
+    rows: list[dict[str, Any]] = []
+    for regex, kind in [
+        (JS_CLASS_RE, "class"),
+        (JS_FUNCTION_RE, "function"),
+        (JS_ARROW_RE, "arrow_function"),
+    ]:
+        for match in regex.finditer(text):
+            rows.append(
+                {
+                    "symbol_fqn": f"{module}.{match.group(1)}",
+                    "path": rel_path,
+                    "kind": kind,
+                    "language": "typescript" if Path(rel_path).suffix.lower() in {".ts", ".tsx"} else "javascript",
+                    "line": _line_for_offset(text, match.start()),
+                    "surface_id": surface_id,
+                }
+            )
+    return rows, ""
+
+
+def _resolve_relative_import(root: Path, rel_path: str, raw_target: str) -> str:
+    if not raw_target.startswith("."):
+        return raw_target
+    base = (root / rel_path).parent
+    if raw_target.startswith(("./", "../")):
+        raw = (base / raw_target).resolve()
+    else:
+        level = len(raw_target) - len(raw_target.lstrip("."))
+        remainder = raw_target[level:]
+        for _ in range(max(0, level - 1)):
+            base = base.parent
+        raw = base.joinpath(*[part for part in remainder.split(".") if part]).resolve()
+    candidates: list[Path] = []
+    if raw.suffix:
+        candidates.append(raw)
+    else:
+        for suffix in [".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]:
+            candidates.append(raw.with_suffix(suffix))
+        for suffix in [".py", ".ts", ".tsx", ".js", ".jsx"]:
+            candidates.append(raw / f"index{suffix}")
+        candidates.append(raw / "__init__.py")
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return _relative(candidate, root)
+    return raw_target
+
+
+def _resolve_python_module(root: Path, module: str) -> str:
+    if not module or module.startswith("."):
+        return module
+    parts = [part for part in module.split(".") if part]
+    if not parts:
+        return module
+    candidates = [
+        root.joinpath(*parts).with_suffix(".py"),
+        root.joinpath(*parts, "__init__.py"),
+        root.joinpath("src", *parts).with_suffix(".py"),
+        root.joinpath("src", *parts, "__init__.py"),
+    ]
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return _relative(candidate, root)
+    return module
+
+
+def _python_import_edges(root: Path, path: Path, rel_path: str, *, max_parse_bytes: int) -> tuple[list[dict[str, Any]], str]:
+    text, failure = _read_text_for_parse(path, max_parse_bytes=max_parse_bytes)
+    if failure:
+        return [], failure
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return [], "syntax_error"
+    edges: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name:
+                    target = _resolve_python_module(root, alias.name)
+                    edges.append(
+                        {
+                            "from": rel_path,
+                            "to": target,
+                            "relation": "REFERENCES",
+                            "language": "python",
+                            "line": node.lineno,
+                            "evidence": rel_path,
+                        }
+                    )
+        elif isinstance(node, ast.ImportFrom):
+            module = "." * int(node.level or 0) + str(node.module or "")
+            target = _resolve_relative_import(root, rel_path, module) if module.startswith(".") else _resolve_python_module(root, module)
+            if target:
+                edges.append(
+                    {
+                        "from": rel_path,
+                        "to": target,
+                        "relation": "REFERENCES",
+                        "language": "python",
+                        "line": node.lineno,
+                        "evidence": rel_path,
+                    }
+                )
+    return edges, ""
+
+
+def _js_ts_import_edges(root: Path, path: Path, rel_path: str, *, max_parse_bytes: int) -> tuple[list[dict[str, Any]], str]:
+    text, failure = _read_text_for_parse(path, max_parse_bytes=max_parse_bytes)
+    if failure:
+        return [], failure
+    edges: list[dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
+    language = "typescript" if Path(rel_path).suffix.lower() in {".ts", ".tsx"} else "javascript"
+    for regex in [JS_IMPORT_FROM_RE, JS_IMPORT_SIDE_EFFECT_RE, JS_REQUIRE_RE]:
+        for match in regex.finditer(text):
+            raw_target = match.group(1)
+            line = _line_for_offset(text, match.start())
+            key = (raw_target, line)
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append(
+                {
+                    "from": rel_path,
+                    "to": _resolve_relative_import(root, rel_path, raw_target),
+                    "relation": "REFERENCES",
+                    "language": language,
+                    "line": line,
+                    "evidence": rel_path,
+                }
+            )
+    return edges, ""
 
 
 def iter_repo_files(root: Path, *, exclude_dirs: set[str], max_files: int) -> tuple[list[Path], dict[str, Any]]:
@@ -237,7 +408,7 @@ def _file_inventory_payload(
                 "label": "Read-only repository inventory was generated.",
                 "status": "advisory",
                 "authority_level": "advisory",
-                "supporting_artifacts": [DEFAULT_INVENTORY_NAME, DEFAULT_SYMBOLS_NAME, DEFAULT_SURFACES_NAME],
+                "supporting_artifacts": [DEFAULT_INVENTORY_NAME, DEFAULT_SYMBOLS_NAME, DEFAULT_SURFACES_NAME, DEFAULT_DEPENDENCIES_NAME],
                 "verifiers": ["dcf scan", "dcf validate-manifest", "dcf verify"],
             }
         ],
@@ -256,13 +427,24 @@ def _symbol_map_payload(
 ) -> tuple[dict[str, Any], Counter[str]]:
     rows: list[dict[str, Any]] = []
     parse_failures: Counter[str] = Counter()
+    by_language: Counter[str] = Counter()
     for path in files:
-        if path.suffix.lower() != ".py":
+        suffix = path.suffix.lower()
+        if suffix not in CODE_SUFFIXES:
             continue
         rel_path = _relative(path, root)
-        symbols, failure = _python_symbols(path, root, rel_path, max_parse_bytes=max_parse_bytes)
+        if suffix == ".py":
+            symbols, failure = _python_symbols(path, rel_path, max_parse_bytes=max_parse_bytes)
+            language = "python"
+        elif suffix in JS_TS_SUFFIXES:
+            symbols, failure = _js_ts_symbols(path, rel_path, max_parse_bytes=max_parse_bytes)
+            language = "typescript" if suffix in {".ts", ".tsx"} else "javascript"
+        else:
+            symbols, failure = [], ""
         if failure:
-            parse_failures[failure] += 1
+            parse_failures[f"{language}:{failure}"] += 1
+        if symbols:
+            by_language[language] += len(symbols)
         rows.extend(symbols)
 
     payload = {
@@ -274,9 +456,88 @@ def _symbol_map_payload(
         "summary": {
             "status": "pass",
             "symbol_count": len(rows),
+            "by_language": dict(sorted(by_language.items())),
             "parse_failures": dict(sorted(parse_failures.items())),
         },
         "symbols": rows,
+    }
+    return payload, parse_failures
+
+
+def _dependency_graph_payload(
+    *,
+    root: Path,
+    files: Sequence[Path],
+    generated_at: str,
+    head_commit: str,
+    max_parse_bytes: int,
+) -> tuple[dict[str, Any], Counter[str]]:
+    nodes: dict[str, dict[str, Any]] = {}
+    edges: list[dict[str, Any]] = []
+    parse_failures: Counter[str] = Counter()
+    by_language: Counter[str] = Counter()
+    for path in files:
+        suffix = path.suffix.lower()
+        if suffix not in CODE_SUFFIXES:
+            continue
+        rel_path = _relative(path, root)
+        surface_id, _owner = _surface_for(rel_path)
+        language = "python" if suffix == ".py" else ("typescript" if suffix in {".ts", ".tsx"} else "javascript")
+        nodes[rel_path] = {
+            "id": rel_path,
+            "path": rel_path,
+            "kind": "path",
+            "surface_id": surface_id,
+            "language": language,
+        }
+        if suffix == ".py":
+            found, failure = _python_import_edges(root, path, rel_path, max_parse_bytes=max_parse_bytes)
+        else:
+            found, failure = _js_ts_import_edges(root, path, rel_path, max_parse_bytes=max_parse_bytes)
+        if failure:
+            parse_failures[f"{language}:{failure}"] += 1
+        if found:
+            by_language[language] += len(found)
+        for edge in found:
+            target = str(edge.get("to") or "")
+            if "/" in target or target.endswith(tuple(CODE_SUFFIXES)):
+                nodes.setdefault(
+                    target,
+                    {
+                        "id": target,
+                        "path": target,
+                        "kind": "path",
+                        "surface_id": _surface_for(target)[0],
+                        "language": "",
+                    },
+                )
+            else:
+                nodes.setdefault(
+                    target,
+                    {
+                        "id": target,
+                        "name": target,
+                        "kind": "symbol",
+                        "language": "",
+                    },
+                )
+            edges.append(edge)
+
+    payload = {
+        "schema_version": DEPENDENCY_GRAPH_SCHEMA_VERSION,
+        "authority_effect": "none",
+        "no_apply": True,
+        "generated_at": generated_at,
+        "head_commit": head_commit,
+        "summary": {
+            "status": "pass",
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "by_language": dict(sorted(by_language.items())),
+            "parse_failures": dict(sorted(parse_failures.items())),
+        },
+        "nodes": sorted(nodes.values(), key=lambda item: str(item.get("id") or "")),
+        "edges": edges,
     }
     return payload, parse_failures
 
@@ -333,11 +594,18 @@ def _manifest_payload() -> dict[str, Any]:
                 "verifier": "dcf scan",
             },
             {
-                "source_id": "repo_python_symbols",
+                "source_id": "repo_code_symbols",
                 "role": "advisory_source_symbol_graph",
                 "required": False,
                 "path": DEFAULT_SYMBOLS_NAME,
-                "verifier": "python_ast_parse",
+                "verifier": "stdlib_ast_and_conservative_regex_parse",
+            },
+            {
+                "source_id": "repo_dependency_graph",
+                "role": "advisory_dependency_graph",
+                "required": False,
+                "path": DEFAULT_DEPENDENCIES_NAME,
+                "verifier": "stdlib_import_parse",
             },
             {
                 "source_id": "repo_surface_map",
@@ -396,6 +664,13 @@ def scan_repository(
         head_commit=head_commit,
         max_parse_bytes=max_parse_bytes,
     )
+    dependency_graph, dependency_parse_failures = _dependency_graph_payload(
+        root=root,
+        files=files,
+        generated_at=generated_at,
+        head_commit=head_commit,
+        max_parse_bytes=max_parse_bytes,
+    )
     surfaces = _surface_map_payload(generated_at=generated_at, head_commit=head_commit, by_surface=by_surface)
     manifest = _manifest_payload()
 
@@ -403,11 +678,15 @@ def scan_repository(
         "manifest": (resolved_output / DEFAULT_MANIFEST_NAME).as_posix(),
         "inventory": (resolved_output / DEFAULT_INVENTORY_NAME).as_posix(),
         "symbols": (resolved_output / DEFAULT_SYMBOLS_NAME).as_posix(),
+        "legacy_python_symbols": (resolved_output / DEFAULT_LEGACY_SYMBOLS_NAME).as_posix(),
         "surfaces": (resolved_output / DEFAULT_SURFACES_NAME).as_posix(),
+        "dependencies": (resolved_output / DEFAULT_DEPENDENCIES_NAME).as_posix(),
     }
     if write:
         write_json(Path(output_paths["inventory"]), inventory)
         write_json(Path(output_paths["symbols"]), symbols)
+        write_json(Path(output_paths["legacy_python_symbols"]), symbols)
+        write_json(Path(output_paths["dependencies"]), dependency_graph)
         write_json(Path(output_paths["surfaces"]), surfaces)
         write_json(Path(output_paths["manifest"]), manifest)
 
@@ -425,6 +704,7 @@ def scan_repository(
         "summary": {
             "file_count": int(inventory["summary"]["file_count"]),
             "symbol_count": int(symbols["summary"]["symbol_count"]),
+            "dependency_edge_count": int(dependency_graph["summary"]["edge_count"]),
             "surface_count": int(surfaces["summary"]["surface_count"]),
             "total_bytes": int(inventory["summary"]["total_bytes"]),
             "truncated": bool(walk_summary.get("truncated")),
@@ -432,6 +712,7 @@ def scan_repository(
             "by_surface": dict(sorted(by_surface.items())),
             "by_suffix": dict(sorted(by_suffix.items())),
             "parse_failures": dict(sorted(parse_failures.items())),
+            "dependency_parse_failures": dict(sorted(dependency_parse_failures.items())),
         },
         "outputs": output_paths,
     }
@@ -447,7 +728,7 @@ def markdown_scan(result: Mapping[str, Any]) -> str:
         f"- Authority effect: `{result.get('authority_effect')}`",
         f"- No apply: `{result.get('no_apply')}`",
         f"- Root: `{result.get('root')}`",
-        f"- Files: `{summary.get('file_count')}` symbols=`{summary.get('symbol_count')}` surfaces=`{summary.get('surface_count')}` truncated=`{summary.get('truncated')}`",
+        f"- Files: `{summary.get('file_count')}` symbols=`{summary.get('symbol_count')}` dependencies=`{summary.get('dependency_edge_count')}` surfaces=`{summary.get('surface_count')}` truncated=`{summary.get('truncated')}`",
         "",
         "## Outputs",
         "",

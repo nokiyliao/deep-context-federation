@@ -239,12 +239,27 @@ def test_repo_scan_bootstraps_buildable_federation(tmp_path: Path) -> None:
     (repo / "src/pkg/mod.py").write_text(
         "\n".join(
             [
+                "from .util import value",
+                "",
                 "class Thing:",
                 "    def run(self):",
-                "        return 1",
+                "        return value",
                 "",
                 "def helper():",
                 "    return Thing().run()",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (repo / "src/pkg/util.py").write_text("value = 1\n", encoding="utf-8")
+    (repo / "src/app.ts").write_text(
+        "\n".join(
+            [
+                "import { helper } from './pkg/mod';",
+                "",
+                "export class Panel {}",
+                "export const renderPanel = () => helper();",
             ]
         )
         + "\n",
@@ -257,20 +272,32 @@ def test_repo_scan_bootstraps_buildable_federation(tmp_path: Path) -> None:
     assert result["schema_version"] == "deep_context_federation_repo_scan_v1"
     assert result["authority_effect"] == "none"
     assert result["no_apply"] is True
-    assert result["summary"]["file_count"] == 4
-    assert result["summary"]["symbol_count"] >= 2
+    assert result["summary"]["file_count"] == 6
+    assert result["summary"]["symbol_count"] >= 4
+    assert result["summary"]["dependency_edge_count"] >= 2
     assert "output" in result["summary"]["skipped_dirs"]
 
     manifest_path = Path(result["outputs"]["manifest"])
     assert manifest_path.exists()
     assert Path(result["outputs"]["inventory"]).exists()
     assert Path(result["outputs"]["symbols"]).exists()
+    assert Path(result["outputs"]["legacy_python_symbols"]).exists()
     assert Path(result["outputs"]["surfaces"]).exists()
+    assert Path(result["outputs"]["dependencies"]).exists()
 
     symbol_payload = json.loads(Path(result["outputs"]["symbols"]).read_text(encoding="utf-8"))
     symbols = [row["symbol_fqn"] for row in symbol_payload["symbols"]]
     assert any(symbol.endswith(".Thing") for symbol in symbols)
     assert any(symbol.endswith(".helper") for symbol in symbols)
+    assert any(symbol.endswith(".Panel") for symbol in symbols)
+    assert any(symbol.endswith(".renderPanel") for symbol in symbols)
+
+    dependency_payload = json.loads(Path(result["outputs"]["dependencies"]).read_text(encoding="utf-8"))
+    assert dependency_payload["summary"]["edge_count"] >= 2
+    assert any(row["to"] == "src/pkg/mod.py" for row in dependency_payload["edges"])
+    assert any(row["from"] == "src/app.ts" and row["to"] == "src/pkg/mod.py" for row in dependency_payload["edges"])
+    assert any(row["from"] == "tests/test_mod.py" and row["to"] == "src/pkg/mod.py" for row in dependency_payload["edges"])
+    assert any(row["from"] == "src/pkg/mod.py" and row["to"] == "src/pkg/util.py" for row in dependency_payload["edges"])
 
     payload = build_federation(
         manifest_path=manifest_path,
@@ -283,6 +310,7 @@ def test_repo_scan_bootstraps_buildable_federation(tmp_path: Path) -> None:
     assert payload["summary"]["error_count"] == 0
     assert payload["graph_summary"]["edge_type_counts"]["OWNS"] > 0
     assert payload["graph_summary"]["edge_type_counts"]["REFERENCES_SYMBOL"] > 0
+    assert any(source["source_id"] == "repo_dependency_graph" for source in payload["sources"])
 
     query = query_federation(payload, preset="code-to-authority", limit=20)
     values = {row["value"] for row in query["rows"]}

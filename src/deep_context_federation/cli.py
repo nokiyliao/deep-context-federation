@@ -9,11 +9,18 @@ from typing import Sequence
 
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.builder import DEFAULT_JSON_NAME, build_federation, read_json
+from deep_context_federation.diff import diff_federations
+from deep_context_federation.diff import markdown_diff
+from deep_context_federation.doctor import doctor_federation
+from deep_context_federation.doctor import markdown_doctor
 from deep_context_federation.graph import markdown_trace
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.query import markdown as query_markdown
 from deep_context_federation.query import query_federation
+from deep_context_federation.rank import markdown_rank
+from deep_context_federation.rank import rank_entities
+from deep_context_federation.rank import rank_sources
 from deep_context_federation.sqlite_query import SQL_PRESETS
 from deep_context_federation.sqlite_query import markdown as sql_markdown
 from deep_context_federation.sqlite_query import query_sqlite
@@ -55,6 +62,18 @@ def build_parser() -> argparse.ArgumentParser:
     trace.add_argument("--depth", type=int, default=2)
     trace.add_argument("--limit", type=int, default=50)
     trace.add_argument("--format", choices=["json", "markdown"], default="json")
+    doctor = sub.add_parser("doctor", help="Diagnose federation health and recommend next actions.")
+    doctor.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
+    doctor.add_argument("--format", choices=["json", "markdown"], default="json")
+    rank = sub.add_parser("rank", help="Rank important entities or risky sources.")
+    rank.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
+    rank.add_argument("--kind", choices=["entities", "sources"], default="entities")
+    rank.add_argument("--limit", type=int, default=20)
+    rank.add_argument("--format", choices=["json", "markdown"], default="json")
+    diff = sub.add_parser("diff", help="Diff two federation artifacts.")
+    diff.add_argument("--before", type=Path, required=True)
+    diff.add_argument("--after", type=Path, required=True)
+    diff.add_argument("--format", choices=["json", "markdown"], default="json")
     sql = sub.add_parser("sql", help="Query the generated SQLite read model.")
     sql.add_argument("--sqlite", type=Path, default=Path(".dcf") / "deep_context_federation_latest.sqlite")
     sql.add_argument("--preset", choices=sorted(SQL_PRESETS), required=True)
@@ -124,6 +143,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = trace_federation(payload, match=args.match, depth=args.depth, limit=args.limit)
         if args.format == "markdown":
             print(markdown_trace(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "doctor":
+        payload = read_required_json(args.input)
+        result = doctor_federation(payload)
+        if args.format == "markdown":
+            print(markdown_doctor(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "rank":
+        payload = read_required_json(args.input)
+        result = rank_sources(payload, limit=args.limit) if args.kind == "sources" else rank_entities(payload, limit=args.limit)
+        if args.format == "markdown":
+            print(markdown_rank(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "diff":
+        before = read_required_json(args.before)
+        after = read_required_json(args.after)
+        result = diff_federations(before, after)
+        if args.format == "markdown":
+            print(markdown_diff(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0

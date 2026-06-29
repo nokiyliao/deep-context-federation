@@ -772,7 +772,7 @@ def write_sqlite(path: Path, payload: Mapping[str, Any]) -> None:
         path.unlink()
     conn = sqlite3.connect(path)
     try:
-        conn.execute("create table sources (source_id text primary key, role text, required integer, status text, path text, summary_json text)")
+        conn.execute("create table sources (source_id text primary key, role text, required integer, status text, path text, quality_score integer, quality_reasons_json text, summary_json text)")
         conn.execute("create table entities (entity_id text primary key, entity_type text, value text, label text, source_ids_json text, metadata_json text)")
         conn.execute("create table edges (edge_id text primary key, edge_type text, from_entity text, to_entity text, source_id text)")
         conn.execute("create table conflicts (conflict_id text, conflict_type text, severity text, source_id text, detail_json text)")
@@ -780,8 +780,17 @@ def write_sqlite(path: Path, payload: Mapping[str, Any]) -> None:
         for source in payload.get("sources") or []:
             if isinstance(source, Mapping):
                 conn.execute(
-                    "insert into sources values (?, ?, ?, ?, ?, ?)",
-                    (source.get("source_id"), source.get("role"), 1 if source.get("required") else 0, source.get("status"), source.get("path"), json.dumps(source.get("summary") or {}, sort_keys=True)),
+                    "insert into sources values (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        source.get("source_id"),
+                        source.get("role"),
+                        1 if source.get("required") else 0,
+                        source.get("status"),
+                        source.get("path"),
+                        (source.get("quality") or {}).get("score") if isinstance(source.get("quality"), Mapping) else None,
+                        json.dumps((source.get("quality") or {}).get("reasons") if isinstance(source.get("quality"), Mapping) else [], sort_keys=True),
+                        json.dumps(source.get("summary") or {}, sort_keys=True),
+                    ),
                 )
                 source_json = json.dumps(dict(source), ensure_ascii=True, sort_keys=True)
                 conn.execute(

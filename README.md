@@ -48,6 +48,9 @@ Deep Context Federation now combines several capabilities that are usually split
 - semantic edges such as `OWNS`, `SUPPORTS`, `DERIVES_FROM`, and `REFERENCES_SYMBOL`
 - SQLite read model with search presets
 - graph trace from any matching entity
+- entity/source ranking for prioritization
+- doctor-style diagnostics with recommended actions
+- federation diff between two builds
 - source fingerprint cache for incremental runs
 - local benchmark command for build-time tracking
 
@@ -93,6 +96,15 @@ python -m deep_context_federation.cli trace \
   --depth 2 \
   --format markdown
 
+python -m deep_context_federation.cli doctor \
+  --input .dcf/deep_context_federation_latest.json \
+  --format markdown
+
+python -m deep_context_federation.cli rank \
+  --input .dcf/deep_context_federation_latest.json \
+  --kind entities \
+  --format markdown
+
 python -m deep_context_federation.cli sql \
   --sqlite .dcf/deep_context_federation_latest.sqlite \
   --preset search \
@@ -112,6 +124,8 @@ dcf build --manifest examples/deep_context_federation.example.json --root exampl
 dcf verify --manifest examples/deep_context_federation.example.json --root examples --input .dcf/deep_context_federation_latest.json
 dcf query --input .dcf/deep_context_federation_latest.json --preset surface-splits --format markdown
 dcf trace --input .dcf/deep_context_federation_latest.json --match dashboard --depth 2 --format markdown
+dcf doctor --input .dcf/deep_context_federation_latest.json --format markdown
+dcf rank --input .dcf/deep_context_federation_latest.json --kind sources --format markdown
 dcf sql --sqlite .dcf/deep_context_federation_latest.sqlite --preset source-health
 ```
 
@@ -204,6 +218,35 @@ dcf trace --input .dcf/deep_context_federation_latest.json --match dashboard --d
 ```
 
 The output is useful for "code-to-authority" and "claim-to-evidence" exploration because it traverses the unified entity graph rather than one source's private graph.
+
+## Ranking And Doctor
+
+`rank` turns the federation into a prioritization surface:
+
+```bash
+dcf rank --input .dcf/deep_context_federation_latest.json --kind entities --limit 20
+dcf rank --input .dcf/deep_context_federation_latest.json --kind sources --limit 20
+```
+
+Entity ranking combines graph degree, semantic edge weights, source quality, and entity type. Source ranking highlights risky sources by combining quality score, required status, and conflict counts.
+
+`doctor` gives a compact health verdict:
+
+```bash
+dcf doctor --input .dcf/deep_context_federation_latest.json --format markdown
+```
+
+It checks hard conflicts, missing required sources, stale sources, low-quality sources, graph connectivity, and unresolved warnings. The output includes recommended actions for automation or human review.
+
+## Federation Diff
+
+Compare two builds:
+
+```bash
+dcf diff --before old.json --after new.json --format markdown
+```
+
+The diff reports source changes, entity/edge additions and removals, conflict changes, and summary deltas. This helps track whether governance work is reducing fragmentation or simply moving it around.
 
 ## Incremental Cache
 

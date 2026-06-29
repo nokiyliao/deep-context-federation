@@ -11,9 +11,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.builder import build_federation, codebase_memory_source
 from deep_context_federation.cache import DEFAULT_CACHE_NAME
+from deep_context_federation.diff import diff_federations
+from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.query import query_federation
+from deep_context_federation.rank import rank_entities
+from deep_context_federation.rank import rank_sources
 from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.verifier import verify_federation
 
@@ -56,11 +60,26 @@ def test_build_verify_and_query_example(tmp_path: Path) -> None:
 
     source_health = query_sqlite(tmp_path / "deep_context_federation_latest.sqlite", preset="source-health", limit=10)
     assert source_health["row_count"] > 0
+    assert "quality_score" in source_health["rows"][0]
 
     trace = trace_federation(payload, match="dashboard", depth=2, limit=20)
     assert trace["schema_version"] == "deep_context_federation_trace_v1"
     assert trace["seed_count"] > 0
     assert trace["node_count"] > 0
+
+    entity_rank = rank_entities(payload, limit=5)
+    assert entity_rank["schema_version"] == "deep_context_federation_entity_rank_v1"
+    assert entity_rank["row_count"] == 5
+    assert entity_rank["rows"][0]["score"] >= entity_rank["rows"][-1]["score"]
+
+    source_rank = rank_sources(payload, limit=5)
+    assert source_rank["schema_version"] == "deep_context_federation_source_rank_v1"
+    assert source_rank["row_count"] == 5
+
+    doctor = doctor_federation(payload)
+    assert doctor["schema_version"] == "deep_context_federation_doctor_v1"
+    assert doctor["ok"] is True
+    assert doctor["status"] == "pass"
 
 
 def test_incremental_cache_marks_unchanged_sources(tmp_path: Path) -> None:
@@ -80,6 +99,33 @@ def test_incremental_cache_marks_unchanged_sources(tmp_path: Path) -> None:
     assert first["incremental_cache"]["previous_cache_available"] is False
     assert second["incremental_cache"]["previous_cache_available"] is True
     assert second["incremental_cache"]["unchanged_source_count"] > 0
+
+
+def test_diff_federations_reports_added_conflict(tmp_path: Path) -> None:
+    before = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=False,
+    )
+    after = json.loads(json.dumps(before))
+    after["conflicts"].append(
+        {
+            "conflict_id": "source_stale:example",
+            "conflict_type": "source_stale",
+            "severity": "warning",
+            "source_id": "current_truth_snapshot",
+            "detail": {"source_head": "old"},
+        }
+    )
+    after["summary"]["warning_count"] = 1
+    after["summary"]["conflict_count"] = 1
+
+    result = diff_federations(before, after)
+
+    assert result["schema_version"] == "deep_context_federation_diff_v1"
+    assert result["conflicts"]["added"] == ["source_stale:example"]
+    assert "warning_count" in result["summary_delta"]
 
 
 def test_verifier_rejects_authority_drift(tmp_path: Path) -> None:

@@ -11,9 +11,9 @@ SQL_PRESETS: dict[str, dict[str, str]] = {
     "source-health": {
         "description": "Source status, required flag, and summary JSON.",
         "sql": """
-            select source_id, role, required, status, path, summary_json
+            select source_id, role, required, status, path, quality_score, quality_reasons_json, summary_json
             from sources
-            order by required desc, status desc, source_id asc
+            order by quality_score asc, required desc, source_id asc
             limit :limit
         """,
     },

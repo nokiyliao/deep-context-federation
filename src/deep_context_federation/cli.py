@@ -24,6 +24,8 @@ from deep_context_federation.agent_handoff_verify import markdown_agent_handoff_
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
 from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_model_input import markdown_agent_model_input
+from deep_context_federation.agent_onboard import build_agent_onboard
+from deep_context_federation.agent_onboard import markdown_agent_onboard
 from deep_context_federation.agent_profile import load_agent_profile
 from deep_context_federation.agent_profile import markdown_agent_profile
 from deep_context_federation.agent_profile_init import build_agent_profile_init
@@ -498,6 +500,39 @@ def build_parser() -> argparse.ArgumentParser:
     agent_profile_init.add_argument("--no-content", action="store_true")
     agent_profile_init.add_argument("--no-prompt", action="store_true")
     agent_profile_init.add_argument("--format", choices=["json", "markdown"], default="json")
+    agent_onboard = sub.add_parser("agent-onboard", help="Generate an agent profile and run the fail-closed agent-ready path in one wrapper command.")
+    agent_onboard.add_argument("--root", type=Path, default=Path.cwd())
+    agent_onboard.add_argument("--profile-output", type=Path, default=Path(".dcf") / "agent_ready_profile.json")
+    agent_onboard.add_argument("--output", type=Path, help="Optional agent-onboard capsule JSON path.")
+    agent_onboard.add_argument("--profile-id", default="")
+    agent_onboard.add_argument("--description", default="")
+    agent_onboard.add_argument("--task", required=True)
+    agent_onboard.add_argument("--target", action="append", default=[])
+    agent_onboard.add_argument("--targets-file", type=Path)
+    agent_onboard.add_argument("--manifest", type=Path, action="append", default=[])
+    agent_onboard.add_argument("--handoff", type=Path)
+    agent_onboard.add_argument("--output-dir", type=Path)
+    agent_onboard.add_argument("--quality-policy", type=Path)
+    agent_onboard.add_argument("--target-review-policy", type=Path)
+    agent_onboard.add_argument("--efficiency-policy", type=Path)
+    agent_onboard.add_argument("--context-gate-policy", type=Path)
+    agent_onboard.add_argument("--baseline", type=Path, action="append", default=[])
+    agent_onboard.add_argument("--workflow-token-budget", type=int, default=4000)
+    agent_onboard.add_argument("--context-token-budget", type=int, default=4000)
+    agent_onboard.add_argument("--context-mode", choices=["read-first", "decision-allowed", "all"], default="read-first")
+    agent_onboard.add_argument("--max-artifact-tokens", type=int, default=1200)
+    agent_onboard.add_argument("--query-limit", type=int, default=10)
+    agent_onboard.add_argument("--max-presets", type=int, default=3)
+    agent_onboard.add_argument("--max-rows", type=int, default=80)
+    agent_onboard.add_argument("--max-files", type=int, default=5000)
+    agent_onboard.add_argument("--max-parse-bytes", type=int, default=1_000_000)
+    agent_onboard.add_argument("--hash-files", action="store_true")
+    agent_onboard.add_argument("--include-codebase-memory", action="store_true")
+    agent_onboard.add_argument("--codebase-memory-cache-dir", type=Path)
+    agent_onboard.add_argument("--include-details", action="store_true")
+    agent_onboard.add_argument("--no-content", action="store_true")
+    agent_onboard.add_argument("--no-prompt", action="store_true")
+    agent_onboard.add_argument("--format", choices=["json", "markdown"], default="json")
     agent_discover = sub.add_parser("agent-discover", help="Discover repo-local DCF handoff readiness for global wrappers.")
     agent_discover.add_argument("--root", type=Path, default=Path.cwd())
     agent_discover.add_argument("--handoff", type=Path)
@@ -1125,6 +1160,50 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if args.format == "markdown":
             print(markdown_agent_profile_init(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "agent-onboard":
+        targets = list(args.target or [])
+        if args.targets_file:
+            targets.extend(read_targets_file(args.targets_file))
+        result = build_agent_onboard(
+            root=args.root,
+            profile_path=args.profile_output,
+            profile_id=args.profile_id,
+            description=args.description,
+            task=args.task,
+            targets=targets,
+            manifests=args.manifest,
+            handoff_path=args.handoff,
+            output_dir=args.output_dir,
+            quality_policy_path=args.quality_policy,
+            target_review_policy_path=args.target_review_policy,
+            efficiency_policy_path=args.efficiency_policy,
+            context_gate_policy_path=args.context_gate_policy,
+            workflow_token_budget=args.workflow_token_budget,
+            context_token_budget=args.context_token_budget,
+            context_mode=args.context_mode,
+            max_artifact_tokens=args.max_artifact_tokens,
+            query_limit=args.query_limit,
+            max_presets=args.max_presets,
+            max_rows=args.max_rows,
+            max_files=args.max_files,
+            max_parse_bytes=args.max_parse_bytes,
+            include_hashes=args.hash_files,
+            include_codebase_memory=args.include_codebase_memory,
+            codebase_memory_cache_dir=args.codebase_memory_cache_dir,
+            include_details=args.include_details,
+            include_content=not args.no_content,
+            include_prompt=not args.no_prompt,
+            extra_baselines=args.baseline,
+        )
+        if args.output:
+            result["outputs"] = dict(result.get("outputs") if isinstance(result.get("outputs"), dict) else {})
+            result["outputs"]["agent_onboard_json"] = args.output.expanduser().resolve().as_posix()
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_agent_onboard(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

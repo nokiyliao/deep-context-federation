@@ -15,7 +15,9 @@ from deep_context_federation.agent_discover import AGENT_DISCOVERY_SCHEMA_VERSIO
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
+from deep_context_federation.agent_onboard import AGENT_ONBOARD_SCHEMA_VERSION
 from deep_context_federation.agent_profile import AGENT_PROFILE_SCHEMA_VERSION
+from deep_context_federation.agent_profile import AGENT_PROFILE_VALIDATION_SCHEMA_VERSION
 from deep_context_federation.agent_profile_init import AGENT_PROFILE_INIT_SCHEMA_VERSION
 from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_route import AGENT_ROUTE_SCHEMA_VERSION
@@ -936,6 +938,31 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
             "Deep Context Federation agent profile",
             [
                 "schema_version",
+                "authority_effect",
+                "no_apply",
+            ],
+            {
+                **_boundary_props(),
+                "profile_id": {"type": "string"},
+                "description": {"type": "string"},
+                "root": {"type": "string"},
+                "output_dir": {"type": "string"},
+                "manifests": array_type,
+                "handoff": {"type": "string"},
+                "task": {"type": "string"},
+                "targets": array_type,
+                "quality_policy": {"type": "string"},
+                "target_review_policy": {"type": "string"},
+                "efficiency_policy": {"type": "string"},
+                "context_gate_policy": {"type": "string"},
+                "baselines": array_type,
+            },
+        ),
+        "agent_profile_validation": _schema(
+            AGENT_PROFILE_VALIDATION_SCHEMA_VERSION,
+            "Deep Context Federation agent profile validation",
+            [
+                "schema_version",
                 "ok",
                 "status",
                 "authority_effect",
@@ -987,6 +1014,41 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "errors": array_type,
                 "outputs": object_type,
                 "summary": object_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "agent_onboard": _schema(
+            AGENT_ONBOARD_SCHEMA_VERSION,
+            "Deep Context Federation agent onboard",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "profile_path",
+                "profile_init_summary",
+                "profile_validation_summary",
+                "agent_ready_summary",
+                "model_input_ready",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_onboard", "fail_agent_onboard"]},
+                **_boundary_props(),
+                "root": {"type": "string"},
+                "profile_path": {"type": "string"},
+                "profile_init_summary": object_type,
+                "profile_validation_summary": object_type,
+                "agent_ready_summary": object_type,
+                "model_input_ready": {"type": "boolean"},
+                "prompt_source": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+                "recommended_next_command": {"type": "string"},
+                "agent_ready": object_type,
+                "errors": array_type,
+                "outputs": object_type,
                 "safety_boundaries": object_type,
             },
         ),

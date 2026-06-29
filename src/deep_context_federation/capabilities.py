@@ -15,7 +15,9 @@ from deep_context_federation.agent_discover import AGENT_DISCOVERY_SCHEMA_VERSIO
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
 from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
+from deep_context_federation.agent_onboard import AGENT_ONBOARD_SCHEMA_VERSION
 from deep_context_federation.agent_profile import AGENT_PROFILE_SCHEMA_VERSION
+from deep_context_federation.agent_profile import AGENT_PROFILE_VALIDATION_SCHEMA_VERSION
 from deep_context_federation.agent_profile_init import AGENT_PROFILE_INIT_SCHEMA_VERSION
 from deep_context_federation.agent_ready import AGENT_READY_SCHEMA_VERSION
 from deep_context_federation.agent_route import AGENT_ROUTE_SCHEMA_VERSION
@@ -442,8 +444,21 @@ def _artifact_contracts() -> list[dict[str, Any]]:
         {
             "artifact_kind": "agent_profile",
             "schema_version": AGENT_PROFILE_SCHEMA_VERSION,
+            "producer": "agent-profile-init_or_human",
+            "consumer_commands": ["agent-profile", "agent-ready", "agent-onboard", "global_wrapper"],
+            "top_level_required": [
+                "schema_version",
+                "authority_effect",
+                "no_apply",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "agent_profile_validation",
+            "schema_version": AGENT_PROFILE_VALIDATION_SCHEMA_VERSION,
             "producer": "agent-profile",
-            "consumer_commands": ["agent-ready", "global_wrapper", "ci", "operator_context"],
+            "consumer_commands": ["agent-ready", "agent-onboard", "global_wrapper", "ci", "operator_context"],
             "top_level_required": [
                 "schema_version",
                 "ok",
@@ -474,6 +489,27 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "profile_validation_summary",
                 "checks",
                 "errors",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "agent_onboard",
+            "schema_version": AGENT_ONBOARD_SCHEMA_VERSION,
+            "producer": "agent-onboard",
+            "consumer_commands": ["global_wrapper", "ci", "operator_context", "model_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "profile_path",
+                "profile_init_summary",
+                "profile_validation_summary",
+                "agent_ready_summary",
+                "model_input_ready",
                 "safety_boundaries",
             ],
             "authority_effect": "none",
@@ -899,7 +935,7 @@ def _commands() -> list[dict[str, Any]]:
             "command": "agent-profile",
             "intent": "Validate and normalize a machine-readable agent-ready profile for global wrappers.",
             "writes": ["optional agent profile JSON when --output is set"],
-            "output_schemas": [AGENT_PROFILE_SCHEMA_VERSION],
+            "output_schemas": [AGENT_PROFILE_VALIDATION_SCHEMA_VERSION],
             "input_schemas": [AGENT_PROFILE_SCHEMA_VERSION],
             "options": ["--profile", "--output", "--format"],
             "authority_effect": "none",
@@ -909,12 +945,44 @@ def _commands() -> list[dict[str, Any]]:
             "command": "agent-profile-init",
             "intent": "Generate a validated machine-readable agent-ready profile from repo-local manifests and policies.",
             "writes": ["agent-ready profile JSON at --output"],
-            "output_schemas": [AGENT_PROFILE_INIT_SCHEMA_VERSION, AGENT_PROFILE_SCHEMA_VERSION],
+            "output_schemas": [AGENT_PROFILE_INIT_SCHEMA_VERSION, AGENT_PROFILE_SCHEMA_VERSION, AGENT_PROFILE_VALIDATION_SCHEMA_VERSION],
             "input_schemas": [MANIFEST_SCHEMA],
             "options": [
                 "--root",
                 "--output",
                 "--profile-id",
+                "--task",
+                "--target",
+                "--targets-file",
+                "--manifest",
+                "--handoff",
+                "--quality-policy",
+                "--target-review-policy",
+                "--efficiency-policy",
+                "--context-gate-policy",
+                "--workflow-token-budget",
+                "--context-token-budget",
+                "--format",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "agent-onboard",
+            "intent": "Generate a profile and run the fail-closed agent-ready path in one global-wrapper command.",
+            "writes": ["agent-ready profile JSON", "output_dir generated DCF artifacts", "optional onboard JSON when --output is set"],
+            "output_schemas": [
+                AGENT_ONBOARD_SCHEMA_VERSION,
+                AGENT_PROFILE_INIT_SCHEMA_VERSION,
+                AGENT_PROFILE_SCHEMA_VERSION,
+                AGENT_PROFILE_VALIDATION_SCHEMA_VERSION,
+                AGENT_READY_SCHEMA_VERSION,
+            ],
+            "input_schemas": [MANIFEST_SCHEMA],
+            "options": [
+                "--root",
+                "--profile-output",
+                "--output",
                 "--task",
                 "--target",
                 "--targets-file",

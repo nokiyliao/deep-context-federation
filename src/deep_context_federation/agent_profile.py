@@ -10,6 +10,7 @@ from deep_context_federation.builder import read_json
 from deep_context_federation.builder import utc_now
 
 AGENT_PROFILE_SCHEMA_VERSION = "deep_context_federation_agent_profile_v1"
+AGENT_PROFILE_VALIDATION_SCHEMA_VERSION = "deep_context_federation_agent_profile_validation_v1"
 
 
 PATH_FIELDS = {
@@ -122,7 +123,7 @@ def load_agent_profile(path: Path) -> dict[str, Any]:
 
     failed = [row for row in checks if row.get("passed") is not True]
     return {
-        "schema_version": AGENT_PROFILE_SCHEMA_VERSION,
+        "schema_version": AGENT_PROFILE_VALIDATION_SCHEMA_VERSION,
         "ok": not failed,
         "status": "pass_agent_profile" if not failed else "fail_agent_profile",
         "authority_effect": "none",

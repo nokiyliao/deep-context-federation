@@ -25,6 +25,8 @@ from deep_context_federation.efficiency_gate import normalize_efficiency_gate_po
 from deep_context_federation.efficiency_report import build_efficiency_report
 from deep_context_federation.graph import trace_federation
 from deep_context_federation.intake import build_agent_intake
+from deep_context_federation.input_fingerprint import build_input_fingerprint
+from deep_context_federation.input_fingerprint import compare_input_fingerprint
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
@@ -64,9 +66,11 @@ __all__ = [
     "build_capabilities",
     "build_agent_intake",
     "build_efficiency_report",
+    "build_input_fingerprint",
     "build_task_brief",
     "build_schema_registry",
     "compose_manifests",
+    "compare_input_fingerprint",
     "diff_federations",
     "doctor_federation",
     "evaluate_agent_context_gate",

@@ -32,6 +32,8 @@ from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_POLICY_SCHEM
 from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_SCHEMA_VERSION
 from deep_context_federation.efficiency_report import EFFICIENCY_REPORT_SCHEMA_VERSION
 from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
+from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION
+from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_VERSION
 from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_INPUT_SCHEMA
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
@@ -390,6 +392,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "agent_context_summary",
                 "agent_context_gate_summary",
                 "agent_handoff_verification_summary",
+                "input_fingerprint_summary",
                 "model_handoff",
                 "outputs",
                 "safety_boundaries",
@@ -495,6 +498,41 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "prompt_source",
                 "prompt_estimated_tokens",
                 "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "input_fingerprint",
+            "schema_version": INPUT_FINGERPRINT_SCHEMA_VERSION,
+            "producer": "agent-handoff",
+            "consumer_commands": ["agent-ready", "agent_router", "global_wrapper", "ci"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "root",
+                "digest",
+                "manifests",
+                "sources",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "input_fingerprint_compare",
+            "schema_version": INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION,
+            "producer": "agent-ready",
+            "consumer_commands": ["agent_router", "global_wrapper", "ci"],
+            "top_level_required": [
+                "schema_version",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "comparable",
+                "matches",
             ],
             "authority_effect": "none",
             "no_apply": True,

@@ -254,6 +254,8 @@ python -m deep_context_federation.cli agent-ready \
 
 `agent-ready` is fail-closed. It emits prompt text only after an existing handoff passes `agent-model-input`, or after a manifest plus task builds a gated handoff that then passes `agent-model-input`. It does not auto-install tools, call external models, mutate source files, or claim project authority.
 
+Fresh `agent-handoff` artifacts include an `input_fingerprint` digest over the manifest and explicitly listed source files. When `agent-ready` reuses an existing handoff and can see the current manifest, it compares that digest first; if a manifest-declared source changed, it returns `fail_agent_ready` and emits no prompt.
+
 Use lower-level discovery when a wrapper only needs to probe the repo state:
 
 ```bash
@@ -601,6 +603,8 @@ For global wrappers, prefer `dcf agent-model-input --input <handoff.json> --form
 Use `dcf agent-route --root <repo> --task '<task>'` as the first global step. If it returns `ready_agent_route`, execute the terminal `agent-model-input` step; if it returns `needs_agent_handoff`, execute the handoff step and then rediscover; if it returns `needs_bootstrap_agent_route`, run the scan/build step first; if it returns `blocked_agent_route` or `needs_task_agent_route`, do not emit model input.
 
 Use `dcf agent-ready --root <repo> --task '<task>' --format prompt` when the runner wants one command that can consume an existing safe handoff or build a task handoff from an existing manifest, then emit prompt text only if the final model-input gate passes.
+
+Reused handoffs are freshness-aware when their original `input_fingerprint` is present. A changed manifest-declared source produces `input_fingerprint_mismatch`, so wrappers do not accidentally feed a model prompt built from stale evidence.
 
 ## Capabilities Manifest
 

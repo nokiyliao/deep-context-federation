@@ -115,7 +115,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.37.0"
+    assert payload["package"]["version"] == "0.38.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -174,6 +174,8 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert by_kind["agent_ready"]["schema_version"] == "deep_context_federation_agent_ready_v1"
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
+    assert by_kind["input_fingerprint"]["schema_version"] == "deep_context_federation_input_fingerprint_v1"
+    assert by_kind["input_fingerprint_compare"]["schema_version"] == "deep_context_federation_input_fingerprint_compare_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
     assert payload["safety_boundaries"]["external_tool_install"] == "never"
@@ -210,6 +212,8 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_discovery"]["schema_version"] == "deep_context_federation_agent_discovery_v1"
     assert by_kind["agent_ready"]["schema_version"] == "deep_context_federation_agent_ready_v1"
     assert by_kind["agent_route"]["schema_version"] == "deep_context_federation_agent_route_v1"
+    assert by_kind["input_fingerprint"]["schema_version"] == "deep_context_federation_input_fingerprint_v1"
+    assert by_kind["input_fingerprint_compare"]["schema_version"] == "deep_context_federation_input_fingerprint_compare_v1"
     assert by_kind["workflow_plan"]["schema_version"] == "deep_context_federation_workflow_plan_v1"
     assert by_kind["workflow_run"]["schema_version"] == "deep_context_federation_workflow_run_v1"
 
@@ -700,6 +704,10 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["model_handoff"]["read_first"][-1] == result["outputs"]["agent_model_prompt_markdown"]
     assert result["model_handoff"]["model_prompt_estimated_tokens"] > 0
     assert result["model_handoff"]["machine_context_estimated_tokens"] > result["model_handoff"]["model_prompt_estimated_tokens"]
+    assert result["input_fingerprint_summary"]["status"] == "pass_input_fingerprint"
+    assert len(result["input_fingerprint_summary"]["digest"]) == 64
+    assert result["input_fingerprint"]["source_count"] > 0
+    assert validate_artifact_contract(result["input_fingerprint"], artifact_kind="input_fingerprint")["ok"] is True
     assert result["agent_handoff_verification_summary"]["status"] == "pass_agent_handoff_verification"
     assert result["agent_handoff_verification_summary"]["ok"] is True
     assert Path(result["outputs"]["agent_handoff_json"]).exists()
@@ -728,6 +736,7 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert ready["ok"] is True
     assert ready["status"] == "pass_agent_ready"
     assert ready["action_taken"] == "read_existing_handoff"
+    assert ready["input_freshness"]["status"] == "not_checked_no_current_manifest"
     assert ready["prompt_text"].startswith("# Deep Context Federation Agent Context")
     assert ready["model_input_summary"]["status"] == "pass_agent_model_input"
     assert validate_artifact_contract(ready)["ok"] is True
@@ -939,12 +948,40 @@ def test_agent_ready_builds_or_blocks_model_input(tmp_path: Path) -> None:
     assert ready["status"] == "pass_agent_ready"
     assert ready["action_taken"] == "build_agent_handoff"
     assert ready["route_summary"]["status"] == "needs_agent_handoff"
+    assert ready["input_freshness"]["status"] == "freshly_built"
     assert ready["handoff_summary"]["status"] in {"pass_agent_handoff", "warn_agent_handoff"}
     assert ready["model_input_summary"]["status"] == "pass_agent_model_input"
     assert ready["prompt_source"]
     assert ready["prompt_estimated_tokens"] > 0
     assert ready["prompt_text"].startswith("# Deep Context Federation Agent Context")
     assert validate_artifact_contract(ready)["ok"] is True
+
+    reused = build_agent_ready(
+        root=manifest_root,
+        output_dir=manifest_root / ".dcf",
+        handoff_path=manifest_root / ".dcf/deep_context_federation_agent_handoff.json",
+    )
+    assert reused["ok"] is True
+    assert reused["action_taken"] == "read_existing_handoff"
+    assert reused["input_freshness"]["status"] == "pass_input_fingerprint_compare"
+    assert reused["input_freshness"]["matches"] is True
+    assert validate_artifact_contract(reused["input_freshness"], artifact_kind="input_fingerprint_compare")["ok"] is True
+    assert validate_artifact_contract(reused)["ok"] is True
+
+    source_path = manifest_root / "fixtures/current_truth_snapshot.json"
+    source_path.write_text(source_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    stale = build_agent_ready(
+        root=manifest_root,
+        output_dir=manifest_root / ".dcf",
+        handoff_path=manifest_root / ".dcf/deep_context_federation_agent_handoff.json",
+    )
+    assert stale["ok"] is False
+    assert stale["status"] == "fail_agent_ready"
+    assert stale["input_freshness"]["status"] == "fail_input_fingerprint_compare"
+    assert validate_artifact_contract(stale["input_freshness"], artifact_kind="input_fingerprint_compare")["ok"] is True
+    assert {row["id"] for row in stale["errors"]} == {"input_fingerprint_mismatch"}
+    assert stale["prompt_text"] == ""
+    assert validate_artifact_contract(stale)["ok"] is True
 
 
 def test_context_pack_is_token_bounded(tmp_path: Path) -> None:

@@ -27,6 +27,8 @@ from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_POLICY_SCHEM
 from deep_context_federation.efficiency_gate import EFFICIENCY_GATE_SCHEMA_VERSION
 from deep_context_federation.efficiency_report import EFFICIENCY_REPORT_SCHEMA_VERSION
 from deep_context_federation.intake import AGENT_INTAKE_SCHEMA_VERSION
+from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION
+from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
@@ -769,6 +771,8 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "agent_context_summary": object_type,
                 "agent_context_gate_summary": object_type,
                 "agent_handoff_verification_summary": object_type,
+                "input_fingerprint_summary": object_type,
+                "input_fingerprint": object_type,
                 "model_handoff": object_type,
                 "outputs": object_type,
                 "safety_boundaries": object_type,
@@ -894,6 +898,7 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "action_taken",
                 "route_summary",
                 "handoff_summary",
+                "input_freshness",
                 "model_input_summary",
                 "prompt_source",
                 "prompt_estimated_tokens",
@@ -909,6 +914,7 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "action_taken": {"type": "string"},
                 "route_summary": object_type,
                 "handoff_summary": object_type,
+                "input_freshness": object_type,
                 "model_input_summary": object_type,
                 "prompt_source": {"type": "string"},
                 "prompt_format": {"type": "string"},
@@ -918,6 +924,50 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "errors": array_type,
                 "outputs": object_type,
                 "safety_boundaries": object_type,
+            },
+        ),
+        "input_fingerprint": _schema(
+            INPUT_FINGERPRINT_SCHEMA_VERSION,
+            "Deep Context Federation input fingerprint",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "root",
+                "digest",
+                "manifests",
+                "sources",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_input_fingerprint", "fail_input_fingerprint"]},
+                **_boundary_props(),
+                "root": {"type": "string"},
+                "digest": {"type": "string"},
+                "manifest_count": {"type": "integer"},
+                "source_count": {"type": "integer"},
+                "manifests": array_type,
+                "sources": array_type,
+                "errors": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "input_fingerprint_compare": _schema(
+            INPUT_FINGERPRINT_COMPARE_SCHEMA_VERSION,
+            "Deep Context Federation input fingerprint compare",
+            ["schema_version", "status", "authority_effect", "no_apply", "comparable", "matches"],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string"},
+                **_boundary_props(),
+                "comparable": {"type": "boolean"},
+                "matches": {},
+                "previous_digest": {"type": "string"},
+                "current_digest": {"type": "string"},
+                "reason": {"type": "string"},
+                "current_fingerprint": object_type,
             },
         ),
     }

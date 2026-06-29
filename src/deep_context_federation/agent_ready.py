@@ -11,6 +11,8 @@ from deep_context_federation.agent_model_input import build_agent_model_input
 from deep_context_federation.agent_route import route_agent_context
 from deep_context_federation.builder import read_json
 from deep_context_federation.builder import utc_now
+from deep_context_federation.input_fingerprint import build_input_fingerprint
+from deep_context_federation.input_fingerprint import compare_input_fingerprint
 
 AGENT_READY_SCHEMA_VERSION = "deep_context_federation_agent_ready_v1"
 
@@ -65,6 +67,7 @@ def _failure(
     route: Mapping[str, Any],
     action_taken: str,
     errors: Sequence[Mapping[str, Any]],
+    input_freshness: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "schema_version": AGENT_READY_SCHEMA_VERSION,
@@ -80,6 +83,7 @@ def _failure(
         "route_summary": _route_summary(route),
         "handoff_summary": {},
         "model_input_summary": {},
+        "input_freshness": dict(input_freshness or {}),
         "prompt_source": "",
         "prompt_format": "",
         "prompt_estimated_tokens": 0,
@@ -141,6 +145,7 @@ def build_agent_ready(
     route_status = str(route.get("status") or "")
     handoff: dict[str, Any] = {}
     action_taken = "none"
+    input_freshness: dict[str, Any] = {}
 
     if route_status == "ready_agent_route":
         action_taken = "read_existing_handoff"
@@ -156,6 +161,54 @@ def build_agent_ready(
                 action_taken=action_taken,
                 errors=[{"id": "handoff_unreadable", "path": selected}],
             )
+        current_manifests = _manifest_paths(route, manifests)
+        previous_fingerprint = handoff.get("input_fingerprint") if isinstance(handoff.get("input_fingerprint"), Mapping) else {}
+        if current_manifests and previous_fingerprint:
+            current_fingerprint = build_input_fingerprint(root=root, manifests=current_manifests)
+            input_freshness = compare_input_fingerprint(previous_fingerprint, current_fingerprint)
+            input_freshness["current_fingerprint"] = current_fingerprint
+            if input_freshness.get("matches") is not True:
+                return _failure(
+                    root=root,
+                    task=task_text,
+                    targets=targets,
+                    route=route,
+                    action_taken=action_taken,
+                    input_freshness=input_freshness,
+                    errors=[{"id": "input_fingerprint_mismatch", "status": input_freshness.get("status")}],
+                )
+        elif current_manifests and not previous_fingerprint:
+            current_fingerprint = build_input_fingerprint(root=root, manifests=current_manifests)
+            input_freshness = {
+                "schema_version": "deep_context_federation_input_fingerprint_compare_v1",
+                "ok": False,
+                "status": "fail_input_fingerprint_compare",
+                "authority_effect": "none",
+                "no_apply": True,
+                "comparable": False,
+                "matches": False,
+                "reason": "previous_input_fingerprint_missing",
+                "current_fingerprint": current_fingerprint,
+            }
+            return _failure(
+                root=root,
+                task=task_text,
+                targets=targets,
+                route=route,
+                action_taken=action_taken,
+                input_freshness=input_freshness,
+                errors=[{"id": "input_fingerprint_missing"}],
+            )
+        else:
+            input_freshness = {
+                "schema_version": "deep_context_federation_input_fingerprint_compare_v1",
+                "ok": True,
+                "status": "not_checked_no_current_manifest",
+                "authority_effect": "none",
+                "no_apply": True,
+                "comparable": False,
+                "matches": None,
+            }
     elif route_status == "needs_agent_handoff" or manifests:
         action_taken = "build_agent_handoff"
         manifest_paths = _manifest_paths(route, manifests)
@@ -207,6 +260,16 @@ def build_agent_ready(
             extra_baselines=extra_baselines,
         )
         handoff_ref = Path(str(handoff.get("outputs", {}).get("agent_handoff_json") or ""))
+        input_freshness = {
+            "schema_version": "deep_context_federation_input_fingerprint_compare_v1",
+            "ok": True,
+            "status": "freshly_built",
+            "authority_effect": "none",
+            "no_apply": True,
+            "comparable": True,
+            "matches": True,
+            "current_digest": handoff.get("input_fingerprint", {}).get("digest") if isinstance(handoff.get("input_fingerprint"), Mapping) else "",
+        }
     elif route_status == "needs_task_agent_route":
         return _failure(
             root=root,
@@ -246,6 +309,7 @@ def build_agent_ready(
             "ok": handoff.get("ok"),
             "decision": handoff.get("decision") if isinstance(handoff.get("decision"), Mapping) else {},
         },
+        "input_freshness": input_freshness,
         "model_input_summary": _summary(model_input),
         "prompt_source": model_input.get("prompt_source") if ok else "",
         "prompt_format": model_input.get("prompt_format") if ok else "",

@@ -18,6 +18,7 @@ from deep_context_federation.builder import utc_now
 from deep_context_federation.builder import write_json
 from deep_context_federation.builder import write_markdown
 from deep_context_federation.context_pack import estimate_tokens
+from deep_context_federation.input_fingerprint import build_input_fingerprint
 
 AGENT_HANDOFF_SCHEMA_VERSION = "deep_context_federation_agent_handoff_v1"
 DEFAULT_AGENT_HANDOFF_JSON_NAME = "deep_context_federation_agent_handoff.json"
@@ -210,6 +211,7 @@ def build_agent_handoff(
     root = root.expanduser().resolve()
     out_dir = _normalize_output_dir(root, output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    input_fingerprint = build_input_fingerprint(root=root, manifests=manifests)
 
     agent_ci = build_agent_ci(
         root=root,
@@ -348,6 +350,15 @@ def build_agent_handoff(
         "agent_context_summary": _summary(agent_context),
         "agent_context_gate_summary": _summary(agent_context_gate),
         "agent_handoff_verification_summary": {},
+        "input_fingerprint_summary": {
+            "schema_version": input_fingerprint.get("schema_version"),
+            "status": input_fingerprint.get("status"),
+            "ok": input_fingerprint.get("ok"),
+            "digest": input_fingerprint.get("digest"),
+            "manifest_count": input_fingerprint.get("manifest_count"),
+            "source_count": input_fingerprint.get("source_count"),
+        },
+        "input_fingerprint": input_fingerprint,
         "model_handoff": model_handoff,
         "outputs": outputs,
         "safety_boundaries": {

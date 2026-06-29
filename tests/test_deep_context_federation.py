@@ -109,7 +109,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.30.0"
+    assert payload["package"]["version"] == "0.31.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -678,12 +678,31 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["model_handoff"]["machine_context_source"] == result["outputs"]["agent_context_json"]
     assert result["model_handoff"]["read_first"][-1] == result["outputs"]["agent_model_prompt_markdown"]
     assert result["model_handoff"]["model_prompt_estimated_tokens"] > 0
+    assert result["model_handoff"]["machine_context_estimated_tokens"] > result["model_handoff"]["model_prompt_estimated_tokens"]
     assert Path(result["outputs"]["agent_handoff_json"]).exists()
     assert Path(result["outputs"]["agent_ci_json"]).exists()
     assert context_path.exists()
     assert prompt_path.exists()
     assert prompt_path.read_text(encoding="utf-8").startswith("# Deep Context Federation Agent Context")
     assert prompt_path.stat().st_size < context_path.stat().st_size
+    prompt_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "model_prompt")
+    gate_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "context_gate")
+    context_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "machine_context")
+    assert prompt_artifact["path"] == prompt_path.as_posix()
+    assert prompt_artifact["exists"] is True
+    assert prompt_artifact["default_model_input"] is True
+    assert len(prompt_artifact["sha256"]) == 64
+    assert gate_artifact["exists"] is True
+    assert context_artifact["path"] == context_path.as_posix()
+    assert context_artifact["estimated_tokens"] == result["model_handoff"]["machine_context_estimated_tokens"]
+    economics = result["model_handoff"]["token_economics"]
+    assert economics["status"] == "measured"
+    assert economics["default_model_input"] == "model_prompt_source"
+    assert economics["model_prompt_estimated_tokens"] == result["model_handoff"]["model_prompt_estimated_tokens"]
+    assert economics["machine_context_estimated_tokens"] == result["model_handoff"]["machine_context_estimated_tokens"]
+    assert 0 < economics["model_prompt_to_machine_context_ratio"] < 1
+    assert economics["estimated_token_savings"] > 0
+    assert economics["estimated_token_savings_percent"] > 50
     assert Path(result["outputs"]["agent_context_gate_json"]).exists()
     assert validate_artifact_contract(result)["ok"] is True
 
@@ -718,6 +737,10 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert failed["decision"]["stop_reasons"][0]["id"] == "agent_context_gate_failed"
     assert failed["model_handoff"]["model_prompt_source"] == ""
     assert failed["model_handoff"]["machine_context_source"] == failed["outputs"]["agent_context_json"]
+    assert failed["model_handoff"]["token_economics"]["status"] == "not_applicable"
+    assert failed["model_handoff"]["token_economics"]["default_model_input"] == ""
+    assert failed["model_handoff"]["token_economics"]["model_prompt_estimated_tokens"] == 0
+    assert failed["model_handoff"]["token_economics"]["estimated_token_savings"] == 0
     assert validate_artifact_contract(failed)["ok"] is True
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from collections.abc import Mapping, Sequence
@@ -41,6 +42,43 @@ def _json_text(value: Any) -> str:
         return json.dumps(value, ensure_ascii=True, sort_keys=True)
     except Exception:
         return str(value)
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest() if text else ""
+
+
+def _artifact_fingerprint(path: Path, *, role: str, default_model_input: bool = False) -> dict[str, Any]:
+    text = _read_text(path)
+    exists = path.exists() and path.is_file()
+    return {
+        "role": role,
+        "path": path.as_posix(),
+        "exists": exists,
+        "bytes": path.stat().st_size if exists else 0,
+        "sha256": _sha256_text(text),
+        "estimated_tokens": estimate_tokens(text) if text else 0,
+        "default_model_input": default_model_input,
+    }
+
+
+def _ratio(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(float(numerator) / float(denominator), 6)
+
+
+def _savings_percent(before: int, after: int) -> float:
+    if before <= 0:
+        return 0.0
+    return round(max(0.0, (float(before - after) / float(before)) * 100.0), 3)
 
 
 def _summary(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -247,6 +285,16 @@ def build_agent_handoff(
         "agent_context_gate_json": agent_context_gate_json.as_posix(),
     }
     model_prompt_source = agent_model_prompt_md.as_posix() if ok and include_prompt and prompt_text else ""
+    prompt_fingerprint = _artifact_fingerprint(agent_model_prompt_md, role="model_prompt", default_model_input=bool(model_prompt_source))
+    context_fingerprint = _artifact_fingerprint(agent_context_json, role="machine_context")
+    gate_fingerprint = _artifact_fingerprint(agent_context_gate_json, role="context_gate")
+    read_first_artifacts = [
+        gate_fingerprint,
+        prompt_fingerprint,
+    ]
+    machine_context_tokens = int(context_fingerprint.get("estimated_tokens") or 0)
+    model_prompt_tokens = int(prompt_fingerprint.get("estimated_tokens") or 0) if model_prompt_source else 0
+    measured_prompt_economics = bool(model_prompt_source)
     model_handoff = {
         "read_first": [
             item
@@ -255,8 +303,20 @@ def build_agent_handoff(
         ],
         "model_prompt_source": model_prompt_source,
         "model_prompt_format": "markdown" if model_prompt_source else "",
-        "model_prompt_estimated_tokens": agent_context.get("prompt_estimated_tokens") if ok else 0,
+        "model_prompt_estimated_tokens": model_prompt_tokens,
         "machine_context_source": agent_context_json.as_posix(),
+        "machine_context_estimated_tokens": machine_context_tokens,
+        "read_first_artifacts": read_first_artifacts,
+        "audit_artifacts": [context_fingerprint],
+        "token_economics": {
+            "status": "measured" if measured_prompt_economics else "not_applicable",
+            "default_model_input": "model_prompt_source" if model_prompt_source else "",
+            "model_prompt_estimated_tokens": model_prompt_tokens,
+            "machine_context_estimated_tokens": machine_context_tokens,
+            "model_prompt_to_machine_context_ratio": _ratio(model_prompt_tokens, machine_context_tokens) if measured_prompt_economics else 0.0,
+            "estimated_token_savings": max(0, machine_context_tokens - model_prompt_tokens) if measured_prompt_economics else 0,
+            "estimated_token_savings_percent": _savings_percent(machine_context_tokens, model_prompt_tokens) if measured_prompt_economics else 0.0,
+        },
         "skip_by_default": [
             "full repository tree",
             "full federation artifact",

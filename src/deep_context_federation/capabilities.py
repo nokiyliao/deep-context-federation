@@ -632,6 +632,7 @@ def _commands() -> list[dict[str, Any]]:
             "writes": [
                 "output_dir generated artifacts",
                 "agent model prompt markdown",
+                "model handoff token economics and artifact fingerprints",
                 "optional agent handoff JSON when --output is set",
             ],
             "output_schemas": [AGENT_HANDOFF_SCHEMA_VERSION, AGENT_CI_SCHEMA_VERSION, AGENT_CONTEXT_SCHEMA_VERSION, AGENT_CONTEXT_GATE_SCHEMA_VERSION],

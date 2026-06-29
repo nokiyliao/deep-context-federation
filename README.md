@@ -229,7 +229,7 @@ python -m deep_context_federation.cli agent-handoff \
   --output .dcf/deep_context_federation_agent_handoff.json
 ```
 
-`agent-handoff` writes the underlying `agent-ci`, `agent-context`, and `agent-context-gate` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `agent-context` JSON remains available as `machine_context_source` for audit/debug reads.
+`agent-handoff` writes the underlying `agent-ci`, `agent-context`, and `agent-context-gate` artifacts, then emits one `deep_context_federation_agent_handoff_v1` decision that points to the gated model prompt source. The prompt source is a prompt-only Markdown file, while the full `agent-context` JSON remains available as `machine_context_source` for audit/debug reads. The handoff also includes `read_first_artifacts`, `audit_artifacts`, and `token_economics` so runners can verify hashes and token savings without opening every generated file first.
 
 Bootstrap can also merge curated manifests into the same graph:
 
@@ -541,7 +541,7 @@ Use `examples/agent_context_gate_policy.example.json` as a starter policy. The d
 
 and emits `deep_context_federation_agent_handoff_v1` with a final `decision`, compact summaries, generated output paths, and `model_handoff.model_prompt_source`. This is the command to use when an external runner wants one deterministic pass/fail handoff instead of orchestrating DCF subcommands itself.
 
-For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md`, not the full machine JSON. The JSON context is still recorded as `model_handoff.machine_context_source`, so agents can default to the smaller prompt-only surface and open the heavier JSON only when auditing evidence, hashes, or skipped/truncated rows.
+For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md`, not the full machine JSON. The JSON context is still recorded as `model_handoff.machine_context_source`, so agents can default to the smaller prompt-only surface and open the heavier JSON only when auditing evidence, hashes, or skipped/truncated rows. `model_handoff.token_economics` records prompt/context estimated tokens, ratio, and estimated savings; `read_first_artifacts` and `audit_artifacts` record path, bytes, SHA-256, and default-model-input flags.
 
 ## Capabilities Manifest
 

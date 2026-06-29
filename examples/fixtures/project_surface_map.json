@@ -1,0 +1,26 @@
+{
+  "schema_version": "project_surface_map_v1",
+  "generated_at": "2026-01-01T00:00:02Z",
+  "authority_effect": "none",
+  "no_apply": true,
+  "surfaces": [
+    {
+      "surface_id": "authority_contracts",
+      "display": "Authority Contracts",
+      "owner": "architecture-board",
+      "path": "docs/PRODUCTION_AUTHORITY.md"
+    },
+    {
+      "surface_id": "operator_dashboard",
+      "display": "Operator Dashboard",
+      "owner": "ops-ui",
+      "path": "ui/dashboard/app.py"
+    },
+    {
+      "surface_id": "research_outputs",
+      "display": "Research Outputs",
+      "owner": "research",
+      "path": "output/research"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": "advisory_code_map_v1",
+  "generated_at": "2026-01-01T00:00:03Z",
+  "authority_effect": "none",
+  "no_apply": true,
+  "symbols": [
+    {
+      "symbol_fqn": "dashboard.readiness.build_projection",
+      "path": "ui/dashboard/readiness.py",
+      "surface_id": "operator_dashboard"
+    },
+    {
+      "symbol_fqn": "governance.contract.load",
+      "path": "scripts/governance/load_contract.py",
+      "surface_id": "authority_contracts"
+    }
+  ]
+}

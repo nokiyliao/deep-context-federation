@@ -1,0 +1,43 @@
+{
+  "schema_version": "evidence_authority_explorer_v1",
+  "generated_at": "2026-01-01T00:00:01Z",
+  "authority_effect": "none",
+  "no_apply": true,
+  "status": "pass_evidence_authority_explorer",
+  "claims": [
+    {
+      "claim_id": "dashboard_readiness_projection",
+      "label": "Dashboard readiness is a derivative operator projection",
+      "status": "pass",
+      "authority_level": "derivative_projection",
+      "authority_sources": [
+        "docs/PRODUCTION_AUTHORITY.md"
+      ],
+      "supporting_artifacts": [
+        "fixtures/current_truth_snapshot.json"
+      ],
+      "advisory_sources": [
+        "fixtures/advisory_code_map.json"
+      ],
+      "verifiers": [
+        "example/verifiers/verify_dashboard_projection.py"
+      ]
+    },
+    {
+      "claim_id": "research_only_boundary",
+      "label": "Research artifacts cannot mutate production authority",
+      "status": "pass",
+      "authority_level": "policy",
+      "authority_sources": [
+        "docs/SYSTEM_BOUNDARY.md"
+      ],
+      "supporting_artifacts": [
+        "fixtures/project_surface_map.json"
+      ],
+      "advisory_sources": [],
+      "verifiers": [
+        "example/verifiers/verify_research_boundary.py"
+      ]
+    }
+  ]
+}

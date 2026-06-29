@@ -1,0 +1,36 @@
+{
+  "schema_version": "deep_context_federation_manifest_v1",
+  "authority_boundary": {
+    "authority_effect": "none",
+    "no_apply": true
+  },
+  "sources": [
+    {
+      "source_id": "current_truth_snapshot",
+      "role": "current_truth",
+      "required": true,
+      "path": "fixtures/current_truth_snapshot.json",
+      "verifier": "example/verifiers/verify_current_truth.py"
+    },
+    {
+      "source_id": "evidence_authority_explorer",
+      "role": "claim_lineage",
+      "required": true,
+      "path": "fixtures/evidence_authority_explorer.json",
+      "verifier": "example/verifiers/verify_evidence.py"
+    },
+    {
+      "source_id": "project_surface_map",
+      "role": "project_surface",
+      "required": true,
+      "path": "fixtures/project_surface_map.json",
+      "verifier": "example/verifiers/verify_surface_map.py"
+    },
+    {
+      "source_id": "advisory_code_map",
+      "role": "advisory_source_graph",
+      "required": false,
+      "path": "fixtures/advisory_code_map.json"
+    }
+  ]
+}

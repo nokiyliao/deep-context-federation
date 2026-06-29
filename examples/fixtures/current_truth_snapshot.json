@@ -1,0 +1,17 @@
+{
+  "schema_version": "current_truth_snapshot_v1",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "authority_effect": "none",
+  "no_apply": true,
+  "status": "pass_current_truth_snapshot",
+  "head_commit": "",
+  "summary": {
+    "surface_count": 3,
+    "warning_count": 0
+  },
+  "sources": {
+    "evidence_authority_explorer": {
+      "path": "fixtures/evidence_authority_explorer.json"
+    }
+  }
+}

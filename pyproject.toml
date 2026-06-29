@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deep-context-federation"
-version = "0.1.0"
+version = "0.2.0"
 description = "Read-only federation layer for code graphs, evidence artifacts, operator projections, and advisory context maps."
 readme = "README.md"
 requires-python = ">=3.10"

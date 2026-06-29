@@ -7,9 +7,14 @@ import json
 from pathlib import Path
 from typing import Sequence
 
+from deep_context_federation.bench import benchmark_build
 from deep_context_federation.builder import DEFAULT_JSON_NAME, build_federation, read_json
+from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.query import markdown as query_markdown
 from deep_context_federation.query import query_federation
+from deep_context_federation.sqlite_query import SQL_PRESETS
+from deep_context_federation.sqlite_query import markdown as sql_markdown
+from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.verifier import read_json as read_required_json
 from deep_context_federation.verifier import verify_federation
 
@@ -29,6 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--codebase-memory-cache-dir", type=Path)
     build.add_argument("--write", action="store_true")
     build.add_argument("--json", action="store_true")
+    validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
+    validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
+    validate.add_argument("--json", action="store_true")
     verify = sub.add_parser("verify", help="Verify a federation artifact.")
     verify.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     verify.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
@@ -39,11 +47,29 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--preset", required=True)
     query.add_argument("--limit", type=int, default=50)
     query.add_argument("--format", choices=["json", "markdown"], default="json")
+    sql = sub.add_parser("sql", help="Query the generated SQLite read model.")
+    sql.add_argument("--sqlite", type=Path, default=Path(".dcf") / "deep_context_federation_latest.sqlite")
+    sql.add_argument("--preset", choices=sorted(SQL_PRESETS), required=True)
+    sql.add_argument("--limit", type=int, default=50)
+    sql.add_argument("--search", default="")
+    sql.add_argument("--format", choices=["json", "markdown"], default="json")
+    bench = sub.add_parser("bench", help="Benchmark in-memory federation build time.")
+    add_common_source_args(bench)
+    bench.add_argument("--iterations", type=int, default=5)
+    bench.add_argument("--json", action="store_true")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "validate-manifest":
+        manifest = read_json(args.manifest)
+        result = validate_manifest(manifest, manifest_path=args.manifest)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        else:
+            print(f"{result['status']} errors={result['error_count']} sources={result['source_count']}")
+        return 0 if result["ok"] else 2
     if args.command == "build":
         payload = build_federation(
             manifest_path=args.manifest,
@@ -84,6 +110,33 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(query_markdown(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "sql":
+        result = query_sqlite(args.sqlite, preset=args.preset, limit=args.limit, search=args.search)
+        if args.format == "markdown":
+            print(sql_markdown(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "bench":
+        result = benchmark_build(
+            manifest_path=args.manifest,
+            root=args.root,
+            output_dir=args.output_dir,
+            iterations=args.iterations,
+        )
+        if args.json:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        else:
+            print(
+                "bench iterations={} mean={:.6f}s median={:.6f}s min={:.6f}s max={:.6f}s".format(
+                    result["iterations"],
+                    result["seconds_mean"],
+                    result["seconds_median"],
+                    result["seconds_min"],
+                    result["seconds_max"],
+                )
+            )
         return 0
     raise AssertionError(args.command)
 

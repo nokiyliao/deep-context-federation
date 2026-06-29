@@ -10,7 +10,19 @@ It joins local context surfaces such as:
 - advisory source maps
 - code graph or memory adapters
 
-The output is a machine-readable federation graph of sources, entities, edges, conflicts, and local "Codex Fusion" synthesis roles. It is designed to help humans and coding agents ask, "Which surface says this, what evidence supports it, and is this source stale or advisory?"
+The output is a machine-readable federation graph of sources, entities, edges, conflicts, local "Codex Fusion" synthesis roles, and a SQLite read model. It is designed to help humans and coding agents ask, "Which surface says this, what evidence supports it, and is this source stale or advisory?"
+
+## Why It Exists
+
+Most code-intelligence tools optimize one lane:
+
+- symbol graph navigation
+- repository surface maps
+- long-term code memory
+- evidence receipt indexing
+- dashboard/operator projection
+
+Deep Context Federation is the integration layer across those lanes. It does not try to be the best symbol parser or the best long-term memory store. It makes those tools safer and more useful together by enforcing a common read-only boundary, ranking source health, joining claims to evidence, and exposing stale or conflicting context before agents act on it.
 
 ## Boundary
 
@@ -42,6 +54,9 @@ python -m pip install -e ".[dev]"
 Run the bundled example after installation:
 
 ```bash
+python -m deep_context_federation.cli validate-manifest \
+  --manifest examples/deep_context_federation.example.json
+
 python -m deep_context_federation.cli build \
   --manifest examples/deep_context_federation.example.json \
   --root examples \
@@ -57,6 +72,17 @@ python -m deep_context_federation.cli query \
   --input .dcf/deep_context_federation_latest.json \
   --preset claim-lineage \
   --format markdown
+
+python -m deep_context_federation.cli sql \
+  --sqlite .dcf/deep_context_federation_latest.sqlite \
+  --preset search \
+  --search dashboard \
+  --format markdown
+
+python -m deep_context_federation.cli bench \
+  --manifest examples/deep_context_federation.example.json \
+  --root examples \
+  --iterations 5
 ```
 
 If installed as a package, use `dcf`:
@@ -65,6 +91,7 @@ If installed as a package, use `dcf`:
 dcf build --manifest examples/deep_context_federation.example.json --root examples --output-dir .dcf --write
 dcf verify --manifest examples/deep_context_federation.example.json --root examples --input .dcf/deep_context_federation_latest.json
 dcf query --input .dcf/deep_context_federation_latest.json --preset surface-splits --format markdown
+dcf sql --sqlite .dcf/deep_context_federation_latest.sqlite --preset source-health
 ```
 
 From a fresh source checkout without installing first, prefix commands with `PYTHONPATH=src`:
@@ -106,6 +133,44 @@ Paths are resolved relative to the manifest directory first, then relative to `-
 - `code-to-authority`: path and symbol entities joined into the federation
 - `r19-context`: text filter for projects that use R19 research lanes
 - `operator-projection`: dashboard/operator/governance projection context
+
+## SQLite Read Model
+
+The generated SQLite file is intended for agent and automation use. It contains:
+
+- `sources`
+- `entities`
+- `edges`
+- `conflicts`
+- `search_index`
+
+SQL presets:
+
+- `source-health`
+- `stale-sources`
+- `claim-lineage`
+- `surface-splits`
+- `code-to-authority`
+- `operator-projection`
+- `search`
+
+Example:
+
+```bash
+dcf sql --sqlite .dcf/deep_context_federation_latest.sqlite --preset search --search governance
+```
+
+## Source Quality
+
+Each source row includes a `quality` object with a numeric score and reasons. The score penalizes stale sources, missing required sources, authority-boundary drift, missing verifiers, and optional unavailable adapters. This gives agents an immediate signal about which context is reliable enough to use and which needs refresh or owner review first.
+
+## Benchmarking
+
+Use `bench` to track local build performance:
+
+```bash
+dcf bench --manifest examples/deep_context_federation.example.json --root examples --iterations 20 --json
+```
 
 ## Optional codebase-memory adapter
 

@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from deep_context_federation.manifest import validate_manifest
+
 SCHEMA_VERSION = "deep_context_federation_v1"
 MANIFEST_SCHEMA = "deep_context_federation_manifest_v1"
 DEFAULT_JSON_NAME = "deep_context_federation_latest.json"
@@ -580,6 +582,36 @@ def source_conflicts(sources: Mapping[str, Mapping[str, Any]], codebase_conflict
     return conflicts
 
 
+def source_quality(source: Mapping[str, Any]) -> dict[str, Any]:
+    score = 100
+    reasons: list[str] = []
+    status = str(source.get("status") or "")
+    if status == "stale":
+        score -= 20
+        reasons.append("stale")
+    elif status in {"missing", "error"}:
+        score -= 60
+        reasons.append(status)
+    elif status == "optional_unavailable":
+        score -= 10
+        reasons.append("optional_unavailable")
+    if source.get("required") and status not in {"loaded", "stale"}:
+        score -= 30
+        reasons.append("required_not_loaded")
+    if str(source.get("authority_effect") or "none") != "none" or source.get("no_apply") is False:
+        score -= 50
+        reasons.append("authority_boundary_violation")
+    if not source.get("verifier"):
+        score -= 5
+        reasons.append("no_verifier")
+    return {"score": max(0, score), "reasons": reasons}
+
+
+def attach_source_quality(sources: dict[str, dict[str, Any]]) -> None:
+    for source in sources.values():
+        source["quality"] = source_quality(source)
+
+
 def fusion_synthesis(sources: Mapping[str, Mapping[str, Any]], conflicts: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     error_types = {str(item.get("conflict_type") or "") for item in conflicts if str(item.get("severity") or "") == "error"}
     warning_types = {str(item.get("conflict_type") or "") for item in conflicts if str(item.get("severity") or "") == "warning"}
@@ -693,11 +725,17 @@ def write_sqlite(path: Path, payload: Mapping[str, Any]) -> None:
         conn.execute("create table entities (entity_id text primary key, entity_type text, value text, label text, source_ids_json text, metadata_json text)")
         conn.execute("create table edges (edge_id text primary key, edge_type text, from_entity text, to_entity text, source_id text)")
         conn.execute("create table conflicts (conflict_id text, conflict_type text, severity text, source_id text, detail_json text)")
+        conn.execute("create table search_index (kind text, row_id text, text text, json text)")
         for source in payload.get("sources") or []:
             if isinstance(source, Mapping):
                 conn.execute(
                     "insert into sources values (?, ?, ?, ?, ?, ?)",
                     (source.get("source_id"), source.get("role"), 1 if source.get("required") else 0, source.get("status"), source.get("path"), json.dumps(source.get("summary") or {}, sort_keys=True)),
+                )
+                source_json = json.dumps(dict(source), ensure_ascii=True, sort_keys=True)
+                conn.execute(
+                    "insert into search_index values (?, ?, ?, ?)",
+                    ("source", source.get("source_id"), source_json, source_json),
                 )
         for entity in payload.get("entities") or []:
             if isinstance(entity, Mapping):
@@ -705,12 +743,34 @@ def write_sqlite(path: Path, payload: Mapping[str, Any]) -> None:
                     "insert into entities values (?, ?, ?, ?, ?, ?)",
                     (entity.get("entity_id"), entity.get("entity_type"), entity.get("value"), entity.get("label"), json.dumps(entity.get("source_ids") or [], sort_keys=True), json.dumps(entity.get("metadata") or {}, sort_keys=True)),
                 )
+                entity_json = json.dumps(dict(entity), ensure_ascii=True, sort_keys=True)
+                conn.execute(
+                    "insert into search_index values (?, ?, ?, ?)",
+                    ("entity", entity.get("entity_id"), entity_json, entity_json),
+                )
         for edge in payload.get("edges") or []:
             if isinstance(edge, Mapping):
                 conn.execute("insert into edges values (?, ?, ?, ?, ?)", (edge.get("edge_id"), edge.get("edge_type"), edge.get("from_entity"), edge.get("to_entity"), edge.get("source_id")))
+                edge_json = json.dumps(dict(edge), ensure_ascii=True, sort_keys=True)
+                conn.execute(
+                    "insert into search_index values (?, ?, ?, ?)",
+                    ("edge", edge.get("edge_id"), edge_json, edge_json),
+                )
         for conflict in payload.get("conflicts") or []:
             if isinstance(conflict, Mapping):
                 conn.execute("insert into conflicts values (?, ?, ?, ?, ?)", (conflict.get("conflict_id"), conflict.get("conflict_type"), conflict.get("severity"), conflict.get("source_id"), json.dumps(conflict.get("detail") or {}, sort_keys=True)))
+                conflict_json = json.dumps(dict(conflict), ensure_ascii=True, sort_keys=True)
+                conn.execute(
+                    "insert into search_index values (?, ?, ?, ?)",
+                    ("conflict", conflict.get("conflict_id"), conflict_json, conflict_json),
+                )
+        for fusion in payload.get("codex_fusion_synthesis") or []:
+            if isinstance(fusion, Mapping):
+                fusion_json = json.dumps(dict(fusion), ensure_ascii=True, sort_keys=True)
+                conn.execute(
+                    "insert into search_index values (?, ?, ?, ?)",
+                    ("fusion", fusion.get("role"), fusion_json, fusion_json),
+                )
         conn.commit()
     finally:
         conn.close()
@@ -730,6 +790,9 @@ def build_federation(
     manifest_dir = manifest_path.parent
     output_dir = output_dir.expanduser().resolve()
     manifest = load_manifest(manifest_path)
+    manifest_verification = validate_manifest(manifest, manifest_path=manifest_path)
+    if not manifest_verification["ok"]:
+        raise ValueError(f"manifest validation failed: {manifest_verification['errors']}")
     git = git_info(root)
     source_specs = [dict(item) for item in manifest.get("sources") or [] if isinstance(item, Mapping)]
     sources = {
@@ -739,6 +802,7 @@ def build_federation(
     }
     codebase, codebase_conflicts = codebase_memory_source(root, include=include_codebase_memory, cache_dir=codebase_memory_cache_dir)
     sources["codebase_memory_mcp"] = codebase
+    attach_source_quality(sources)
     entities, edges, entity_conflicts = build_entities_and_edges(sources)
     conflicts = source_conflicts(sources, codebase_conflicts)
     conflicts.extend(entity_conflicts)
@@ -763,6 +827,7 @@ def build_federation(
             "external_model_calls_allowed": False,
         },
         "manifest": {"path": manifest_path.as_posix(), "schema_version": manifest.get("schema_version")},
+        "manifest_verification": manifest_verification,
         "sources": [sources[key] for key in sorted(sources)],
         "entities": sorted(entities, key=lambda item: (str(item.get("entity_type")), str(item.get("value")))),
         "edges": sorted(edges, key=lambda item: (str(item.get("edge_type")), str(item.get("edge_id")))),

@@ -8,8 +8,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from deep_context_federation.bench import benchmark_build
 from deep_context_federation.builder import build_federation, codebase_memory_source
+from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.query import query_federation
+from deep_context_federation.sqlite_query import query_sqlite
 from deep_context_federation.verifier import verify_federation
 
 
@@ -42,6 +45,13 @@ def test_build_verify_and_query_example(tmp_path: Path) -> None:
     assert query["schema_version"] == "deep_context_federation_query_v1"
     assert query["row_count"] > 0
 
+    sqlite_query = query_sqlite(tmp_path / "deep_context_federation_latest.sqlite", preset="search", search="dashboard", limit=10)
+    assert sqlite_query["schema_version"] == "deep_context_federation_sql_query_v1"
+    assert sqlite_query["row_count"] > 0
+
+    source_health = query_sqlite(tmp_path / "deep_context_federation_latest.sqlite", preset="source-health", limit=10)
+    assert source_health["row_count"] > 0
+
 
 def test_verifier_rejects_authority_drift(tmp_path: Path) -> None:
     payload = build_federation(
@@ -66,6 +76,58 @@ def test_verifier_rejects_authority_drift(tmp_path: Path) -> None:
 
     assert result["ok"] is False
     assert any(error["id"] == "no_error_conflicts" for error in result["errors"])
+
+
+def test_manifest_validation_rejects_duplicates() -> None:
+    manifest = {
+        "schema_version": "deep_context_federation_manifest_v1",
+        "sources": [
+            {"source_id": "same", "role": "current_truth", "required": True, "path": "a.json"},
+            {"source_id": "same", "role": "evidence", "required": False, "path": "b.json"},
+        ],
+    }
+
+    result = validate_manifest(manifest)
+
+    assert result["ok"] is False
+    assert any(error["id"] == "source_ids_unique" for error in result["errors"])
+
+
+def test_build_rejects_invalid_manifest(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "deep_context_federation_manifest_v1",
+                "sources": [
+                    {"source_id": "missing_role", "required": True, "path": "a.json"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifest validation failed"):
+        build_federation(
+            manifest_path=manifest_path,
+            root=tmp_path,
+            output_dir=tmp_path / ".dcf",
+            write=False,
+        )
+
+
+def test_build_benchmark_reports_timings(tmp_path: Path) -> None:
+    result = benchmark_build(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        iterations=2,
+    )
+
+    assert result["schema_version"] == "deep_context_federation_benchmark_v1"
+    assert result["iterations"] == 2
+    assert result["seconds_mean"] >= 0
+    assert result["last_summary"]["error_count"] == 0
 
 
 def test_codebase_memory_adapter_safety(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

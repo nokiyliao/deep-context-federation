@@ -27,6 +27,7 @@ from deep_context_federation.scanner import SCAN_SCHEMA_VERSION
 from deep_context_federation.scanner import SURFACE_MAP_SCHEMA_VERSION
 from deep_context_federation.scanner import SYMBOL_MAP_SCHEMA_VERSION
 from deep_context_federation.sqlite_query import SQL_PRESETS
+from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 from deep_context_federation.version import __version__
 
@@ -53,7 +54,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "schema_version": SCHEMA_VERSION,
             "producer": "build",
             "default_outputs": [DEFAULT_JSON_NAME, DEFAULT_MD_NAME, DEFAULT_SQLITE_NAME],
-            "consumer_commands": ["verify", "query", "trace", "doctor", "rank", "diff", "quality-gate"],
+            "consumer_commands": ["verify", "query", "trace", "doctor", "rank", "diff", "quality-gate", "brief"],
             "top_level_required": ["schema_version", "sources", "entities", "edges", "conflicts", "query_presets"],
             "authority_effect": "none",
             "no_apply": True,
@@ -125,8 +126,25 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "artifact_kind": "context_pack",
             "schema_version": CONTEXT_PACK_SCHEMA_VERSION,
             "producer": "pack",
-            "consumer_commands": ["agent_prompt", "model_context_router"],
+            "consumer_commands": ["brief", "agent_prompt", "model_context_router"],
             "top_level_required": ["schema_version", "token_budget", "estimated_tokens", "prompt_text", "coverage", "rows", "summary"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "task_brief",
+            "schema_version": TASK_BRIEF_SCHEMA_VERSION,
+            "producer": "brief",
+            "consumer_commands": ["agent_router", "agent_prompt", "operator_context"],
+            "top_level_required": [
+                "schema_version",
+                "status",
+                "task",
+                "selected_presets",
+                "doctor_summary",
+                "context_pack",
+                "recommended_commands",
+            ],
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -278,6 +296,15 @@ def _commands() -> list[dict[str, Any]]:
             "writes": ["optional context pack JSON when --output is set"],
             "output_schemas": [CONTEXT_PACK_SCHEMA_VERSION],
             "options": ["--task", "--token-budget", "--max-rows", "--min-score", "--no-prompt"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "brief",
+            "intent": "Build a task routing brief with selected query presets, doctor summary, recommended commands, and prompt pack.",
+            "writes": ["optional task brief JSON when --output is set"],
+            "output_schemas": [TASK_BRIEF_SCHEMA_VERSION],
+            "options": ["--task", "--token-budget", "--query-limit", "--max-presets", "--max-rows", "--no-prompt"],
             "authority_effect": "none",
             "no_apply": True,
         },

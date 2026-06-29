@@ -53,6 +53,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
+- task routing brief that selects query presets, runs diagnostics, and embeds a bounded prompt pack
 - token-aware context packing for bounded model prompts
 - machine-readable quality gate for CI and agent routing
 - entity/source ranking for prioritization
@@ -132,6 +133,16 @@ python -m deep_context_federation.cli pack \
   --task "dashboard operator evidence authority" \
   --token-budget 4000 \
   --output .dcf/deep_context_federation_context_pack.json
+```
+
+Or generate a full task routing brief before handing work to an agent:
+
+```bash
+python -m deep_context_federation.cli brief \
+  --input .dcf/deep_context_federation_latest.json \
+  --task "dashboard operator evidence authority" \
+  --token-budget 4000 \
+  --output .dcf/deep_context_federation_task_brief.json
 ```
 
 Run only the repository scan when you want starter source snapshots without the full pipeline:
@@ -335,6 +346,18 @@ The output includes:
 - source snapshot and explicit `authority_effect: none` / `no_apply: true`
 
 This is the intended way to reduce model input tokens: run local federation queries and packing first, then feed `prompt_text` to the model instead of the whole repository or full federation JSON. Use `--no-prompt` when an agent only needs the machine-readable scored rows and will render its own prompt.
+
+## Task Brief
+
+`dcf brief` is the agent start surface. It consumes a federation artifact plus a task string and emits:
+
+- selected query presets with the terms that triggered them
+- compact routed query samples
+- doctor status and recommended actions
+- embedded `context_pack.prompt_text`
+- token budget, compression, coverage, and recommended follow-up commands
+
+Use it when an agent should not decide from scratch whether to run `query`, `doctor`, `trace`, or `pack`. The brief remains `authority_effect: none` / `no_apply: true`; it routes context and diagnostics only.
 
 ## Quality Gate
 

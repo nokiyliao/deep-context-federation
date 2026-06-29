@@ -16,6 +16,7 @@ from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERS
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
 from deep_context_federation.scanner import SCAN_SCHEMA_VERSION
+from deep_context_federation.task_brief import TASK_BRIEF_SCHEMA_VERSION
 from deep_context_federation.verifier import VERIFY_SCHEMA_VERSION
 
 SCHEMA_REGISTRY_SCHEMA_VERSION = "deep_context_federation_schema_registry_v1"
@@ -266,6 +267,39 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "rows": array_type,
                 "dropped": array_type,
                 "summary": object_type,
+            },
+        ),
+        "task_brief": _schema(
+            TASK_BRIEF_SCHEMA_VERSION,
+            "Deep Context Federation task routing brief",
+            [
+                "schema_version",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "task",
+                "selected_presets",
+                "doctor_summary",
+                "context_budget",
+                "coverage",
+                "context_pack",
+                "recommended_commands",
+                "safety_boundaries",
+            ],
+            {
+                "status": {"type": "string", "enum": ["ready", "warn", "blocked"]},
+                **_boundary_props(),
+                "task": {"type": "string"},
+                "terms": array_type,
+                "source_snapshot": object_type,
+                "selected_presets": array_type,
+                "routed_queries": array_type,
+                "doctor_summary": object_type,
+                "context_budget": object_type,
+                "coverage": object_type,
+                "context_pack": object_type,
+                "recommended_commands": array_type,
+                "safety_boundaries": object_type,
             },
         ),
     }

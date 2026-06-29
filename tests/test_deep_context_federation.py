@@ -29,6 +29,7 @@ from deep_context_federation.scanner import scan_repository
 from deep_context_federation.schemas import build_schema_registry
 from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import query_sqlite
+from deep_context_federation.task_brief import build_task_brief
 from deep_context_federation.verifier import verify_federation
 
 
@@ -57,7 +58,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.14.0"
+    assert payload["package"]["version"] == "0.15.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -67,6 +68,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "scan",
         "schema",
         "validate-artifact",
+        "brief",
         "pack",
         "quality-gate",
         "query",
@@ -98,6 +100,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["quality_gate_policy"]["schema_version"] == "deep_context_federation_quality_gate_policy_v1"
     assert by_kind["contract_validation"]["schema_version"] == "deep_context_federation_contract_validation_v1"
     assert by_kind["context_pack"]["schema_version"] == "deep_context_federation_context_pack_v1"
+    assert by_kind["task_brief"]["schema_version"] == "deep_context_federation_task_brief_v1"
 
     policy = json.loads(EXAMPLE_QUALITY_GATE_POLICY.read_text(encoding="utf-8"))
     valid = validate_artifact_contract(policy)
@@ -150,6 +153,38 @@ def test_context_pack_is_token_bounded(tmp_path: Path) -> None:
     )
     assert rows_only["prompt_text"] == ""
     assert rows_only["prompt_estimated_tokens"] == 0
+
+
+def test_task_brief_routes_agent_context(tmp_path: Path) -> None:
+    payload = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=False,
+    )
+
+    brief = build_task_brief(
+        payload,
+        task="dashboard operator evidence authority",
+        token_budget=900,
+        query_limit=5,
+        max_presets=3,
+    )
+
+    assert brief["schema_version"] == "deep_context_federation_task_brief_v1"
+    assert brief["authority_effect"] == "none"
+    assert brief["no_apply"] is True
+    assert brief["status"] in {"ready", "warn", "blocked"}
+    assert brief["context_pack"]["prompt_text"].startswith("# Deep Context Federation Prompt Pack")
+    assert brief["context_pack"]["estimated_tokens"] <= 900
+    assert brief["context_budget"]["estimated_token_savings"] > 0
+    assert brief["coverage"]["selected_source_count"] > 0
+    selected_presets = {row["preset"] for row in brief["selected_presets"]}
+    assert {"claim-lineage", "operator-projection"} <= selected_presets
+    assert len(brief["routed_queries"]) == len(brief["selected_presets"])
+    assert any(row["purpose"] == "generate_bounded_model_context" for row in brief["recommended_commands"])
+    assert brief["safety_boundaries"]["mutation_allowed"] is False
+    assert validate_artifact_contract(brief)["ok"] is True
 
 
 def test_build_verify_and_query_example(tmp_path: Path) -> None:

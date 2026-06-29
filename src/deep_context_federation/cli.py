@@ -44,6 +44,8 @@ from deep_context_federation.schemas import validate_artifact_contract
 from deep_context_federation.sqlite_query import SQL_PRESETS
 from deep_context_federation.sqlite_query import markdown as sql_markdown
 from deep_context_federation.sqlite_query import query_sqlite
+from deep_context_federation.task_brief import build_task_brief
+from deep_context_federation.task_brief import markdown_task_brief
 from deep_context_federation.verifier import read_json as read_required_json
 from deep_context_federation.verifier import verify_federation
 
@@ -121,6 +123,16 @@ def build_parser() -> argparse.ArgumentParser:
     pack.add_argument("--no-prompt", action="store_true", help="Emit scored JSON rows without the rendered prompt_text field.")
     pack.add_argument("--output", type=Path)
     pack.add_argument("--format", choices=["json", "markdown"], default="json")
+    brief = sub.add_parser("brief", help="Build a one-shot task routing brief with queries, doctor summary, and prompt pack.")
+    brief.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
+    brief.add_argument("--task", required=True)
+    brief.add_argument("--token-budget", type=int, default=4000)
+    brief.add_argument("--query-limit", type=int, default=10)
+    brief.add_argument("--max-presets", type=int, default=3)
+    brief.add_argument("--max-rows", type=int, default=80)
+    brief.add_argument("--no-prompt", action="store_true", help="Skip rendered prompt_text inside the embedded context_pack.")
+    brief.add_argument("--output", type=Path)
+    brief.add_argument("--format", choices=["json", "markdown"], default="json")
     trace = sub.add_parser("trace", help="Trace neighboring federation entities by text match.")
     trace.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     trace.add_argument("--match", required=True)
@@ -331,6 +343,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_context_pack(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "brief":
+        payload = read_required_json(args.input)
+        result = build_task_brief(
+            payload,
+            task=args.task,
+            token_budget=args.token_budget,
+            query_limit=args.query_limit,
+            max_presets=args.max_presets,
+            max_rows=args.max_rows,
+            include_prompt=not args.no_prompt,
+            input_path=args.input.as_posix(),
+        )
+        if args.output:
+            result["outputs"] = {"task_brief_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_task_brief(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0

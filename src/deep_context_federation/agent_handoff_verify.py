@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,14 @@ def _read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except Exception:
         return ""
+
+
+def _read_json(path: Path) -> Mapping[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, Mapping) else {}
 
 
 def _sha256(text: str) -> str:
@@ -126,20 +135,36 @@ def verify_agent_handoff(payload: Mapping[str, Any], *, handoff_path: Path | Non
     prompt_source = str(model_handoff.get("model_prompt_source") or "")
     machine_context_source = str(model_handoff.get("machine_context_source") or "")
     context_advantage_source = str(model_handoff.get("context_advantage_source") or "")
+    public_boundary_source = str(model_handoff.get("public_boundary_audit_source") or "")
     prompt_row = next((row for row in read_first_artifacts if row.get("role") == "model_prompt"), {})
     context_row = next((row for row in audit_artifacts if row.get("role") == "machine_context"), {})
     gate_row = next((row for row in read_first_artifacts if row.get("role") == "context_gate"), {})
     advantage_row = next((row for row in read_first_artifacts if row.get("role") == "context_advantage"), {})
+    public_boundary_row = next((row for row in read_first_artifacts if row.get("role") == "public_boundary_audit"), {})
 
     add("context_gate_artifact_listed", bool(gate_row), None)
     add("context_advantage_artifact_listed", bool(advantage_row), None)
+    add("public_boundary_audit_artifact_listed", bool(public_boundary_row), None)
     add("context_advantage_source_present", bool(context_advantage_source), None)
+    add("public_boundary_audit_source_present", bool(public_boundary_source), None)
     add(
         "context_advantage_source_matches_read_first_artifact",
         context_advantage_source == str(advantage_row.get("path") or ""),
         {"source": context_advantage_source, "artifact": advantage_row.get("path")},
     )
     add("context_advantage_source_in_read_first", context_advantage_source in read_first, {"source": context_advantage_source, "read_first": read_first})
+    add(
+        "public_boundary_audit_source_matches_read_first_artifact",
+        public_boundary_source == str(public_boundary_row.get("path") or ""),
+        {"source": public_boundary_source, "artifact": public_boundary_row.get("path")},
+    )
+    add("public_boundary_audit_source_in_read_first", public_boundary_source in read_first, {"source": public_boundary_source, "read_first": read_first})
+    if public_boundary_source:
+        boundary_path = _resolve(public_boundary_source, base_dir=base_dir)
+        boundary_payload = _read_json(boundary_path)
+        add("public_boundary_audit_schema", boundary_payload.get("schema_version") == "deep_context_federation_public_boundary_audit_v1", boundary_payload.get("schema_version"))
+        add("public_boundary_audit_ok", boundary_payload.get("ok") is True, {"status": boundary_payload.get("status"), "ok": boundary_payload.get("ok")})
+        add("public_boundary_audit_no_errors", _int(boundary_payload.get("summary", {}).get("error_count") if isinstance(boundary_payload.get("summary"), Mapping) else 0) == 0, boundary_payload.get("summary"))
     add("machine_context_artifact_listed", bool(context_row), None)
     add("machine_context_source_matches_audit_artifact", machine_context_source == str(context_row.get("path") or ""), {"source": machine_context_source, "artifact": context_row.get("path")})
     if payload.get("ok") is True:

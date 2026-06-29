@@ -451,6 +451,7 @@ def _artifact_contracts() -> list[dict[str, Any]]:
                 "agent_context_gate_summary",
                 "unified_plane_audit_summary",
                 "context_advantage_summary",
+                "public_boundary_audit_summary",
                 "agent_handoff_verification_summary",
                 "input_fingerprint_summary",
                 "model_handoff",
@@ -1123,11 +1124,12 @@ def _commands() -> list[dict[str, Any]]:
         },
         {
             "command": "prepare-model-handoff",
-            "intent": "Run decide-continuation, pack-model-context, and gate-model-context into one gated model handoff artifact.",
+            "intent": "Run decide-continuation, pack-model-context, gate-model-context, public-boundary audit, and verification into one gated model handoff artifact.",
             "writes": [
                 "output_dir generated artifacts",
                 "model prompt markdown",
                 "model handoff token economics and artifact fingerprints",
+                "public boundary audit JSON and Markdown",
                 "model handoff verification JSON and Markdown",
                 "optional model handoff JSON when --output is set",
             ],
@@ -1137,6 +1139,7 @@ def _commands() -> list[dict[str, Any]]:
                 AGENT_CI_SCHEMA_VERSION,
                 AGENT_CONTEXT_SCHEMA_VERSION,
                 AGENT_CONTEXT_GATE_SCHEMA_VERSION,
+                PUBLIC_BOUNDARY_AUDIT_SCHEMA_VERSION,
             ],
             "input_schemas": [
                 QUALITY_GATE_POLICY_SCHEMA_VERSION,

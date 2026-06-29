@@ -23,6 +23,8 @@ from deep_context_federation.context_advantage import prove_context_advantage
 from deep_context_federation.context_pack import estimate_tokens
 from deep_context_federation.input_fingerprint import build_input_fingerprint
 from deep_context_federation.native_integration import build_native_integration_plan
+from deep_context_federation.public_boundary import build_public_boundary_audit
+from deep_context_federation.public_boundary import markdown_public_boundary_audit
 from deep_context_federation.unified_plane_audit import audit_unified_plane
 from deep_context_federation.unified_plane_audit import markdown_unified_plane_audit
 from deep_context_federation.unified_index import build_unified_index
@@ -48,6 +50,8 @@ DEFAULT_AGENT_UNIFIED_PLANE_AUDIT_JSON_NAME = "deep_context_federation_unified_p
 DEFAULT_AGENT_UNIFIED_PLANE_AUDIT_MD_NAME = "DEEP_CONTEXT_FEDERATION_UNIFIED_PLANE_AUDIT.md"
 DEFAULT_AGENT_CONTEXT_ADVANTAGE_JSON_NAME = "deep_context_federation_context_advantage.json"
 DEFAULT_AGENT_CONTEXT_ADVANTAGE_MD_NAME = "DEEP_CONTEXT_FEDERATION_CONTEXT_ADVANTAGE.md"
+DEFAULT_AGENT_PUBLIC_BOUNDARY_AUDIT_JSON_NAME = "deep_context_federation_public_boundary_audit.json"
+DEFAULT_AGENT_PUBLIC_BOUNDARY_AUDIT_MD_NAME = "DEEP_CONTEXT_FEDERATION_PUBLIC_BOUNDARY_AUDIT.md"
 
 
 def _normalize_output_dir(root: Path, output_dir: Path) -> Path:
@@ -189,6 +193,7 @@ def _handoff_decision(
     agent_context: Mapping[str, Any],
     agent_context_gate: Mapping[str, Any],
     context_advantage: Mapping[str, Any],
+    public_boundary_audit: Mapping[str, Any],
 ) -> dict[str, Any]:
     stop_reasons: list[dict[str, Any]] = []
     cautions: list[dict[str, Any]] = []
@@ -212,11 +217,20 @@ def _handoff_decision(
                 "failed_check_ids": _failed_check_ids(context_advantage),
             }
         )
+    if public_boundary_audit.get("ok") is not True:
+        stop_reasons.append(
+            {
+                "id": "public_boundary_audit_failed",
+                "status": public_boundary_audit.get("status"),
+                "failed_check_ids": _failed_check_ids(public_boundary_audit),
+            }
+        )
     for name, payload in (
         ("agent_ci", agent_ci),
         ("agent_context", agent_context),
         ("agent_context_gate", agent_context_gate),
         ("context_advantage", context_advantage),
+        ("public_boundary_audit", public_boundary_audit),
     ):
         if str(payload.get("status") or "").startswith("warn"):
             cautions.append({"id": f"{name}_warn", "status": payload.get("status")})
@@ -410,7 +424,19 @@ def build_agent_handoff(
     write_json(context_advantage_json, context_advantage)
     write_markdown(context_advantage_md, markdown_context_advantage(context_advantage).splitlines())
 
-    decision = _handoff_decision(agent_ci, agent_context, agent_context_gate, context_advantage)
+    public_boundary_audit = build_public_boundary_audit(
+        [
+            ("selected_context", selected_context),
+            ("agent_context_gate", agent_context_gate),
+            ("context_advantage", context_advantage),
+        ]
+    )
+    public_boundary_audit_json = out_dir / DEFAULT_AGENT_PUBLIC_BOUNDARY_AUDIT_JSON_NAME
+    public_boundary_audit_md = out_dir / DEFAULT_AGENT_PUBLIC_BOUNDARY_AUDIT_MD_NAME
+    write_json(public_boundary_audit_json, public_boundary_audit)
+    write_markdown(public_boundary_audit_md, markdown_public_boundary_audit(public_boundary_audit).splitlines())
+
+    decision = _handoff_decision(agent_ci, agent_context, agent_context_gate, context_advantage, public_boundary_audit)
     ok = bool(decision.get("handoff_allowed"))
     status = "fail_agent_handoff"
     if ok:
@@ -437,6 +463,8 @@ def build_agent_handoff(
         "unified_plane_audit_markdown": unified_plane_audit_md.as_posix(),
         "context_advantage_json": context_advantage_json.as_posix(),
         "context_advantage_markdown": context_advantage_md.as_posix(),
+        "public_boundary_audit_json": public_boundary_audit_json.as_posix(),
+        "public_boundary_audit_markdown": public_boundary_audit_md.as_posix(),
     }
     model_prompt_source = agent_model_prompt_md.as_posix() if ok and include_prompt and prompt_text else ""
     prompt_fingerprint = _artifact_fingerprint(agent_model_prompt_md, role="model_prompt", default_model_input=bool(model_prompt_source))
@@ -446,8 +474,10 @@ def build_agent_handoff(
     selected_fingerprint = _artifact_fingerprint(selected_context_json, role="selected_context")
     unified_plane_fingerprint = _artifact_fingerprint(unified_plane_audit_json, role="unified_plane_audit")
     context_advantage_fingerprint = _artifact_fingerprint(context_advantage_json, role="context_advantage")
+    public_boundary_fingerprint = _artifact_fingerprint(public_boundary_audit_json, role="public_boundary_audit")
     read_first_artifacts = [
         context_advantage_fingerprint,
+        public_boundary_fingerprint,
         gate_fingerprint,
         selected_fingerprint,
         prompt_fingerprint,
@@ -457,6 +487,7 @@ def build_agent_handoff(
     unified_context_tokens = int(unified_fingerprint.get("estimated_tokens") or 0)
     selected_context_tokens = int(selected_fingerprint.get("estimated_tokens") or 0)
     context_advantage_tokens = int(context_advantage_fingerprint.get("estimated_tokens") or 0)
+    public_boundary_tokens = int(public_boundary_fingerprint.get("estimated_tokens") or 0)
     measured_prompt_economics = bool(model_prompt_source)
     model_handoff = {
         "read_first": [
@@ -464,6 +495,7 @@ def build_agent_handoff(
             for item in (
                 handoff_json.as_posix(),
                 context_advantage_json.as_posix(),
+                public_boundary_audit_json.as_posix(),
                 agent_context_gate_json.as_posix(),
                 selected_context_json.as_posix(),
                 model_prompt_source,
@@ -486,6 +518,9 @@ def build_agent_handoff(
         "context_advantage_source": context_advantage_json.as_posix(),
         "context_advantage_markdown": context_advantage_md.as_posix(),
         "context_advantage_estimated_tokens": context_advantage_tokens,
+        "public_boundary_audit_source": public_boundary_audit_json.as_posix(),
+        "public_boundary_audit_markdown": public_boundary_audit_md.as_posix(),
+        "public_boundary_audit_estimated_tokens": public_boundary_tokens,
         "unified_context_summary": {
             "schema_version": unified_index.get("schema_version"),
             "status": unified_index.get("status"),
@@ -503,6 +538,7 @@ def build_agent_handoff(
         },
         "unified_plane_audit_summary": _summary(unified_plane_audit),
         "context_advantage_summary": _summary(context_advantage),
+        "public_boundary_audit_summary": _summary(public_boundary_audit),
         "read_first_artifacts": read_first_artifacts,
         "audit_artifacts": [context_fingerprint, unified_fingerprint, unified_plane_fingerprint],
         "token_economics": {
@@ -513,8 +549,9 @@ def build_agent_handoff(
             "unified_context_estimated_tokens": unified_context_tokens,
             "selected_context_estimated_tokens": selected_context_tokens,
             "context_advantage_estimated_tokens": context_advantage_tokens,
+            "public_boundary_audit_estimated_tokens": public_boundary_tokens,
             "selected_context_to_unified_context_ratio": _ratio(selected_context_tokens, unified_context_tokens),
-            "read_first_support_estimated_tokens": int(gate_fingerprint.get("estimated_tokens") or 0) + selected_context_tokens + context_advantage_tokens,
+            "read_first_support_estimated_tokens": int(gate_fingerprint.get("estimated_tokens") or 0) + selected_context_tokens + context_advantage_tokens + public_boundary_tokens,
             "model_prompt_to_machine_context_ratio": _ratio(model_prompt_tokens, machine_context_tokens) if measured_prompt_economics else 0.0,
             "estimated_token_savings": max(0, machine_context_tokens - model_prompt_tokens) if measured_prompt_economics else 0,
             "estimated_token_savings_percent": _savings_percent(machine_context_tokens, model_prompt_tokens) if measured_prompt_economics else 0.0,
@@ -547,6 +584,7 @@ def build_agent_handoff(
         "agent_context_gate_summary": _summary(agent_context_gate),
         "unified_plane_audit_summary": _summary(unified_plane_audit),
         "context_advantage_summary": _summary(context_advantage),
+        "public_boundary_audit_summary": _summary(public_boundary_audit),
         "agent_handoff_verification_summary": {},
         "input_fingerprint_summary": {
             "schema_version": input_fingerprint.get("schema_version"),
@@ -594,6 +632,7 @@ def markdown_agent_handoff(result: Mapping[str, Any]) -> str:
     model_handoff = result.get("model_handoff") if isinstance(result.get("model_handoff"), Mapping) else {}
     gate_summary = result.get("agent_context_gate_summary") if isinstance(result.get("agent_context_gate_summary"), Mapping) else {}
     advantage_summary = result.get("context_advantage_summary") if isinstance(result.get("context_advantage_summary"), Mapping) else {}
+    boundary_summary = result.get("public_boundary_audit_summary") if isinstance(result.get("public_boundary_audit_summary"), Mapping) else {}
     lines = [
         "# Deep Context Federation Agent Handoff",
         "",
@@ -604,6 +643,7 @@ def markdown_agent_handoff(result: Mapping[str, Any]) -> str:
         f"- Task: `{result.get('task')}`",
         f"- Context gate status: `{gate_summary.get('status')}`",
         f"- Context advantage status: `{advantage_summary.get('status')}`",
+        f"- Public boundary status: `{boundary_summary.get('status')}`",
         f"- Handoff verification status: `{result.get('agent_handoff_verification_summary', {}).get('status') if isinstance(result.get('agent_handoff_verification_summary'), Mapping) else ''}`",
         f"- Model prompt source: `{model_handoff.get('model_prompt_source')}`",
         f"- Model prompt tokens: `{model_handoff.get('model_prompt_estimated_tokens')}`",

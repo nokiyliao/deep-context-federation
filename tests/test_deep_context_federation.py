@@ -243,7 +243,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.58.0"
+    assert payload["package"]["version"] == "0.59.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -312,6 +312,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["top_level_required"]
+    assert "public_boundary_audit_summary" in by_kind["agent_handoff"]["top_level_required"]
     assert by_kind["operator_context"]["schema_version"] == "deep_context_federation_operator_context_v1"
     assert by_kind["public_boundary_audit"]["schema_version"] == "deep_context_federation_public_boundary_audit_v1"
     assert by_kind["query"]["source_identity_policy"]["source_ids_exposed"] is False
@@ -370,6 +371,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["json_schema"]["required"]
+    assert "public_boundary_audit_summary" in by_kind["agent_handoff"]["json_schema"]["required"]
     assert by_kind["operator_context"]["schema_version"] == "deep_context_federation_operator_context_v1"
     assert by_kind["public_boundary_audit"]["schema_version"] == "deep_context_federation_public_boundary_audit_v1"
     assert by_kind["read_model_query"]["schema_version"] == "deep_context_federation_sql_query_v1"
@@ -1471,6 +1473,8 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["unified_plane_audit_summary"]["status"] == "pass_unified_plane_audit"
     assert result["context_advantage_summary"]["status"] == "pass_context_advantage"
     assert result["context_advantage_summary"]["ok"] is True
+    assert result["public_boundary_audit_summary"]["ok"] is True
+    assert result["public_boundary_audit_summary"]["status"] in {"pass_public_boundary_audit", "warn_public_boundary_audit"}
     prompt_path = Path(result["outputs"]["agent_model_prompt_markdown"])
     context_path = Path(result["outputs"]["agent_context_json"])
     assert result["model_handoff"]["model_prompt_source"] == result["outputs"]["agent_model_prompt_markdown"]
@@ -1480,10 +1484,13 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert result["model_handoff"]["selected_context_source"] == result["outputs"]["selected_context_json"]
     assert result["model_handoff"]["unified_plane_audit_source"] == result["outputs"]["unified_plane_audit_json"]
     assert result["model_handoff"]["context_advantage_source"] == result["outputs"]["context_advantage_json"]
+    assert result["model_handoff"]["public_boundary_audit_source"] == result["outputs"]["public_boundary_audit_json"]
     assert result["model_handoff"]["unified_plane_audit_summary"]["status"] == "pass_unified_plane_audit"
     assert result["model_handoff"]["context_advantage_summary"]["status"] == "pass_context_advantage"
+    assert result["model_handoff"]["public_boundary_audit_summary"]["ok"] is True
     assert result["outputs"]["selected_context_json"] in result["model_handoff"]["read_first"]
     assert result["outputs"]["context_advantage_json"] in result["model_handoff"]["read_first"]
+    assert result["outputs"]["public_boundary_audit_json"] in result["model_handoff"]["read_first"]
     assert result["outputs"]["unified_index_json"] not in result["model_handoff"]["read_first"]
     assert result["model_handoff"]["read_first"][-1] == result["outputs"]["agent_model_prompt_markdown"]
     assert result["model_handoff"]["model_prompt_estimated_tokens"] > 0
@@ -1511,10 +1518,13 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert Path(result["outputs"]["unified_plane_audit_markdown"]).exists()
     assert Path(result["outputs"]["context_advantage_json"]).exists()
     assert Path(result["outputs"]["context_advantage_markdown"]).exists()
+    assert Path(result["outputs"]["public_boundary_audit_json"]).exists()
+    assert Path(result["outputs"]["public_boundary_audit_markdown"]).exists()
     unified_index = json.loads(Path(result["outputs"]["unified_index_json"]).read_text(encoding="utf-8"))
     selected_context = json.loads(Path(result["outputs"]["selected_context_json"]).read_text(encoding="utf-8"))
     unified_plane_audit = json.loads(Path(result["outputs"]["unified_plane_audit_json"]).read_text(encoding="utf-8"))
     context_advantage = json.loads(Path(result["outputs"]["context_advantage_json"]).read_text(encoding="utf-8"))
+    public_boundary_audit = json.loads(Path(result["outputs"]["public_boundary_audit_json"]).read_text(encoding="utf-8"))
     assert unified_index["schema_version"] == "deep_context_federation_unified_index_v1"
     assert unified_index["source_identity_policy"]["public_identity"] == "deep_context_federation"
     assert unified_index["source_identity_policy"]["source_ids_exposed"] is False
@@ -1535,6 +1545,11 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert context_advantage["status"] == "pass_context_advantage"
     assert context_advantage["ok"] is True
     assert validate_artifact_contract(context_advantage, artifact_kind="context_advantage")["ok"] is True
+    assert public_boundary_audit["schema_version"] == "deep_context_federation_public_boundary_audit_v1"
+    assert public_boundary_audit["ok"] is True
+    assert public_boundary_audit["status"] in {"pass_public_boundary_audit", "warn_public_boundary_audit"}
+    assert any(row["artifact_ref"] == "selected_context" for row in public_boundary_audit["rows"])
+    assert validate_artifact_contract(public_boundary_audit, artifact_kind="public_boundary_audit")["ok"] is True
 
     def assert_no_source_identity(value: object) -> None:
         if isinstance(value, dict):
@@ -1584,6 +1599,7 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     gate_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "context_gate")
     selected_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "selected_context")
     advantage_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "context_advantage")
+    public_boundary_artifact = next(row for row in result["model_handoff"]["read_first_artifacts"] if row["role"] == "public_boundary_audit")
     unified_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "unified_context_audit")
     unified_plane_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "unified_plane_audit")
     context_artifact = next(row for row in result["model_handoff"]["audit_artifacts"] if row["role"] == "machine_context")
@@ -1599,6 +1615,9 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert advantage_artifact["path"] == result["outputs"]["context_advantage_json"]
     assert advantage_artifact["exists"] is True
     assert advantage_artifact["estimated_tokens"] == result["model_handoff"]["context_advantage_estimated_tokens"]
+    assert public_boundary_artifact["path"] == result["outputs"]["public_boundary_audit_json"]
+    assert public_boundary_artifact["exists"] is True
+    assert public_boundary_artifact["estimated_tokens"] == result["model_handoff"]["public_boundary_audit_estimated_tokens"]
     assert unified_artifact["path"] == result["outputs"]["unified_index_json"]
     assert unified_artifact["exists"] is True
     assert unified_artifact["estimated_tokens"] == result["model_handoff"]["unified_context_estimated_tokens"]
@@ -1615,6 +1634,8 @@ def test_agent_handoff_runs_gated_model_handoff(tmp_path: Path) -> None:
     assert economics["selected_context_estimated_tokens"] == result["model_handoff"]["selected_context_estimated_tokens"]
     assert economics["context_advantage_estimated_tokens"] == result["model_handoff"]["context_advantage_estimated_tokens"]
     assert economics["context_advantage_estimated_tokens"] > 0
+    assert economics["public_boundary_audit_estimated_tokens"] == result["model_handoff"]["public_boundary_audit_estimated_tokens"]
+    assert economics["public_boundary_audit_estimated_tokens"] > 0
     assert 0 < economics["selected_context_to_unified_context_ratio"] < 1
     assert economics["read_first_support_estimated_tokens"] >= result["model_handoff"]["selected_context_estimated_tokens"]
     assert economics["read_first_support_estimated_tokens"] < result["model_handoff"]["unified_context_estimated_tokens"]

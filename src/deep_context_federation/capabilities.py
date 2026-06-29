@@ -16,6 +16,7 @@ from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import QUERY_PRESETS
 from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
+from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
 from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_INPUT_SCHEMA
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
@@ -117,6 +118,15 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "producer": "query",
             "consumer_commands": ["agent_router", "operator_context"],
             "top_level_required": ["schema_version", "preset", "status", "rows"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "artifact_kind": "context_pack",
+            "schema_version": CONTEXT_PACK_SCHEMA_VERSION,
+            "producer": "pack",
+            "consumer_commands": ["agent_prompt", "model_context_router"],
+            "top_level_required": ["schema_version", "token_budget", "estimated_tokens", "rows", "summary"],
             "authority_effect": "none",
             "no_apply": True,
         },
@@ -259,6 +269,14 @@ def _commands() -> list[dict[str, Any]]:
             "writes": [],
             "output_schemas": [QUERY_SCHEMA_VERSION],
             "presets": list(QUERY_PRESETS),
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "pack",
+            "intent": "Build a token-aware bounded context pack for a task.",
+            "writes": ["optional context pack JSON when --output is set"],
+            "output_schemas": [CONTEXT_PACK_SCHEMA_VERSION],
             "authority_effect": "none",
             "no_apply": True,
         },

@@ -53,6 +53,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - one-command bootstrap pipeline for scan, compose, build, verify, and doctor
 - self-describing capabilities manifest for commands, contracts, presets, and safety boundaries
 - JSON Schema registry and built-in artifact contract validation
+- token-aware context packing for bounded model prompts
 - machine-readable quality gate for CI and agent routing
 - entity/source ranking for prioritization
 - doctor-style diagnostics with recommended actions
@@ -121,6 +122,16 @@ python -m deep_context_federation.cli quality-gate \
   --input .dcf/deep_context_federation_bootstrap.json \
   --policy .dcf/quality_gate_policy.json \
   --output .dcf/deep_context_federation_quality_gate.json
+```
+
+Pack only the relevant context for a model or agent task:
+
+```bash
+python -m deep_context_federation.cli pack \
+  --input .dcf/deep_context_federation_latest.json \
+  --task "dashboard operator evidence authority" \
+  --token-budget 4000 \
+  --output .dcf/deep_context_federation_context_pack.json
 ```
 
 Run only the repository scan when you want starter source snapshots without the full pipeline:
@@ -300,6 +311,28 @@ dcf validate-artifact \
 ```
 
 This is intentionally a contract-shape gate: it checks schema identity, required top-level fields, `authority_effect: none`, `no_apply: true`, and basic JSON types. Deeper project semantics still belong to `dcf verify`, `dcf doctor`, and `dcf quality-gate`.
+
+## Token-Aware Context Packing
+
+`dcf pack` is the model-efficiency layer. It takes a full federation artifact plus a task string, scores sources/entities/edges/conflicts locally, and emits a bounded context bundle:
+
+```bash
+dcf pack \
+  --input .dcf/deep_context_federation_latest.json \
+  --task "claim lineage for dashboard readiness" \
+  --token-budget 8000 \
+  --max-rows 80 \
+  --output .dcf/deep_context_federation_context_pack.json
+```
+
+The output includes:
+
+- selected rows with score, matched terms, and estimated token cost
+- dropped-row summary with budget or rank reasons
+- original estimated tokens, packed estimated tokens, token savings, and compression ratio
+- source snapshot and explicit `authority_effect: none` / `no_apply: true`
+
+This is the intended way to reduce model input tokens: run local federation queries and packing first, then feed the compact context pack to the model instead of the whole repository or full federation JSON.
 
 ## Quality Gate
 

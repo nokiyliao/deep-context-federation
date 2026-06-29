@@ -11,6 +11,7 @@ from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import SCHEMA_VERSION
 from deep_context_federation.capabilities import CAPABILITIES_SCHEMA_VERSION
 from deep_context_federation.compose import COMPOSE_SCHEMA_VERSION
+from deep_context_federation.context_pack import CONTEXT_PACK_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
@@ -229,6 +230,34 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "row_count": {"type": "integer"},
                 "rows": array_type,
                 "source_snapshot": object_type,
+            },
+        ),
+        "context_pack": _schema(
+            CONTEXT_PACK_SCHEMA_VERSION,
+            "Deep Context Federation token-aware context pack",
+            [
+                "schema_version",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "task",
+                "token_budget",
+                "estimated_tokens",
+                "rows",
+                "summary",
+            ],
+            {
+                "status": {"type": "string", "const": "ok"},
+                **_boundary_props(),
+                "task": {"type": "string"},
+                "token_budget": {"type": "integer"},
+                "estimated_tokens": {"type": "integer"},
+                "original_estimated_tokens": {"type": "integer"},
+                "estimated_token_savings": {"type": "integer"},
+                "compression_ratio": {"type": "number"},
+                "rows": array_type,
+                "dropped": array_type,
+                "summary": object_type,
             },
         ),
     }

@@ -14,6 +14,7 @@ from deep_context_federation.builder import build_federation, codebase_memory_so
 from deep_context_federation.capabilities import build_capabilities
 from deep_context_federation.cache import DEFAULT_CACHE_NAME
 from deep_context_federation.compose import compose_manifests
+from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
@@ -56,7 +57,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.12.0"
+    assert payload["package"]["version"] == "0.13.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -66,6 +67,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "scan",
         "schema",
         "validate-artifact",
+        "pack",
         "quality-gate",
         "query",
         "sql",
@@ -95,6 +97,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["federation"]["schema_version"] == "deep_context_federation_v1"
     assert by_kind["quality_gate_policy"]["schema_version"] == "deep_context_federation_quality_gate_policy_v1"
     assert by_kind["contract_validation"]["schema_version"] == "deep_context_federation_contract_validation_v1"
+    assert by_kind["context_pack"]["schema_version"] == "deep_context_federation_context_pack_v1"
 
     policy = json.loads(EXAMPLE_QUALITY_GATE_POLICY.read_text(encoding="utf-8"))
     valid = validate_artifact_contract(policy)
@@ -108,6 +111,29 @@ def test_schema_registry_and_contract_validation() -> None:
     assert failed["ok"] is False
     error_ids = {row["id"] for row in failed["errors"]}
     assert "$.no_apply:required" in error_ids
+
+
+def test_context_pack_is_token_bounded(tmp_path: Path) -> None:
+    payload = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path,
+        write=False,
+    )
+
+    pack = pack_context(payload, task="dashboard operator evidence authority", token_budget=700, max_rows=12)
+
+    assert pack["schema_version"] == "deep_context_federation_context_pack_v1"
+    assert pack["authority_effect"] == "none"
+    assert pack["no_apply"] is True
+    assert pack["estimated_tokens"] <= 700
+    assert pack["original_estimated_tokens"] > pack["estimated_tokens"]
+    assert pack["estimated_token_savings"] > 0
+    assert 0 < pack["compression_ratio"] < 1
+    assert pack["summary"]["selected_count"] == len(pack["rows"])
+    assert pack["summary"]["dropped_count"] > 0
+    assert any(row["matched_terms"] for row in pack["rows"])
+    assert validate_artifact_contract(pack)["ok"] is True
 
 
 def test_build_verify_and_query_example(tmp_path: Path) -> None:

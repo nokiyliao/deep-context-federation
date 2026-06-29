@@ -15,6 +15,8 @@ from deep_context_federation.capabilities import build_capabilities
 from deep_context_federation.capabilities import markdown_capabilities
 from deep_context_federation.compose import compose_manifests
 from deep_context_federation.compose import markdown_compose
+from deep_context_federation.context_pack import markdown_context_pack
+from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.diff import markdown_diff
 from deep_context_federation.doctor import doctor_federation
@@ -110,6 +112,14 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--preset", required=True)
     query.add_argument("--limit", type=int, default=50)
     query.add_argument("--format", choices=["json", "markdown"], default="json")
+    pack = sub.add_parser("pack", help="Build a token-aware bounded context pack for a task.")
+    pack.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
+    pack.add_argument("--task", required=True)
+    pack.add_argument("--token-budget", type=int, default=4000)
+    pack.add_argument("--min-score", type=int, default=0)
+    pack.add_argument("--max-rows", type=int, default=80)
+    pack.add_argument("--output", type=Path)
+    pack.add_argument("--format", choices=["json", "markdown"], default="json")
     trace = sub.add_parser("trace", help="Trace neighboring federation entities by text match.")
     trace.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
     trace.add_argument("--match", required=True)
@@ -302,6 +312,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = query_federation(payload, preset=args.preset, limit=args.limit)
         if args.format == "markdown":
             print(query_markdown(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0
+    if args.command == "pack":
+        payload = read_required_json(args.input)
+        result = pack_context(
+            payload,
+            task=args.task,
+            token_budget=args.token_budget,
+            min_score=args.min_score,
+            max_rows=args.max_rows,
+        )
+        if args.output:
+            result["outputs"] = {"context_pack_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_context_pack(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0

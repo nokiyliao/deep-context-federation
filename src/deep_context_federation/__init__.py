@@ -4,6 +4,7 @@ from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.builder import build_federation
 from deep_context_federation.capabilities import build_capabilities
 from deep_context_federation.compose import compose_manifests
+from deep_context_federation.context_pack import pack_context
 from deep_context_federation.diff import diff_federations
 from deep_context_federation.doctor import doctor_federation
 from deep_context_federation.graph import trace_federation
@@ -32,6 +33,7 @@ __all__ = [
     "evaluate_quality_gate",
     "load_quality_gate_policy",
     "normalize_quality_gate_policy",
+    "pack_context",
     "query_federation",
     "query_sqlite",
     "rank_entities",

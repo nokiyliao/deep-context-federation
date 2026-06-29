@@ -13,6 +13,7 @@ from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
+from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import MANIFEST_SCHEMA
 from deep_context_federation.builder import SCHEMA_VERSION
@@ -787,6 +788,29 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "checks": array_type,
                 "errors": array_type,
                 "summary": object_type,
+            },
+        ),
+        "agent_model_input": _schema(
+            AGENT_MODEL_INPUT_SCHEMA_VERSION,
+            "Deep Context Federation fail-closed agent model input",
+            ["schema_version", "ok", "status", "authority_effect", "no_apply", "verification_summary", "checks", "errors", "safety_boundaries"],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_agent_model_input", "fail_agent_model_input"]},
+                **_boundary_props(),
+                "input_ref": {"type": "string"},
+                "prompt_source": {"type": "string"},
+                "prompt_format": {"type": "string"},
+                "prompt_bytes": {"type": "integer"},
+                "prompt_sha256": {"type": "string"},
+                "prompt_estimated_tokens": {"type": "integer"},
+                "prompt_text": {"type": "string"},
+                "handoff_summary": object_type,
+                "verification_summary": object_type,
+                "token_economics": object_type,
+                "checks": array_type,
+                "errors": array_type,
+                "safety_boundaries": object_type,
             },
         ),
     }

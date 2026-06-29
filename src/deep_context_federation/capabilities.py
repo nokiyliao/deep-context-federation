@@ -13,6 +13,7 @@ from deep_context_federation.agent_context_gate import AGENT_CONTEXT_GATE_SCHEMA
 from deep_context_federation.agent_ci import AGENT_CI_SCHEMA_VERSION
 from deep_context_federation.agent_handoff import AGENT_HANDOFF_SCHEMA_VERSION
 from deep_context_federation.agent_handoff_verify import AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION
+from deep_context_federation.agent_model_input import AGENT_MODEL_INPUT_SCHEMA_VERSION
 from deep_context_federation.bootstrap import BOOTSTRAP_SCHEMA_VERSION
 from deep_context_federation.builder import DEFAULT_JSON_NAME
 from deep_context_federation.builder import DEFAULT_MD_NAME
@@ -412,6 +413,25 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "agent_model_input",
+            "schema_version": AGENT_MODEL_INPUT_SCHEMA_VERSION,
+            "producer": "agent-model-input",
+            "consumer_commands": ["agent_runner", "ci", "operator_context", "github_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "verification_summary",
+                "checks",
+                "errors",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "schema_registry",
             "schema_version": "deep_context_federation_schema_registry_v1",
             "producer": "schema",
@@ -656,7 +676,13 @@ def _commands() -> list[dict[str, Any]]:
                 "agent handoff verification JSON and Markdown",
                 "optional agent handoff JSON when --output is set",
             ],
-            "output_schemas": [AGENT_HANDOFF_SCHEMA_VERSION, AGENT_CI_SCHEMA_VERSION, AGENT_CONTEXT_SCHEMA_VERSION, AGENT_CONTEXT_GATE_SCHEMA_VERSION],
+            "output_schemas": [
+                AGENT_HANDOFF_SCHEMA_VERSION,
+                AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION,
+                AGENT_CI_SCHEMA_VERSION,
+                AGENT_CONTEXT_SCHEMA_VERSION,
+                AGENT_CONTEXT_GATE_SCHEMA_VERSION,
+            ],
             "input_schemas": [
                 QUALITY_GATE_POLICY_SCHEMA_VERSION,
                 TARGET_REVIEW_GATE_POLICY_SCHEMA_VERSION,
@@ -688,6 +714,16 @@ def _commands() -> list[dict[str, Any]]:
             "output_schemas": [AGENT_HANDOFF_VERIFICATION_SCHEMA_VERSION],
             "input_schemas": [AGENT_HANDOFF_SCHEMA_VERSION],
             "options": ["--input", "--output", "--format"],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "agent-model-input",
+            "intent": "Verify an agent handoff and emit model prompt text only when all handoff checks pass.",
+            "writes": ["optional model input JSON when --output is set"],
+            "output_schemas": [AGENT_MODEL_INPUT_SCHEMA_VERSION],
+            "input_schemas": [AGENT_HANDOFF_SCHEMA_VERSION],
+            "options": ["--input", "--output", "--no-prompt", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },

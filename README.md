@@ -240,6 +240,16 @@ python -m deep_context_federation.cli verify-handoff \
 
 `verify-handoff` recomputes listed generated-artifact fingerprints, prompt/context token estimates, and token economics. It exits with code `2` if prompt files, context files, hashes, or economics no longer match the handoff.
 
+Emit the model prompt through a fail-closed reader:
+
+```bash
+python -m deep_context_federation.cli agent-model-input \
+  --input .dcf/deep_context_federation_agent_handoff.json \
+  --format prompt
+```
+
+`agent-model-input` verifies the handoff first. It prints prompt text only when the handoff, generated artifacts, and token economics pass verification; otherwise it exits with code `2` and emits no prompt in `prompt` mode.
+
 Bootstrap can also merge curated manifests into the same graph:
 
 ```bash
@@ -553,6 +563,8 @@ and emits `deep_context_federation_agent_handoff_v1` with a final `decision`, co
 For token efficiency, `model_handoff.model_prompt_source` points at `DEEP_CONTEXT_FEDERATION_AGENT_MODEL_PROMPT.md`, not the full machine JSON. The JSON context is still recorded as `model_handoff.machine_context_source`, so agents can default to the smaller prompt-only surface and open the heavier JSON only when auditing evidence, hashes, or skipped/truncated rows. `model_handoff.token_economics` records prompt/context estimated tokens, ratio, and estimated savings; `read_first_artifacts` and `audit_artifacts` record path, bytes, SHA-256, and default-model-input flags.
 
 Run `dcf verify-handoff --input <handoff.json>` before giving a copied or externally transferred `model_prompt_source` to a model. The verifier is read-only and emits `deep_context_federation_agent_handoff_verification_v1`; it checks safety boundaries, pass/fail semantics, artifact hashes, prompt/context token estimates, and `token_economics` consistency. Fresh `dcf agent-handoff` runs already include the same verification summary and verification artifact.
+
+For global wrappers, prefer `dcf agent-model-input --input <handoff.json> --format prompt` as the final handoff step. It reruns verification and returns only the prompt body on success, which lets Codex, Claude, AGY, GitHub runners, or shell wrappers consume DCF without reimplementing the verification logic.
 
 ## Capabilities Manifest
 

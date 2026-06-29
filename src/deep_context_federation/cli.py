@@ -20,6 +20,8 @@ from deep_context_federation.agent_handoff import build_agent_handoff
 from deep_context_federation.agent_handoff import markdown_agent_handoff
 from deep_context_federation.agent_handoff_verify import markdown_agent_handoff_verification
 from deep_context_federation.agent_handoff_verify import verify_agent_handoff
+from deep_context_federation.agent_model_input import build_agent_model_input
+from deep_context_federation.agent_model_input import markdown_agent_model_input
 from deep_context_federation.bench import benchmark_build
 from deep_context_federation.bootstrap import bootstrap_federation
 from deep_context_federation.bootstrap import markdown_bootstrap
@@ -291,6 +293,11 @@ def build_parser() -> argparse.ArgumentParser:
     verify_handoff.add_argument("--input", type=Path, required=True)
     verify_handoff.add_argument("--output", type=Path)
     verify_handoff.add_argument("--format", choices=["json", "markdown"], default="json")
+    agent_model_input = sub.add_parser("agent-model-input", help="Fail-closed reader that emits model prompt text only after handoff verification passes.")
+    agent_model_input.add_argument("--input", type=Path, required=True)
+    agent_model_input.add_argument("--output", type=Path)
+    agent_model_input.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
+    agent_model_input.add_argument("--format", choices=["json", "markdown", "prompt"], default="json")
     validate = sub.add_parser("validate-manifest", help="Validate manifest shape before reading sources.")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
     validate.add_argument("--json", action="store_true")
@@ -809,6 +816,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(args.output, result)
         if args.format == "markdown":
             print(markdown_agent_handoff_verification(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "agent-model-input":
+        payload = read_required_json(args.input)
+        result = build_agent_model_input(payload, handoff_path=args.input, include_prompt=not args.no_prompt)
+        if args.output:
+            result["outputs"] = {"agent_model_input_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "prompt":
+            if result["ok"]:
+                print(result.get("prompt_text") or "", end="" if str(result.get("prompt_text") or "").endswith("\n") else "\n")
+        elif args.format == "markdown":
+            print(markdown_agent_model_input(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

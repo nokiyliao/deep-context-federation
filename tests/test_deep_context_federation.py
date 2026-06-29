@@ -243,7 +243,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.59.0"
+    assert payload["package"]["version"] == "0.60.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -411,7 +411,7 @@ def test_schema_registry_and_contract_validation() -> None:
 
 
 def test_native_integration_plan_collapses_upstream_identity() -> None:
-    plan = build_native_integration_plan(capabilities=["symbol-call-graph", "surface-map", "long-term-context-memory"])
+    plan = build_native_integration_plan(capabilities=["trace-code-relationships", "map-system-surfaces", "reuse-prior-context"])
 
     assert plan["schema_version"] == "deep_context_federation_native_integration_plan_v1"
     assert plan["ok"] is True
@@ -423,7 +423,7 @@ def test_native_integration_plan_collapses_upstream_identity() -> None:
     assert plan["integration_policy"]["consume_only_allowed"] is False
     assert plan["safety_boundaries"]["user_facing_source_identity_collapsed_to_dcf"] is True
     capability_ids = {row["capability_id"] for row in plan["capabilities"]}
-    assert capability_ids == {"symbol_call_graph", "surface_map", "long_term_context_memory"}
+    assert capability_ids == {"trace_code_relationships", "map_system_surfaces", "reuse_prior_context"}
     assert all(row["input_identity_collapsed"] is True for row in plan["capabilities"])
     assert all("external_overlap" not in row for row in plan["capabilities"])
     assert all("requested_as" not in row for row in plan["capabilities"])
@@ -442,9 +442,9 @@ def test_native_integration_plan_cli_validates(tmp_path: Path) -> None:
             "deep_context_federation.cli",
             "plan-capability-ownership",
             "--function",
-            "symbol-call-graph",
+            "trace-code-relationships",
             "--function",
-            "operator-projection",
+            "summarize-operator-state",
             "--output",
             str(output_path),
             "--format",
@@ -462,7 +462,7 @@ def test_native_integration_plan_cli_validates(tmp_path: Path) -> None:
     assert payload["status"] == "pass_native_integration_plan"
     assert payload["outputs"]["native_integration_plan_json"] == output_path.resolve().as_posix()
     assert output_path.exists()
-    assert {row["capability_id"] for row in payload["capabilities"]} == {"symbol_call_graph", "operator_projection"}
+    assert {row["capability_id"] for row in payload["capabilities"]} == {"trace_code_relationships", "summarize_operator_state"}
     assert all("external_overlap" not in row for row in payload["capabilities"])
     assert validate_artifact_contract(payload, artifact_kind="native_integration_plan")["ok"] is True
 
@@ -710,6 +710,7 @@ def test_legacy_cli_names_remain_hidden_compatibility_aliases(tmp_path: Path) ->
     assert completed.returncode == 0, completed.stderr + completed.stdout
     payload = json.loads(completed.stdout)
     assert payload["status"] == "pass_native_integration_plan"
+    assert {row["capability_id"] for row in payload["capabilities"]} == {"trace_code_relationships"}
     assert payload["outputs"]["native_integration_plan_json"] == output_path.resolve().as_posix()
     assert output_path.exists()
 
@@ -724,11 +725,11 @@ def test_unified_plane_audit_checks_function_named_integrated_plane(tmp_path: Pa
     capabilities = build_capabilities()
     ownership = build_native_integration_plan(
         capabilities=[
-            "symbol-call-graph",
-            "surface-map",
-            "long-term-context-memory",
-            "evidence-lineage",
-            "workflow-orchestration",
+            "trace-code-relationships",
+            "map-system-surfaces",
+            "reuse-prior-context",
+            "trace-claim-evidence",
+            "orchestrate-model-readiness",
         ]
     )
     context_index = build_unified_index(
@@ -1154,11 +1155,11 @@ def test_context_advantage_proves_integrated_token_efficient_entrypoint(tmp_path
     capabilities = build_capabilities()
     ownership = build_native_integration_plan(
         capabilities=[
-            "symbol-call-graph",
-            "surface-map",
-            "long-term-context-memory",
-            "evidence-lineage",
-            "workflow-orchestration",
+            "trace-code-relationships",
+            "map-system-surfaces",
+            "reuse-prior-context",
+            "trace-claim-evidence",
+            "orchestrate-model-readiness",
         ]
     )
     federation = build_federation(
@@ -1873,7 +1874,7 @@ def test_unified_index_collapses_source_identity(tmp_path: Path) -> None:
     )
     memory = build_memory_ledger(root=tmp_path, input_dirs=[tmp_path / "handoff"])
     capabilities = build_capabilities()
-    native_plan = build_native_integration_plan(capabilities=["symbol-call-graph", "long-term-context-memory"])
+    native_plan = build_native_integration_plan(capabilities=["trace-code-relationships", "reuse-prior-context"])
 
     unified = build_unified_index(
         federation=federation,
@@ -1996,7 +1997,7 @@ def test_unified_index_cli_writes_valid_artifact(tmp_path: Path) -> None:
     capabilities_path = tmp_path / "capabilities.json"
     capabilities_path.write_text(json.dumps(build_capabilities(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     native_path = tmp_path / "native_plan.json"
-    native_path.write_text(json.dumps(build_native_integration_plan(capabilities=["surface-map"]), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    native_path.write_text(json.dumps(build_native_integration_plan(capabilities=["map-system-surfaces"]), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     output_path = tmp_path / "unified_index.json"
     env = dict(os.environ)
     env["PYTHONPATH"] = str(REPO_ROOT / "src")

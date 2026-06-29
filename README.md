@@ -126,9 +126,9 @@ Inspect how overlapping tools collapse into DCF-native capabilities:
 
 ```bash
 python -m deep_context_federation.cli plan-capability-ownership \
-  --function symbol-call-graph \
-  --function surface-map \
-  --function long-term-context-memory \
+  --function trace-code-relationships \
+  --function map-system-surfaces \
+  --function reuse-prior-context \
   --format json \
   --output .dcf/deep_context_federation_native_integration_plan.json
 ```
@@ -716,7 +716,7 @@ Function naming is part of the contract, not cosmetic naming. A runner should as
 
 ## Native Unified Integration
 
-`dcf plan-capability-ownership` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names such as `symbol-call-graph`, `surface-map`, `long-term-context-memory`, `evidence-lineage`, `operator-projection`, and `workflow-orchestration`; the emitted artifact is DCF-only:
+`dcf plan-capability-ownership` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names that describe the outcome a runner wants, such as `trace-code-relationships`, `map-system-surfaces`, `reuse-prior-context`, `trace-claim-evidence`, `summarize-operator-state`, and `orchestrate-model-readiness`; the emitted artifact is DCF-only:
 
 - `public_identity: deep_context_federation`
 - `hide_upstream_tool_identity: true`

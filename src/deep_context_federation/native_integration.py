@@ -19,11 +19,11 @@ def _norm(value: str) -> str:
 
 
 NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
-    "symbol_call_graph": {
-        "capability_id": "symbol_call_graph",
-        "capability_name": "Symbol and call graph intelligence",
+    "trace_code_relationships": {
+        "capability_id": "trace_code_relationships",
+        "capability_name": "Trace code relationships",
         "absorbed_function_classes": ["symbol_indexing", "call_graph_navigation", "impact_navigation"],
-        "dcf_native_owner": "repo_scan_symbol_dependency_graph",
+        "dcf_native_owner": "code_relationship_projection",
         "dcf_commands": ["map-repo", "bootstrap-context", "assemble-context", "trace-context", "resolve-evidence", "rank-context", "query-context-store"],
         "native_surfaces": [
             "repo_code_symbols",
@@ -43,11 +43,11 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
             "no wrapper reads a private symbol graph without DCF contract validation",
         ],
     },
-    "surface_map": {
-        "capability_id": "surface_map",
-        "capability_name": "Project surface and split detection",
+    "map_system_surfaces": {
+        "capability_id": "map_system_surfaces",
+        "capability_name": "Map system surfaces",
         "absorbed_function_classes": ["surface_mapping", "split_detection", "ownership_gap_detection"],
-        "dcf_native_owner": "repo_scan_surface_map",
+        "dcf_native_owner": "system_surface_projection",
         "dcf_commands": ["map-repo", "bootstrap-context", "query-context", "diagnose-context", "gate-quality"],
         "native_surfaces": [
             "repo_surface_map",
@@ -62,15 +62,15 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
         "remaining_gap": "Project-specific owners can be made stricter by feeding repo-local policy files into DCF quality gates.",
         "exit_criteria": [
             "surface-split reviews use DCF query-context/diagnose-context output",
-            "surface-map inputs are imported only as normalized DCF rows",
+            "system-surface observations are imported only as normalized DCF rows",
             "surface ownership gaps are reported by DCF conflicts",
         ],
     },
-    "long_term_context_memory": {
-        "capability_id": "long_term_context_memory",
-        "capability_name": "Long-term context memory and reuse",
+    "reuse_prior_context": {
+        "capability_id": "reuse_prior_context",
+        "capability_name": "Reuse prior context",
         "absorbed_function_classes": ["long_term_context_recall", "session_memory", "context_reuse"],
-        "dcf_native_owner": "memory_ledger_fingerprint_agent_handoff",
+        "dcf_native_owner": "context_reuse_ledger",
         "dcf_commands": ["reuse-context", "assemble-context", "diff-context", "prepare-model-handoff", "prepare-model-input", "onboard-runner", "measure-token-efficiency"],
         "native_surfaces": [
             "memory_ledger",
@@ -93,11 +93,11 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
             "memory imports are one-shot, watcher-free, and collapsed into DCF-native records",
         ],
     },
-    "evidence_lineage": {
-        "capability_id": "evidence_lineage",
-        "capability_name": "Evidence lineage and claim adjudication",
+    "trace_claim_evidence": {
+        "capability_id": "trace_claim_evidence",
+        "capability_name": "Trace claim evidence",
         "absorbed_function_classes": ["evidence_receipts", "current_truth_snapshot", "claim_lineage"],
-        "dcf_native_owner": "resolve_adjudicate_review_gate",
+        "dcf_native_owner": "claim_evidence_resolution",
         "dcf_commands": ["resolve-evidence", "adjudicate-evidence", "review-targets", "gate-target-review", "describe-contracts", "check-artifact"],
         "native_surfaces": [
             "entities.claim_id",
@@ -118,11 +118,11 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
             "authority/advisory conflicts are surfaced as DCF conflicts",
         ],
     },
-    "operator_projection": {
-        "capability_id": "operator_projection",
-        "capability_name": "Operator projection and current truth cockpit",
+    "summarize_operator_state": {
+        "capability_id": "summarize_operator_state",
+        "capability_name": "Summarize operator state",
         "absorbed_function_classes": ["governance_projection", "current_truth_projection", "blocker_cockpit"],
-        "dcf_native_owner": "operator_context_projection",
+        "dcf_native_owner": "operator_state_projection",
         "dcf_commands": ["summarize-operator-context", "describe-abilities", "query-context", "diagnose-context", "prepare-model-input", "onboard-runner", "gate-quality"],
         "native_surfaces": [
             "operator_context",
@@ -146,11 +146,11 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
             "current truth snapshots are summarized into DCF operator rows instead of queried separately by agents",
         ],
     },
-    "workflow_orchestration": {
-        "capability_id": "workflow_orchestration",
-        "capability_name": "Agent workflow orchestration and handoff",
+    "orchestrate_model_readiness": {
+        "capability_id": "orchestrate_model_readiness",
+        "capability_name": "Orchestrate model readiness",
         "absorbed_function_classes": ["agent_launch", "prompt_packaging", "session_handoff"],
-        "dcf_native_owner": "agent_profile_onboard_ready_handoff",
+        "dcf_native_owner": "model_readiness_handoff",
         "dcf_commands": ["init-run-profile", "validate-run-profile", "onboard-runner", "prepare-model-input", "prepare-model-handoff", "emit-model-input"],
         "native_surfaces": [
             "agent_profile",
@@ -175,18 +175,24 @@ NATIVE_CAPABILITY_ROWS: dict[str, dict[str, Any]] = {
 }
 
 ALIASES = {
-    "symbol_graph": "symbol_call_graph",
-    "call_graph": "symbol_call_graph",
-    "impact_navigation": "symbol_call_graph",
-    "surface_split_detection": "surface_map",
-    "context_memory": "long_term_context_memory",
-    "memory_import": "long_term_context_memory",
-    "claim_lineage": "evidence_lineage",
-    "evidence_receipts": "evidence_lineage",
-    "current_truth_projection": "operator_projection",
-    "governance_projection": "operator_projection",
-    "agent_handoff": "workflow_orchestration",
-    "agent_launch": "workflow_orchestration",
+    "symbol_call_graph": "trace_code_relationships",
+    "symbol_graph": "trace_code_relationships",
+    "call_graph": "trace_code_relationships",
+    "impact_navigation": "trace_code_relationships",
+    "surface_map": "map_system_surfaces",
+    "surface_split_detection": "map_system_surfaces",
+    "long_term_context_memory": "reuse_prior_context",
+    "context_memory": "reuse_prior_context",
+    "memory_import": "reuse_prior_context",
+    "evidence_lineage": "trace_claim_evidence",
+    "claim_lineage": "trace_claim_evidence",
+    "evidence_receipts": "trace_claim_evidence",
+    "operator_projection": "summarize_operator_state",
+    "current_truth_projection": "summarize_operator_state",
+    "governance_projection": "summarize_operator_state",
+    "workflow_orchestration": "orchestrate_model_readiness",
+    "agent_handoff": "orchestrate_model_readiness",
+    "agent_launch": "orchestrate_model_readiness",
 }
 
 
@@ -261,31 +267,31 @@ def build_native_integration_plan(*, capabilities: Iterable[str] | None = None) 
             {
                 "step": "orchestration_entrypoint",
                 "goal": "All agents start through DCF onboard-runner or prepare-model-input.",
-                "owner_capability": "workflow_orchestration",
+                "owner_capability": "orchestrate_model_readiness",
                 "exit_gate": "agent_onboard and agent_ready artifacts validate and emit prompt only after gates pass",
             },
             {
                 "step": "surface_and_symbol_unification",
                 "goal": "Surface and symbol questions resolve through DCF query/trace/resolve, not private tool outputs.",
-                "owner_capability": "surface_map + symbol_call_graph",
+                "owner_capability": "map_system_surfaces + trace_code_relationships",
                 "exit_gate": "map-repo/bootstrap-context/assemble-context/verify-context pass with repo_surface_map and repo_code_symbols present",
             },
             {
                 "step": "claim_evidence_lineage",
                 "goal": "Claims, current truth, and evidence receipts are joined through DCF resolve/adjudicate.",
-                "owner_capability": "evidence_lineage",
+                "owner_capability": "trace_claim_evidence",
                 "exit_gate": "target review and review gate pass for selected claims",
             },
             {
                 "step": "native_memory_ledger",
                 "goal": "Accepted handoffs and context fingerprints become DCF-native reusable memory.",
-                "owner_capability": "long_term_context_memory",
+                "owner_capability": "reuse_prior_context",
                 "exit_gate": "reuse-context emits reusable rows with fingerprint-bound prompt sources",
             },
             {
                 "step": "operator_projection_convergence",
                 "goal": "Dashboards and agents render the same DCF current context contract.",
-                "owner_capability": "operator_projection",
+                "owner_capability": "summarize_operator_state",
                 "exit_gate": "operator-projection query and quality gate cover blockers, dirty lanes, and current truth drift",
             },
         ],

@@ -376,7 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
     public_boundary.add_argument("--format", choices=["json", "markdown"], default="json")
     native_integration = sub.add_parser("plan-capability-ownership", help="Plan DCF ownership of overlapping context functions.")
     native_integration.set_defaults(capability=[])
-    native_integration.add_argument("--function", dest="capability", metavar="FUNCTION", action="append", help="DCF function name to inspect, such as symbol-call-graph or long-term-context-memory.")
+    native_integration.add_argument("--function", dest="capability", metavar="FUNCTION", action="append", help="DCF function name to inspect, such as trace-code-relationships or reuse-prior-context.")
     native_integration.add_argument("--capability", dest="capability", action="append", help=argparse.SUPPRESS)
     native_integration.add_argument("--output", type=Path)
     native_integration.add_argument("--format", choices=["json", "markdown"], default="json")

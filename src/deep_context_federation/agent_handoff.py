@@ -138,11 +138,11 @@ def _workflow_intake_outputs(agent_ci: Mapping[str, Any]) -> dict[str, str]:
 def _handoff_ownership_plan() -> dict[str, Any]:
     return build_native_integration_plan(
         capabilities=[
-            "symbol-call-graph",
-            "surface-map",
-            "long-term-context-memory",
-            "evidence-lineage",
-            "workflow-orchestration",
+            "trace-code-relationships",
+            "map-system-surfaces",
+            "reuse-prior-context",
+            "trace-claim-evidence",
+            "orchestrate-model-readiness",
         ]
     )
 

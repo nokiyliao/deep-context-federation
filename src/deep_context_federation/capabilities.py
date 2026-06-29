@@ -42,6 +42,7 @@ from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_V
 from deep_context_federation.manifest import MANIFEST_SCHEMA as MANIFEST_VERIFY_INPUT_SCHEMA
 from deep_context_federation.memory_ledger import MEMORY_LEDGER_SCHEMA_VERSION
 from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
+from deep_context_federation.operator_context import OPERATOR_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
@@ -700,6 +701,27 @@ def _artifact_contracts() -> list[dict[str, Any]]:
             "no_apply": True,
         },
         {
+            "artifact_kind": "operator_context",
+            "schema_version": OPERATOR_CONTEXT_SCHEMA_VERSION,
+            "producer": "summarize-operator-context",
+            "consumer_commands": ["agent_router", "global_wrapper", "ci", "operator_context", "model_runner"],
+            "top_level_required": [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "summary",
+                "operator_rows",
+                "doctor_summary",
+                "query_summaries",
+                "recommended_commands",
+                "safety_boundaries",
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
             "artifact_kind": "input_fingerprint",
             "schema_version": INPUT_FINGERPRINT_SCHEMA_VERSION,
             "producer": "prepare-model-handoff",
@@ -1227,6 +1249,16 @@ def _commands() -> list[dict[str, Any]]:
                 "--context-token-budget",
                 "--format",
             ],
+            "authority_effect": "none",
+            "no_apply": True,
+        },
+        {
+            "command": "summarize-operator-context",
+            "intent": "Collapse operator blockers, stale inputs, surface rows, and current-truth drift into one DCF-native projection.",
+            "writes": ["optional operator context JSON when --output is set"],
+            "output_schemas": [OPERATOR_CONTEXT_SCHEMA_VERSION],
+            "input_schemas": [SCHEMA_VERSION],
+            "options": ["--input", "--limit", "--output", "--format"],
             "authority_effect": "none",
             "no_apply": True,
         },

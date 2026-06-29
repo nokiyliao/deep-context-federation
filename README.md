@@ -71,6 +71,7 @@ Deep Context Federation now combines several capabilities that are usually split
 - run profile contract that lets global wrappers drive `prepare-model-input` from one validated JSON file
 - run profile init command that generates that wrapper profile from repo-local manifest and policy paths
 - runner onboarding command that generates the profile and runs the fail-closed ready path in one global-wrapper capsule
+- operator context projection that summarizes blockers, stale inputs, surface rows, and current-truth drift into one DCF-native operator view
 - native integration plan that collapses overlapping tool identities into DCF-owned capabilities
 - memory ledger that materializes generated handoff, ready, onboard, workflow, and fingerprint artifacts into reusable DCF-native context memory
 - unified context index that collapses graph, memory, commands, and native capability rows into source-hidden function facets
@@ -711,6 +712,8 @@ dcf describe-abilities \
 
 The public CLI is intentionally named by the function a runner wants to accomplish: `map-repo`, `assemble-context`, `query-context`, `prove-unified-context`, `select-context`, and `prepare-model-handoff`. Legacy source-shaped or implementation-shaped names remain hidden compatibility aliases only; new machine guidance should use the function names emitted by `describe-abilities`.
 
+Function naming is part of the contract, not cosmetic naming. A runner should ask DCF to do something measurable, such as `summarize-operator-context`, `prove-context-advantage`, or `gate-model-context`; it should not dispatch against an upstream source name such as a graph provider, memory provider, or dashboard artifact name.
+
 ## Native Unified Integration
 
 `dcf plan-capability-ownership` is the governance surface for replacing scattered tool identities with DCF-owned capabilities. Use function names such as `symbol-call-graph`, `surface-map`, `long-term-context-memory`, `evidence-lineage`, `operator-projection`, and `workflow-orchestration`; the emitted artifact is DCF-only:
@@ -787,6 +790,26 @@ dcf prove-unified-context \
   --ownership-plan .dcf/deep_context_federation_native_integration_plan.json \
   --context-index .dcf/deep_context_federation_unified_index.json \
   --working-set .dcf/deep_context_federation_selected_context.json \
+  --format markdown
+```
+
+## Operator Context Projection
+
+`dcf summarize-operator-context` is the operator-facing DCF function for current blockers and drift. It reads one federation artifact and emits a compact, source-hidden projection of:
+
+- conflict rows
+- required input failures
+- stale or low-quality inputs
+- dirty-lane warnings
+- current-truth freshness drift
+- observed surface rows
+
+The output is `deep_context_federation_operator_context_v1` and stays `authority_effect: none` / `no_apply: true`. It does not expose upstream `source_id` values in public operator rows; recommended follow-up commands are DCF function names.
+
+```bash
+dcf summarize-operator-context \
+  --input .dcf/deep_context_federation_latest.json \
+  --limit 50 \
   --format markdown
 ```
 

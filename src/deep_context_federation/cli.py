@@ -66,6 +66,8 @@ from deep_context_federation.memory_ledger import build_memory_ledger
 from deep_context_federation.memory_ledger import markdown_memory_ledger
 from deep_context_federation.native_integration import build_native_integration_plan
 from deep_context_federation.native_integration import markdown_native_integration_plan
+from deep_context_federation.operator_context import build_operator_context
+from deep_context_federation.operator_context import markdown_operator_context
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
 from deep_context_federation.quality_gate import markdown_quality_gate
@@ -141,6 +143,7 @@ COMMAND_ALIASES = {
     "agent-discover": "discover-model-readiness",
     "agent-route": "route-model-readiness",
     "agent-ready": "prepare-model-input",
+    "operator-context": "summarize-operator-context",
     "validate-manifest": "validate-inputs",
     "compose-manifest": "combine-inputs",
     "verify": "verify-context",
@@ -716,6 +719,11 @@ def build_parser() -> argparse.ArgumentParser:
     agent_ready.add_argument("--no-prompt", action="store_true", help="Verify and emit metadata without embedding prompt_text.")
     agent_ready.add_argument("--output", type=Path)
     agent_ready.add_argument("--format", choices=["json", "markdown", "prompt"], default="json")
+    operator_context = sub.add_parser("summarize-operator-context", help="Summarize operator blockers, stale inputs, surface rows, and current-truth drift into one DCF projection.")
+    operator_context.add_argument("--input", type=Path, default=Path(".dcf") / DEFAULT_JSON_NAME)
+    operator_context.add_argument("--limit", type=int, default=50)
+    operator_context.add_argument("--output", type=Path)
+    operator_context.add_argument("--format", choices=["json", "markdown"], default="json")
     validate = sub.add_parser("validate-inputs", help="Validate manifest shape before reading sources.")
     validate.set_defaults(command="validate-manifest")
     validate.add_argument("--manifest", type=Path, default=Path("deep_context_federation.json"))
@@ -1564,6 +1572,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(result.get("prompt_text") or "", end="" if str(result.get("prompt_text") or "").endswith("\n") else "\n")
         elif args.format == "markdown":
             print(markdown_agent_ready(result))
+        else:
+            print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
+        return 0 if result["ok"] else 2
+    if args.command == "summarize-operator-context":
+        federation = read_required_json(args.input)
+        result = build_operator_context(federation, limit=args.limit)
+        if args.output:
+            result["outputs"] = {"operator_context_json": args.output.expanduser().resolve().as_posix()}
+            write_json(args.output, result)
+        if args.format == "markdown":
+            print(markdown_operator_context(result))
         else:
             print(json.dumps(result, ensure_ascii=True, indent=2, sort_keys=True))
         return 0 if result["ok"] else 2

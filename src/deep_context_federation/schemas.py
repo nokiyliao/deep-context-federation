@@ -36,6 +36,7 @@ from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_COMPARE_
 from deep_context_federation.input_fingerprint import INPUT_FINGERPRINT_SCHEMA_VERSION
 from deep_context_federation.memory_ledger import MEMORY_LEDGER_SCHEMA_VERSION
 from deep_context_federation.native_integration import NATIVE_INTEGRATION_PLAN_SCHEMA_VERSION
+from deep_context_federation.operator_context import OPERATOR_CONTEXT_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_POLICY_SCHEMA_VERSION
 from deep_context_federation.quality_gate import QUALITY_GATE_SCHEMA_VERSION
 from deep_context_federation.query import QUERY_SCHEMA_VERSION
@@ -211,6 +212,35 @@ def _artifact_schemas() -> dict[str, dict[str, Any]]:
                 "errors": array_type,
                 "warnings": array_type,
                 "next_actions": array_type,
+                "safety_boundaries": object_type,
+            },
+        ),
+        "operator_context": _schema(
+            OPERATOR_CONTEXT_SCHEMA_VERSION,
+            "Deep Context Federation operator context projection",
+            [
+                "schema_version",
+                "ok",
+                "status",
+                "authority_effect",
+                "no_apply",
+                "summary",
+                "operator_rows",
+                "doctor_summary",
+                "query_summaries",
+                "recommended_commands",
+                "safety_boundaries",
+            ],
+            {
+                "ok": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["pass_operator_context", "warn_operator_context", "fail_operator_context"]},
+                **_boundary_props(),
+                "generated_at": {"type": "string"},
+                "summary": object_type,
+                "operator_rows": array_type,
+                "doctor_summary": object_type,
+                "query_summaries": object_type,
+                "recommended_commands": array_type,
                 "safety_boundaries": object_type,
             },
         ),

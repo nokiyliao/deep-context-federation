@@ -46,6 +46,7 @@ from deep_context_federation.intake import build_agent_intake
 from deep_context_federation.manifest import validate_manifest
 from deep_context_federation.memory_ledger import build_memory_ledger
 from deep_context_federation.native_integration import build_native_integration_plan
+from deep_context_federation.operator_context import build_operator_context
 from deep_context_federation.quality_gate import evaluate_quality_gate
 from deep_context_federation.quality_gate import load_quality_gate_policy
 from deep_context_federation.quality_gate import normalize_quality_gate_policy
@@ -241,7 +242,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.55.0"
+    assert payload["package"]["version"] == "0.56.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
@@ -264,6 +265,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
         "prepare-model-input",
         "route-model-readiness",
         "verify-model-handoff",
+        "summarize-operator-context",
         "prepare-task-intake",
         "assemble-context",
         "map-repo",
@@ -308,6 +310,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["top_level_required"]
+    assert by_kind["operator_context"]["schema_version"] == "deep_context_federation_operator_context_v1"
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
@@ -361,6 +364,7 @@ def test_schema_registry_and_contract_validation() -> None:
     assert by_kind["agent_context_gate_policy"]["schema_version"] == "deep_context_federation_agent_context_gate_policy_v1"
     assert by_kind["agent_handoff"]["schema_version"] == "deep_context_federation_agent_handoff_v1"
     assert "context_advantage_summary" in by_kind["agent_handoff"]["json_schema"]["required"]
+    assert by_kind["operator_context"]["schema_version"] == "deep_context_federation_operator_context_v1"
     assert by_kind["agent_handoff_verification"]["schema_version"] == "deep_context_federation_agent_handoff_verification_v1"
     assert by_kind["agent_model_input"]["schema_version"] == "deep_context_federation_agent_model_input_v1"
     assert by_kind["agent_onboard"]["schema_version"] == "deep_context_federation_agent_onboard_v1"
@@ -445,7 +449,7 @@ def test_native_integration_plan_cli_validates(tmp_path: Path) -> None:
 
     assert completed.returncode == 0, completed.stderr + completed.stdout
     payload = json.loads(completed.stdout)
-    assert payload["status"] == "warn_native_integration_plan"
+    assert payload["status"] == "pass_native_integration_plan"
     assert payload["outputs"]["native_integration_plan_json"] == output_path.resolve().as_posix()
     assert output_path.exists()
     assert {row["capability_id"] for row in payload["capabilities"]} == {"symbol_call_graph", "operator_projection"}
@@ -489,6 +493,7 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "prove-context-advantage" in top_help.stdout
     assert "decide-continuation" in top_help.stdout
     assert "prepare-model-input" in top_help.stdout
+    assert "summarize-operator-context" in top_help.stdout
     assert "native-integration-plan" not in top_help.stdout
     assert "plan-native-ownership" not in top_help.stdout
     assert "memory-ledger" not in top_help.stdout
@@ -610,6 +615,24 @@ def test_memory_import_cli_uses_function_names_in_help() -> None:
     assert "--read-model" in read_model.stdout
     assert "--sqlite" not in read_model.stdout
 
+    operator_context = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "summarize-operator-context",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert operator_context.returncode == 0
+    assert "--input" in operator_context.stdout
+    assert "--limit" in operator_context.stdout
+
 
 def test_legacy_cli_names_remain_hidden_compatibility_aliases(tmp_path: Path) -> None:
     output_path = tmp_path / "legacy_native_integration_plan.json"
@@ -703,9 +726,66 @@ def test_unified_plane_audit_checks_function_named_integrated_plane(tmp_path: Pa
         context_index=context_index,
         require_all_owned=True,
     )
-    assert strict["ok"] is False
-    assert strict["status"] == "fail_unified_plane_audit"
-    assert any(row["id"] == "all_capabilities_fully_owned" for row in strict["errors"])
+    assert strict["ok"] is True
+    assert strict["status"] == "pass_unified_plane_audit"
+    assert strict["summary"]["native_partial_count"] == 0
+
+
+def test_operator_context_summarizes_operator_projection_without_source_identity(tmp_path: Path) -> None:
+    federation = build_federation(
+        manifest_path=EXAMPLE_MANIFEST,
+        root=REPO_ROOT / "examples",
+        output_dir=tmp_path / "federation",
+        write=True,
+    )
+
+    result = build_operator_context(federation, limit=20)
+
+    assert result["schema_version"] == "deep_context_federation_operator_context_v1"
+    assert result["ok"] is True
+    assert result["status"] == "pass_operator_context"
+    assert result["authority_effect"] == "none"
+    assert result["no_apply"] is True
+    assert result["summary"]["operator_projection_row_count"] > 0
+    assert result["summary"]["row_count"] > 0
+    assert result["safety_boundaries"]["source_identity_collapsed"] is True
+    assert result["safety_boundaries"]["source_ids_exposed"] is False
+    row_kinds = {row["kind"] for row in result["operator_rows"]}
+    assert {"current_truth", "surface"} <= row_kinds
+    assert {row["command"] for row in result["recommended_commands"]} == {"query-context", "diagnose-context", "gate-quality"}
+    assert "source_id" not in json.dumps(result["operator_rows"], sort_keys=True)
+    assert "source_ids" not in json.dumps(result["operator_rows"], sort_keys=True)
+    assert validate_artifact_contract(result, artifact_kind="operator_context")["ok"] is True
+
+    output_path = tmp_path / "operator_context.json"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "deep_context_federation.cli",
+            "summarize-operator-context",
+            "--input",
+            str(federation["outputs"]["json"]),
+            "--limit",
+            "20",
+            "--output",
+            str(output_path),
+            "--format",
+            "json",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+    payload = json.loads(completed.stdout)
+    assert payload["outputs"]["operator_context_json"] == output_path.resolve().as_posix()
+    assert output_path.exists()
+    assert validate_artifact_contract(payload, artifact_kind="operator_context")["ok"] is True
 
 
 def test_workflow_plan_sequences_bounded_agent_run(tmp_path: Path) -> None:

@@ -1,0 +1,33 @@
+{
+  "authority_effect": "none",
+  "no_apply": true,
+  "schema_version": "repo_surface_boundary_governance_v1",
+  "surface_count_expected": 1,
+  "surfaces": [
+    {
+      "allowed_write_scopes": [
+        "src/**"
+      ],
+      "authority_role": "implementation",
+      "claim_boundary": "source ownership only",
+      "display": "Application source",
+      "forbidden_crossings": [
+        "deployment authority",
+        "production mutation"
+      ],
+      "id": "application_source",
+      "logical_ref": [
+        "src/**"
+      ],
+      "owner_board": "engineering",
+      "owner_lane": "application",
+      "protected_class": "none",
+      "read_only": false,
+      "required_verifiers": [
+        "python -m pytest -q"
+      ],
+      "requires_heavy_harness": false,
+      "surface_class": "source"
+    }
+  ]
+}

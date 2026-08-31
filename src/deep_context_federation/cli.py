@@ -384,6 +384,12 @@ def _resolve_agent_ready_args(args: argparse.Namespace, normalized: Mapping[str,
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dcf", description="Read-only deep context federation CLI.")
     sub = parser.add_subparsers(dest="command", required=True)
+    runtime = sub.add_parser(
+        "runtime",
+        help="Use the immutable, project-configurable DCF v2 runtime.",
+        add_help=False,
+    )
+    runtime.set_defaults(command="runtime")
     capabilities = sub.add_parser("describe-abilities", help="Describe DCF machine-readable contracts, commands, presets, and safety boundaries.")
     capabilities.set_defaults(command="capabilities")
     capabilities.add_argument("--output", type=Path)
@@ -921,7 +927,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(_normalize_command_argv(argv))
+    normalized = _normalize_command_argv(argv)
+    if normalized and normalized[0] == "runtime":
+        from deep_context_federation.runtime_v2.cli import main as runtime_main
+
+        return runtime_main(normalized[1:])
+    args = build_parser().parse_args(normalized)
     if args.command == "capabilities":
         result = build_capabilities()
         if args.output:

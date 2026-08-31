@@ -1,0 +1,20 @@
+{
+  "context_summary": "Inspect the application source through one bounded, read-only task context.",
+  "evidence_refs": [],
+  "forbidden_effects": [
+    "deployment",
+    "production_mutation"
+  ],
+  "mission": {
+    "current_predicate": "APPLICATION_SOURCE_IS_EXPLAINED",
+    "mission_id": "example-read-source",
+    "mode": "RESEARCH",
+    "objective": "Explain one configured application source surface"
+  },
+  "operations": [
+    "read"
+  ],
+  "read_scopes": [
+    "src/**"
+  ]
+}

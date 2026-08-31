@@ -1,0 +1,12 @@
+{
+  "authority_effect": "none",
+  "capabilities": [
+    "surface-map",
+    "authority-lineage",
+    "verifier-gates",
+    "source-navigation",
+    "model-context"
+  ],
+  "no_apply": true,
+  "schema_version": "dcf_v2_contract"
+}

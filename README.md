@@ -89,6 +89,8 @@ Deep Context Federation now combines several capabilities that are usually split
 
 ## Install
 
+Deep Context Federation requires Python 3.11 or newer.
+
 ```bash
 python -m pip install .
 ```
@@ -98,6 +100,62 @@ For development:
 ```bash
 python -m pip install -e ".[dev]"
 ```
+
+## Operational DCF v2
+
+Version 0.90 adds a project-configurable operational runtime alongside the
+original federation workflow. The original commands remain compatible. The new
+runtime lives under a separate namespace:
+
+```bash
+# Validate collectors and graph construction without writing runtime state.
+dcf runtime refresh --repo-root . --no-write --json
+
+# Publish one immutable generation and atomically update current/last-good.
+dcf runtime refresh --repo-root . --reason bootstrap --json
+
+# Read status, query one capability, and verify generation hashes.
+dcf runtime status --repo-root . --json
+dcf runtime query --repo-root . --capability surface-map --json
+dcf runtime verify --repo-root . --json
+```
+
+The generic runtime reads two project-owned contracts by default:
+
+- `config/contracts/dcf_v2_contract.json`
+- `config/contracts/repo_surface_boundary_governance_v1.json`
+
+Missing contracts are emitted as typed `source_unavailable` evidence rather
+than inferred from filenames or repository shape. Copy the bounded examples in
+[`examples/runtime_v2`](examples/runtime_v2) to start a new integration.
+
+Hooks can enqueue cheap events and a bounded reconciler coalesces them into at
+most one generation:
+
+```bash
+dcf runtime event --repo-root . --kind git --reason post-merge --json
+dcf runtime reconcile-events --repo-root . --json
+```
+
+An immutable generation can also compile an action-scoped J-Space contract and
+provider-independent `task_context_capsule_v1`:
+
+```bash
+dcf runtime compile-jspace \
+  --repo-root . \
+  --surface-id application_source \
+  --action-json examples/runtime_v2/action.read.json \
+  --output .dcf/action.jspace.json \
+  --capsule-output .dcf/action.context-capsule.json \
+  --json
+```
+
+Operational DCF remains read-only with respect to project authority. Its only
+writes are immutable context generations, atomic pointers, event receipts, and
+explicitly requested contract outputs. See
+[`docs/operational-runtime-v2.md`](docs/operational-runtime-v2.md) for the data
+model and [`docs/session-commander-reference-architecture.md`](docs/session-commander-reference-architecture.md)
+for the larger agent-harness graph this evidence plane is designed to support.
 
 ## Quickstart
 

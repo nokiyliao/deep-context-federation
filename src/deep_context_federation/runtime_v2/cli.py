@@ -57,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = subparsers.add_parser("status", help="read current generation status")
     _add_runtime_paths(status)
+    status.add_argument(
+        "--required-capability",
+        dest="required_capabilities",
+        action="append",
+        help="evaluate task-local admission for one capability (repeatable)",
+    )
     status.add_argument("--json", action="store_true")
 
     query = subparsers.add_parser("query", help="query one capability")
@@ -83,6 +89,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_runtime_paths(reconcile)
     reconcile.add_argument("--json", action="store_true")
+
+    watchdog = subparsers.add_parser(
+        "watchdog",
+        help="run one bounded event reconciliation for an external scheduler",
+    )
+    _add_runtime_paths(watchdog)
+    watchdog.add_argument("--once", action="store_true", required=True)
+    watchdog.add_argument("--json", action="store_true")
 
     jspace = subparsers.add_parser(
         "compile-jspace",
@@ -141,9 +155,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             _emit(result, pretty=pretty)
             return EXIT_OK
         if args.command == "status":
-            response = runtime.status()
+            response = runtime.status(
+                required_capabilities=args.required_capabilities,
+            )
             _emit(response.model_dump(mode="json"), pretty=pretty)
-            return EXIT_OK if response.generation_id else EXIT_UNAVAILABLE
+            if response.generation_id is None:
+                return EXIT_UNAVAILABLE
+            if (
+                args.required_capabilities
+                and response.execution_admission.get("admitted") is not True
+            ):
+                return EXIT_BLOCKED
+            return EXIT_OK
         if args.command == "query":
             response, elapsed_ms = query_capability(
                 runtime,
@@ -170,7 +193,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             _emit(result, pretty=pretty)
             return EXIT_OK
-        if args.command == "reconcile-events":
+        if args.command in {"reconcile-events", "watchdog"}:
             result = _reconcile_pending_events(
                 runtime,
                 repo_root=root,

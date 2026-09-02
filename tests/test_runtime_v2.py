@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from deep_context_federation.runtime_v2.jspace import (
 from deep_context_federation.runtime_v2.query import FreshnessBlocked
 from deep_context_federation.runtime_v2.runtime import DcfRuntime
 from deep_context_federation.runtime_v2.storage import GenerationUnavailable
+from deep_context_federation.version import __version__
 
 
 def _git(root: Path, *args: str) -> str:
@@ -211,6 +213,77 @@ def test_concurrent_event_reconcilers_consume_one_batch_once(tmp_path: Path) -> 
     assert len(list((runtime_root / "events/processed").glob("*.json"))) == 1
 
 
+def test_default_current_only_removes_superseded_generation(tmp_path: Path) -> None:
+    root, runtime_root = _project(tmp_path)
+    runtime = DcfRuntime(root, runtime_root=runtime_root)
+    first = runtime.refresh(write=True, reason="first")
+    (root / "src/example.py").write_text("VALUE = 2\n", encoding="utf-8")
+
+    second = runtime.refresh(write=True, reason="second")
+
+    assert first["generation_id"] != second["generation_id"]
+    assert second["retention"] == {
+        "mode": "current_only",
+        "removed_generation_ids": [first["generation_id"]],
+    }
+    assert [path.name for path in runtime_root.joinpath("generations").iterdir()] == [
+        second["generation_id"]
+    ]
+
+
+def test_history_retention_is_explicit_opt_in(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DCF_RETENTION_MODE", "history")
+    root, runtime_root = _project(tmp_path)
+    runtime = DcfRuntime(root, runtime_root=runtime_root)
+    first = runtime.refresh(write=True, reason="first")
+    (root / "src/example.py").write_text("VALUE = 2\n", encoding="utf-8")
+
+    second = runtime.refresh(write=True, reason="second")
+
+    assert second["retention"] == {
+        "mode": "history",
+        "removed_generation_ids": [],
+    }
+    assert {path.name for path in runtime_root.joinpath("generations").iterdir()} == {
+        first["generation_id"],
+        second["generation_id"],
+    }
+
+
+def test_watchdog_once_reuses_bounded_event_reconciliation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, runtime_root = _project(tmp_path)
+    event = enqueue_event(
+        root,
+        kind="operator",
+        payload={"reason": "watchdog-test"},
+        runtime_root=runtime_root,
+    )
+
+    exit_code = dcf_main(
+        [
+            "runtime",
+            "watchdog",
+            "--once",
+            "--repo-root",
+            str(root),
+            "--runtime-root",
+            str(runtime_root),
+            "--json",
+        ]
+    )
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert result["coalesced_event_count"] == 1
+    receipt = json.loads(Path(result["event_receipt"]).read_text(encoding="utf-8"))
+    assert receipt["event_ids"] == [event["event_id"]]
+    assert pending_events(root, runtime_root=runtime_root) == []
+
+
 def test_jspace_and_task_context_capsule_are_bounded_and_deterministic(
     tmp_path: Path,
 ) -> None:
@@ -348,6 +421,77 @@ def test_source_and_working_state_changes_invalidate_their_capabilities(
     ]
 
 
+def test_task_local_admission_ignores_unrelated_global_staleness(
+    tmp_path: Path,
+) -> None:
+    root, runtime_root = _project(tmp_path)
+    runtime = DcfRuntime(root, runtime_root=runtime_root)
+    runtime.refresh(write=True, reason="test")
+    (root / "src/example.py").write_text("VALUE = 2\n", encoding="utf-8")
+
+    surface_status = runtime.status(required_capabilities=["surface-map"])
+    source_status = runtime.status(required_capabilities=["source-navigation"])
+
+    assert surface_status.freshness_status == "stale"
+    assert surface_status.execution_admission == {
+        "status": "pass",
+        "admitted": True,
+        "required_capabilities": ["surface-map"],
+        "blocking_capability_ids": [],
+        "blocking_finding_ids": [],
+        "authority_effect": "none",
+        "no_apply": True,
+    }
+    assert source_status.execution_admission["status"] == "blocked"
+    assert source_status.execution_admission["admitted"] is False
+    assert source_status.execution_admission["blocking_capability_ids"] == [
+        "source-navigation"
+    ]
+
+
+def test_status_cli_returns_blocked_only_for_required_capability(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, runtime_root = _project(tmp_path)
+    runtime = DcfRuntime(root, runtime_root=runtime_root)
+    runtime.refresh(write=True, reason="test")
+    (root / "src/example.py").write_text("VALUE = 2\n", encoding="utf-8")
+
+    surface_exit = dcf_main(
+        [
+            "runtime",
+            "status",
+            "--repo-root",
+            str(root),
+            "--runtime-root",
+            str(runtime_root),
+            "--required-capability",
+            "surface-map",
+            "--json",
+        ]
+    )
+    surface = json.loads(capsys.readouterr().out)
+    source_exit = dcf_main(
+        [
+            "runtime",
+            "status",
+            "--repo-root",
+            str(root),
+            "--runtime-root",
+            str(runtime_root),
+            "--required-capability",
+            "source-navigation",
+            "--json",
+        ]
+    )
+    source = json.loads(capsys.readouterr().out)
+
+    assert surface_exit == 0
+    assert surface["execution_admission"]["admitted"] is True
+    assert source_exit == 2
+    assert source["execution_admission"]["admitted"] is False
+
+
 def test_top_level_cli_preserves_legacy_namespace_and_exposes_runtime(
     tmp_path: Path, capsys
 ) -> None:
@@ -371,6 +515,14 @@ def test_top_level_cli_preserves_legacy_namespace_and_exposes_runtime(
     assert exit_code == 0
     assert payload["generation_id"] == generation_id
     assert payload["safety"]["authority_effect"] == "none"
+
+
+def test_package_metadata_and_runtime_version_are_identical() -> None:
+    project = tomllib.loads(
+        Path("pyproject.toml").read_text(encoding="utf-8")
+    )["project"]
+
+    assert project["version"] == __version__ == "0.91.0"
 
 
 def test_current_generation_hash_tampering_fails_closed(tmp_path: Path) -> None:

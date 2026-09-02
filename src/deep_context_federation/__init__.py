@@ -62,6 +62,7 @@ from deep_context_federation.workflow_plan import build_workflow_plan
 from deep_context_federation.workflow_run import build_workflow_run
 
 __all__ = [
+    "__version__",
     "adjudicate_target",
     "audit_unified_plane",
     "bootstrap_federation",

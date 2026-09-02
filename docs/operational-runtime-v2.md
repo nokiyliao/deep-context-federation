@@ -21,6 +21,12 @@ A pointer is consumable only when its manifest digest and every declared member
 hash verify. If `current.json` is damaged, readers may fall back to the verified
 last-good generation. They never infer a generation from directory ordering.
 
+The default retention mode is `current_only`. After a successful publish or
+no-change reconciliation, DCF verifies the current generation and removes all
+superseded generations before returning. Historical retention is an explicit
+opt-in through `DCF_RETENTION_MODE=history`; it is not required for latest-state
+navigation.
+
 ## Project Layout
 
 `ProjectLayout` makes repository assumptions explicit. A host can configure:
@@ -51,6 +57,29 @@ Graph-backed capabilities resolve an exact entity first, then bounded FTS and
 substring matches. Traversal depth is limited to 1-4. Project working state is
 always advisory and cannot create a lease, complete a task, or authorize a
 command.
+
+Status can evaluate only the capabilities required by the caller:
+
+```bash
+dcf runtime status --repo-root . \
+  --required-capability surface-map \
+  --required-capability source-navigation --json
+```
+
+The response keeps global `diagnostic_health` separate from
+`execution_admission`. Unrelated stale capabilities remain visible, but they do
+not block a task whose required capabilities are current and passing.
+
+An external scheduler can use the same bounded reconciliation path without
+running a persistent DCF daemon:
+
+```bash
+dcf runtime watchdog --once --repo-root . --json
+```
+
+The watcher consumes the configured runtime root's pending event directory,
+coalesces the batch, and creates at most one generation. The event producer,
+watcher, and query process must resolve the same repository and runtime root.
 
 ## J-Space and Task Context
 

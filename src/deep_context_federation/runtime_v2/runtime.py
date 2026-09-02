@@ -56,6 +56,138 @@ DEFAULT_CAPABILITIES = (
 )
 
 
+def _worst(values: list[str], order: list[str], default: str) -> str:
+    if not values:
+        return default
+    return max(
+        values,
+        key=lambda value: order.index(value) if value in order else len(order),
+    )
+
+
+def _separate_diagnostic_and_admission(
+    *,
+    capabilities: dict[str, dict[str, Any]],
+    blockers: list[dict[str, Any]],
+    required_capabilities: list[str],
+    projection_status: str,
+    domain_verdict: str,
+    freshness_status: str,
+    readiness_tier: str,
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    required = list(dict.fromkeys(required_capabilities))
+    required_ids = set(required)
+    required_domains: set[str] = set()
+    blocking_capabilities: list[dict[str, Any]] = []
+
+    for capability_id in required:
+        row = capabilities.get(capability_id)
+        if row is None:
+            blocking_capabilities.append(
+                {
+                    "capability_id": capability_id,
+                    "exists": False,
+                    "reason": "required_capability_missing",
+                }
+            )
+            continue
+        domains = [
+            value
+            for value in row.get("required_domains", [])
+            if isinstance(value, str) and value
+        ]
+        required_domains.update(domains)
+        checks = {
+            "projection_status": row.get("projection_status") == "pass",
+            "domain_verdict": row.get("domain_verdict") == "pass",
+            "freshness_status": row.get("freshness_status") == "current",
+        }
+        if not all(checks.values()):
+            blocking_capabilities.append(
+                {
+                    "capability_id": capability_id,
+                    "exists": True,
+                    "projection_status": row.get("projection_status"),
+                    "domain_verdict": row.get("domain_verdict"),
+                    "freshness_status": row.get("freshness_status"),
+                    "readiness_tier": row.get("readiness_tier"),
+                    "required_domains": domains,
+                    "failed_checks": [
+                        key for key, passed in checks.items() if not passed
+                    ],
+                }
+            )
+
+    def affects_required_capability(blocker: dict[str, Any]) -> bool:
+        capability_id = blocker.get("capability_id")
+        if isinstance(capability_id, str) and capability_id:
+            return capability_id in required_ids
+        domains: set[str] = set()
+        domain = blocker.get("domain")
+        if isinstance(domain, str) and domain:
+            domains.add(domain)
+        changed_domains = blocker.get("changed_domains")
+        if isinstance(changed_domains, list):
+            domains.update(
+                value for value in changed_domains if isinstance(value, str) and value
+            )
+        return bool(domains.intersection(required_domains))
+
+    unrelated_findings = [
+        dict(blocker)
+        for blocker in blockers
+        if not affects_required_capability(blocker)
+    ]
+    diagnostic_ok = (
+        projection_status == "pass"
+        and domain_verdict == "pass"
+        and freshness_status == "current"
+    )
+    diagnostic_health = {
+        "status": "healthy" if diagnostic_ok else "degraded",
+        "ok": diagnostic_ok,
+        "projection_status": projection_status,
+        "domain_verdict": domain_verdict,
+        "freshness_status": freshness_status,
+        "readiness_tier": readiness_tier,
+        "finding_count": len(blockers),
+    }
+    if not required:
+        execution_admission = {
+            "status": "not_evaluated",
+            "admitted": None,
+            "required_capabilities": [],
+            "blocking_capability_ids": [],
+            "blocking_finding_ids": [],
+            "authority_effect": "none",
+            "no_apply": True,
+        }
+    else:
+        admitted = not blocking_capabilities
+        execution_admission = {
+            "status": "pass" if admitted else "blocked",
+            "admitted": admitted,
+            "required_capabilities": required,
+            "blocking_capability_ids": [
+                row["capability_id"] for row in blocking_capabilities
+            ],
+            "blocking_finding_ids": [
+                str(row.get("finding_id") or row.get("blocker_id") or "")
+                for row in blockers
+                if affects_required_capability(row)
+                and (row.get("finding_id") or row.get("blocker_id"))
+            ],
+            "authority_effect": "none",
+            "no_apply": True,
+        }
+    return (
+        diagnostic_health,
+        execution_admission,
+        blocking_capabilities,
+        unrelated_findings,
+    )
+
+
 def _capability(
     capability_id: str,
     data: dict[str, Any],
@@ -232,13 +364,32 @@ class DcfRuntime:
         fingerprints = quick_fingerprints(self.layout)
         fingerprint = input_fingerprint(fingerprints)
         if write and if_needed:
-            try:
-                current, manifest, _ = self.store.load_current()
-                if current.input_fingerprint == fingerprint:
-                    reconciled_at = self.store.reconcile_current(current.generation_id)
-                    return {"status": "unchanged", "generation_id": current.generation_id, "manifest": manifest.model_dump(mode="json"), "reconciled_at": reconciled_at, "authority_effect": "none", "no_apply": True}
-            except GenerationUnavailable:
-                pass
+            with self.store.single_flight():
+                try:
+                    current, manifest, _ = self.store.load_current()
+                    if current.input_fingerprint == fingerprint:
+                        reconciled_at = self.store.reconcile_current(
+                            current.generation_id
+                        )
+                        removed = (
+                            self.store.enforce_current_only()
+                            if self.store.retention_mode == "current_only"
+                            else []
+                        )
+                        return {
+                            "status": "unchanged",
+                            "generation_id": current.generation_id,
+                            "manifest": manifest.model_dump(mode="json"),
+                            "reconciled_at": reconciled_at,
+                            "retention": {
+                                "mode": self.store.retention_mode,
+                                "removed_generation_ids": removed,
+                            },
+                            "authority_effect": "none",
+                            "no_apply": True,
+                        }
+                except GenerationUnavailable:
+                    pass
         native = collect_native(self.layout)
         generation_id = self._generation_id(fingerprints)
         snapshot = self._build_snapshot(generation_id, reason, fingerprints, native)
@@ -274,13 +425,35 @@ class DcfRuntime:
                         snapshot=snapshot,
                         metrics={"graph": graph_metrics},
                     )
+                removed = (
+                    self.store.enforce_current_only()
+                    if self.store.retention_mode == "current_only"
+                    else []
+                )
             except Exception as exc:
                 self.store.write_failure(reason=reason, error=exc, generation_id=generation_id)
                 if isinstance(exc, GenerationTransactionError):
                     raise
                 raise GenerationTransactionError(str(exc)) from exc
         pointer = self.store.read_pointer()
-        return {"status": "published", "generation_id": generation_id, "generation_path": pointer.generation_path if pointer else str(self.store.generation_dir(generation_id)), "manifest": manifest.model_dump(mode="json"), "snapshot": snapshot.model_dump(mode="json"), "elapsed_ms": round((time.perf_counter() - started) * 1000, 3), "authority_effect": "none", "no_apply": True}
+        return {
+            "status": "published",
+            "generation_id": generation_id,
+            "generation_path": (
+                pointer.generation_path
+                if pointer
+                else str(self.store.generation_dir(generation_id))
+            ),
+            "manifest": manifest.model_dump(mode="json"),
+            "snapshot": snapshot.model_dump(mode="json"),
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 3),
+            "retention": {
+                "mode": self.store.retention_mode,
+                "removed_generation_ids": removed,
+            },
+            "authority_effect": "none",
+            "no_apply": True,
+        }
 
     def capability_views(
         self,
@@ -402,20 +575,111 @@ class DcfRuntime:
         )
         return response.model_dump(mode="json")
 
-    def status(self, *, snapshot: DcfSnapshot | None = None) -> StatusResponse:
+    def status(
+        self,
+        *,
+        snapshot: DcfSnapshot | None = None,
+        required_capabilities: list[str] | None = None,
+    ) -> StatusResponse:
+        required = list(required_capabilities or [])
         if snapshot is None:
             try:
                 snapshot, _, _ = self.store.load_current(verify_file_hashes=True)
             except GenerationUnavailable as exc:
-                return StatusResponse(generation_id=None, generated_at=None, projection_status="blocked", domain_verdict="blocked", freshness_status="missing", readiness_tier="blocked", unified_tool_ready=False, repo={}, capabilities={}, blockers=[{"finding_id": "generation_unavailable", "code": "generation_unavailable", "detail": str(exc)}])
+                blocker = {
+                    "finding_id": "generation_unavailable",
+                    "code": "generation_unavailable",
+                    "detail": str(exc),
+                }
+                return StatusResponse(
+                    generation_id=None,
+                    generated_at=None,
+                    projection_status="blocked",
+                    domain_verdict="blocked",
+                    freshness_status="missing",
+                    readiness_tier="blocked",
+                    unified_tool_ready=False,
+                    repo={},
+                    capabilities={},
+                    blockers=[blocker],
+                    diagnostic_health={
+                        "status": "unavailable",
+                        "ok": False,
+                        "projection_status": "blocked",
+                        "domain_verdict": "blocked",
+                        "freshness_status": "missing",
+                        "readiness_tier": "blocked",
+                        "finding_count": 1,
+                    },
+                    execution_admission={
+                        "status": "blocked" if required else "not_evaluated",
+                        "admitted": False if required else None,
+                        "required_capabilities": required,
+                        "blocking_capability_ids": required,
+                        "blocking_finding_ids": ["generation_unavailable"],
+                        "authority_effect": "none",
+                        "no_apply": True,
+                    },
+                    blocking_capabilities=[
+                        {
+                            "capability_id": capability_id,
+                            "exists": False,
+                            "reason": "generation_unavailable",
+                        }
+                        for capability_id in required
+                    ],
+                    unrelated_findings=[] if required else [blocker],
+                )
         _, capabilities, blockers = self.capability_views(include_data=False, snapshot=snapshot)
         status_order = {"pass": 0, "warn": 1, "blocked": 2}
         freshness_order = {"current": 0, "unverified": 1, "stale": 2, "missing": 3}
-        projection = max((row["projection_status"] for row in capabilities.values()), key=lambda value: status_order.get(value, 3), default="pass")
-        verdict = max((row["domain_verdict"] for row in capabilities.values()), key=lambda value: status_order.get(value, 3), default="pass")
-        freshness = max((row["freshness_status"] for row in capabilities.values()), key=lambda value: freshness_order.get(value, 4), default="current")
+        projection = _worst(
+            [row["projection_status"] for row in capabilities.values()],
+            list(status_order),
+            "pass",
+        )
+        verdict = _worst(
+            [row["domain_verdict"] for row in capabilities.values()],
+            list(status_order),
+            "pass",
+        )
+        freshness = _worst(
+            [row["freshness_status"] for row in capabilities.values()],
+            list(freshness_order),
+            "current",
+        )
         ready = bool(snapshot.capabilities.get("unified-tool-readiness") and snapshot.capabilities["unified-tool-readiness"].data.get("unified_tool_ready")) and freshness == "current" and projection != "blocked"
-        return StatusResponse(generation_id=snapshot.generation_id, generated_at=snapshot.generated_at, projection_status=projection, domain_verdict=verdict, freshness_status=freshness, readiness_tier="blocked" if projection == "blocked" else snapshot.readiness_tier, unified_tool_ready=ready, repo=snapshot.repo, capabilities=capabilities, blockers=blockers)
+        readiness = "blocked" if projection == "blocked" else snapshot.readiness_tier
+        (
+            diagnostic_health,
+            execution_admission,
+            blocking_capabilities,
+            unrelated_findings,
+        ) = _separate_diagnostic_and_admission(
+            capabilities=capabilities,
+            blockers=blockers,
+            required_capabilities=required,
+            projection_status=projection,
+            domain_verdict=verdict,
+            freshness_status=freshness,
+            readiness_tier=readiness,
+        )
+        return StatusResponse(
+            generation_id=snapshot.generation_id,
+            generated_at=snapshot.generated_at,
+            projection_status=projection,
+            domain_verdict=verdict,
+            freshness_status=freshness,
+            readiness_tier=readiness,
+            unified_tool_ready=ready,
+            repo=snapshot.repo,
+            capabilities=capabilities,
+            blockers=blockers,
+            diagnostic_health=diagnostic_health,
+            execution_admission=execution_admission,
+            blocking_capabilities=blocking_capabilities,
+            unrelated_findings=unrelated_findings,
+        )
 
     def verify_current(self) -> dict[str, Any]:
         checks: list[dict[str, Any]] = []

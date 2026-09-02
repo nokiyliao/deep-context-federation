@@ -103,7 +103,7 @@ python -m pip install -e ".[dev]"
 
 ## Operational DCF v2
 
-Version 0.90 adds a project-configurable operational runtime alongside the
+Version 0.91 provides a project-configurable operational runtime alongside the
 original federation workflow. The original commands remain compatible. The new
 runtime lives under a separate namespace:
 
@@ -116,6 +116,9 @@ dcf runtime refresh --repo-root . --reason bootstrap --json
 
 # Read status, query one capability, and verify generation hashes.
 dcf runtime status --repo-root . --json
+dcf runtime status --repo-root . \
+  --required-capability surface-map \
+  --required-capability source-navigation --json
 dcf runtime query --repo-root . --capability surface-map --json
 dcf runtime verify --repo-root . --json
 ```
@@ -135,7 +138,16 @@ most one generation:
 ```bash
 dcf runtime event --repo-root . --kind git --reason post-merge --json
 dcf runtime reconcile-events --repo-root . --json
+# Equivalent one-shot entrypoint for launchd, systemd, or CI schedulers.
+dcf runtime watchdog --once --repo-root . --json
 ```
+
+Operational DCF defaults to `current_only`: each successful refresh is a
+self-contained generation and removes superseded generations after pointer and
+member verification. Set `DCF_RETENTION_MODE=history` only when a deployment
+explicitly needs historical generations. Global diagnostic degradation does
+not block an action when every capability named with `--required-capability`
+is current and passing.
 
 An immutable generation can also compile an action-scoped J-Space contract and
 provider-independent `task_context_capsule_v1`:

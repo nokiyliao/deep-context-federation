@@ -260,7 +260,7 @@ def test_capabilities_manifest_is_machine_readable() -> None:
     assert payload["authority_effect"] == "none"
     assert payload["no_apply"] is True
     assert payload["package"]["cli"] == "dcf"
-    assert payload["package"]["version"] == "0.71.0"
+    assert payload["package"]["version"] == "0.91.0"
 
     command_names = {row["command"] for row in payload["commands"]}
     assert {
